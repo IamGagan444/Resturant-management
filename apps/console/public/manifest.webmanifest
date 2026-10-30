@@ -1,0 +1,9 @@
+{
+  "name": "Restaurant Console",
+  "short_name": "Console",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0a09",
+  "theme_color": "#e8590c",
+  "icons": []
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@rms/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@rms/db": "workspace:*",
+    "dotenv": "^16.4.7"
+  }
+}

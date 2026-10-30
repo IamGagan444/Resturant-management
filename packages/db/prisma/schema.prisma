@@ -1,0 +1,831 @@
+// Restaurant / Hotel Management System — multi-tenant schema
+// Stack: Prisma + PostgreSQL
+// Hierarchy: Super Admin -> Hotel (tenant) -> Staff (owner, manager, cashier, cook, waiter) -> Customer (QR, no login)
+//
+// Conventions
+// - Money is Int paise. Tax / service-charge rates are Int basis points (250 = 2.5%).
+// - Every tenant-owned model has `hotelId` (enforced by the tenant Prisma extension in src/tenant.ts).
+//   Non-tenant models: PlatformUser, Plan, Hotel, RefreshToken, WebhookEvent.
+// - Partial unique indexes Prisma can't express live in prisma/sql/partial-indexes.sql
+//   and are appended to the migration that creates the tables.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum PlatformRole {
+  SUPER_ADMIN
+  SUPPORT
+}
+
+enum StaffRole {
+  OWNER
+  MANAGER
+  CASHIER
+  COOK
+  WAITER
+}
+
+enum HotelStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum TableStatus {
+  FREE
+  OCCUPIED
+  BILL_REQUESTED
+  CLEANING
+  RESERVED
+}
+
+enum SessionStatus {
+  OPEN
+  BILLING
+  CLOSED
+}
+
+enum OrderSource {
+  QR_CUSTOMER
+  WAITER
+  COUNTER
+}
+
+enum OrderStatus {
+  AWAITING_PAYMENT // pay-now order, held until UPI succeeds
+  PENDING_CONFIRMATION // hotel requires waiter to confirm first QR order
+  PLACED
+  IN_PROGRESS
+  READY
+  SERVED
+  CANCELLED
+}
+
+enum ItemStatus {
+  QUEUED
+  COOKING
+  READY
+  PICKED_UP
+  SERVED
+  CANCELLED
+  OUT_OF_STOCK // customer asked to pick a replacement
+}
+
+enum FoodType {
+  VEG
+  NON_VEG
+  EGG
+  VEGAN
+}
+
+enum RequestType {
+  CALL_WAITER
+  WATER
+  CUTLERY
+  BILL
+  OTHER
+}
+
+enum RequestStatus {
+  OPEN
+  ACKNOWLEDGED
+  DONE
+}
+
+enum BillStatus {
+  OPEN
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum SplitType {
+  NONE
+  EQUAL
+  BY_GUEST
+  BY_ITEM
+}
+
+enum PaymentMethod {
+  UPI
+  CASH
+  CARD
+  ROOM_CHARGE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum DeviceKind {
+  KDS
+  WAITER
+  POS
+  MANAGER
+  HUB // local hub box on the restaurant LAN (outage fallback)
+}
+
+enum AuthSubject {
+  PLATFORM
+  STAFF
+}
+
+// ─────────────────────────────────────────────
+// PLATFORM (Super Admin level)
+// ─────────────────────────────────────────────
+
+model PlatformUser {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  role         PlatformRole @default(SUPER_ADMIN)
+  createdAt    DateTime     @default(now())
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  name         String   @unique // e.g. Starter, Pro
+  priceMonthly Int // paise
+  maxTables    Int
+  maxStaff     Int
+  features     Json // { kds: true, offlineMode: true, inventory: false, roomService: false }
+  hotels       Hotel[]
+  createdAt    DateTime @default(now())
+}
+
+// Rotating refresh tokens for platform users and staff. Only the hash is stored.
+model RefreshToken {
+  id          String      @id @default(cuid())
+  subjectType AuthSubject
+  subjectId   String
+  deviceId    String?
+  tokenHash   String      @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  replacedBy  String? // id of the token issued on rotation (reuse detection)
+  createdAt   DateTime    @default(now())
+
+  @@index([subjectType, subjectId])
+}
+
+// Payment-gateway webhooks, deduplicated by provider event id.
+model WebhookEvent {
+  id          String    @id @default(cuid())
+  provider    String // "razorpay"
+  eventId     String
+  hotelId     String?
+  payload     Json
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+
+  @@unique([provider, eventId])
+}
+
+// ─────────────────────────────────────────────
+// TENANT (Hotel / Restaurant)
+// ─────────────────────────────────────────────
+
+model Hotel {
+  id               String      @id @default(cuid())
+  name             String
+  slug             String      @unique // QR URL: /h/{slug}/t/{qrToken}
+  phone            String?
+  address          String?
+  gstin            String?
+  invoicePrefix    String      @default("INV") // bill number: {prefix}/{FY}/{seq}, max 16 chars
+  currency         String      @default("INR")
+  timezone         String      @default("Asia/Kolkata")
+  defaultLanguage  String      @default("en")
+  status           HotelStatus @default(TRIAL)
+  planId           String?
+  plan             Plan?       @relation(fields: [planId], references: [id])
+  trialEndsAt      DateTime?
+  featureOverrides Json? // per-hotel overrides of plan.features
+
+  // Behaviour settings
+  requireWaiterConfirm Boolean @default(false) // anti-prank: first QR order needs waiter OK
+  allowPayLater        Boolean @default(true)
+  allowPayNow          Boolean @default(true)
+  pricesIncludeTax     Boolean @default(false)
+  serviceChargeBps     Int     @default(0) // optional by law; cashier can remove per bill
+  readyPickupAlertSec  Int     @default(120) // escalate to manager if READY not picked up
+  sessionIdleMin       Int     @default(180) // auto-close abandoned sessions
+  dayStartsAt          String  @default("04:00") // business-day boundary for order numbers
+
+  // Per-hotel Razorpay credentials (hotel is merchant of record). Secrets encrypted with ENCRYPTION_KEY.
+  razorpayKeyId            String?
+  razorpayKeySecretEnc     String?
+  razorpayWebhookSecretEnc String?
+
+  // Local hub (outage fallback): LAN URL staff devices switch to when the internet is down
+  hubUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff             Staff[]
+  devices           Device[]
+  floors            Floor[]
+  tables            Table[]
+  tableAssignments  TableAssignment[]
+  stations          Station[]
+  taxes             Tax[]
+  categories        MenuCategory[]
+  items             MenuItem[]
+  variants          ItemVariant[]
+  addonGroups       AddonGroup[]
+  addons            Addon[]
+  customers         Customer[]
+  sessions          TableSession[]
+  sessionGuests     SessionGuest[]
+  cartItems         CartItem[]
+  orders            Order[]
+  orderItems        OrderItem[]
+  orderItemAddons   OrderItemAddon[]
+  requests          ServiceRequest[]
+  bills             Bill[]
+  billTaxLines      BillTaxLine[]
+  billSplits        BillSplit[]
+  payments          Payment[]
+  auditLogs         AuditLog[]
+  counters          Counter[]
+  idempotencyKeys   IdempotencyKey[]
+  syncRejections    SyncRejection[]
+}
+
+model Staff {
+  id             String    @id @default(cuid())
+  hotelId        String
+  hotel          Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  name           String
+  phone          String?
+  email          String?   @unique // owners/managers log in with email + password
+  passwordHash   String?
+  role           StaffRole
+  pinHash        String // 4–6 digit PIN for fast switching on paired devices
+  pinFailedCount Int       @default(0)
+  lockedUntil    DateTime?
+  language       String    @default("en")
+  isActive       Boolean   @default(true)
+  stationId      String? // cooks: default station
+  station        Station?  @relation(fields: [stationId], references: [id])
+  createdAt      DateTime  @default(now())
+
+  assignedTables  TableAssignment[]
+  ordersTaken     Order[]           @relation("OrderTakenBy")
+  itemsPickedUp   OrderItem[]       @relation("ItemPickedUpBy")
+  requestsHandled ServiceRequest[]
+  payments        Payment[]
+
+  @@unique([hotelId, phone])
+  @@index([hotelId, role])
+}
+
+// A tablet/phone paired to a hotel by a manager. Staff then switch on it with PIN only.
+model Device {
+  id         String     @id @default(cuid())
+  hotelId    String
+  hotel      Hotel      @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  name       String // "Tandoor KDS", "Floor phone 2"
+  kind       DeviceKind
+  stationId  String? // KDS devices are bound to a station
+  station    Station?   @relation(fields: [stationId], references: [id])
+  tokenHash  String     @unique
+  lastSeenAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([hotelId])
+}
+
+// ─────────────────────────────────────────────
+// FLOOR & TABLES
+// ─────────────────────────────────────────────
+
+model Floor {
+  id        String  @id @default(cuid())
+  hotelId   String
+  hotel     Hotel   @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  name      String // Ground Floor, Rooftop, Rooms
+  sortOrder Int     @default(0)
+  tables    Table[]
+
+  @@index([hotelId])
+}
+
+model Table {
+  id       String      @id @default(cuid())
+  hotelId  String
+  hotel    Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  floorId  String?
+  floor    Floor?      @relation(fields: [floorId], references: [id])
+  label    String // T1, T2, Room 204
+  seats    Int         @default(4)
+  isRoom   Boolean     @default(false) // hotel room service
+  qrToken  String      @unique @default(cuid()) // rotate to invalidate printed QR
+  status   TableStatus @default(FREE)
+  posX     Int? // floor-map position
+  posY     Int?
+  isActive Boolean     @default(true)
+
+  sessions    TableSession[]
+  assignments TableAssignment[]
+
+  @@unique([hotelId, label])
+}
+
+model TableAssignment {
+  id        String   @id @default(cuid())
+  hotelId   String
+  hotel     Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  tableId   String
+  table     Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  shiftDate DateTime @db.Date
+
+  @@unique([tableId, staffId, shiftDate])
+  @@index([hotelId, shiftDate])
+}
+
+// ─────────────────────────────────────────────
+// KITCHEN STATIONS & TAX
+// ─────────────────────────────────────────────
+
+model Station {
+  id      String     @id @default(cuid())
+  hotelId String
+  hotel   Hotel      @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  name    String // Tandoor, Chinese, Bar, Desserts
+  color   String? // KDS card colour
+  items   MenuItem[]
+  cooks   Staff[]
+  devices Device[]
+
+  @@unique([hotelId, name])
+}
+
+model Tax {
+  id      String     @id @default(cuid())
+  hotelId String
+  hotel   Hotel      @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  name    String // CGST, SGST
+  rateBps Int // 250 = 2.5%
+  items   MenuItem[]
+
+  @@index([hotelId])
+}
+
+// ─────────────────────────────────────────────
+// MENU
+// ─────────────────────────────────────────────
+
+model MenuCategory {
+  id            String     @id @default(cuid())
+  hotelId       String
+  hotel         Hotel      @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  name          String
+  translations  Json? // { "hi": "...", "or": "..." }
+  sortOrder     Int        @default(0)
+  // Optional time window in hotel timezone, e.g. Breakfast 07:00–11:00
+  availableFrom String? // "07:00"
+  availableTo   String? // "11:00"
+  isActive      Boolean    @default(true)
+  items         MenuItem[]
+
+  @@index([hotelId])
+}
+
+model MenuItem {
+  id           String       @id @default(cuid())
+  hotelId      String
+  hotel        Hotel        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  categoryId   String
+  category     MenuCategory @relation(fields: [categoryId], references: [id])
+  stationId    String? // routes to the right KDS screen
+  station      Station?     @relation(fields: [stationId], references: [id])
+  name         String
+  translations Json? // { "hi": { "name": "बटर नान", "description": "..." } }
+  description  String?
+  imageUrl     String?
+  price        Int // base price in paise
+  foodType     FoodType     @default(VEG)
+  spiceLevel   Int? // 0–3
+  prepTimeMin  Int          @default(15) // live ETA + KDS card ageing
+  isBestseller Boolean      @default(false)
+  isAvailable  Boolean      @default(true) // cook can toggle OUT OF STOCK
+  isActive     Boolean      @default(true) // soft delete; order history keeps pointing here
+  sortOrder    Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  variants    ItemVariant[]
+  addonGroups AddonGroup[]
+  taxes       Tax[]
+  orderItems  OrderItem[]
+  cartItems   CartItem[]
+
+  @@index([hotelId, categoryId])
+}
+
+model ItemVariant {
+  id      String   @id @default(cuid())
+  hotelId String
+  hotel   Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  itemId  String
+  item    MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  name    String // Half / Full, Small / Large
+  price   Int // paise, replaces base price
+  sortOrder Int    @default(0)
+
+  @@index([itemId])
+}
+
+model AddonGroup {
+  id        String     @id @default(cuid())
+  hotelId   String
+  hotel     Hotel      @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  name      String // Extra toppings, Choose bread
+  minSelect Int        @default(0)
+  maxSelect Int        @default(1)
+  addons    Addon[]
+  items     MenuItem[]
+
+  @@index([hotelId])
+}
+
+model Addon {
+  id              String           @id @default(cuid())
+  hotelId         String
+  hotel           Hotel            @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  groupId         String
+  group           AddonGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name            String
+  price           Int              @default(0)
+  isAvailable     Boolean          @default(true)
+  orderItemAddons OrderItemAddon[]
+
+  @@index([groupId])
+}
+
+// ─────────────────────────────────────────────
+// CUSTOMERS & TABLE SESSIONS (shared cart)
+// ─────────────────────────────────────────────
+
+model Customer {
+  id        String         @id @default(cuid())
+  hotelId   String
+  hotel     Hotel          @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  phone     String
+  name      String?
+  visits    Int            @default(0)
+  createdAt DateTime       @default(now())
+  guests    SessionGuest[]
+
+  @@unique([hotelId, phone])
+}
+
+// One seating = one session. Everyone at the table joins it.
+// At most one OPEN/BILLING session per table (partial unique index).
+model TableSession {
+  id             String        @id @default(cuid())
+  hotelId        String
+  hotel          Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  tableId        String
+  table          Table         @relation(fields: [tableId], references: [id])
+  status         SessionStatus @default(OPEN)
+  joinCode       String // 4-digit code shown on first phone + waiter app; needed to join an open session
+  isConfirmed    Boolean       @default(false) // waiter confirmed real guests are seated
+  openedAt       DateTime      @default(now())
+  lastActivityAt DateTime      @default(now())
+  closedAt       DateTime?
+
+  guests    SessionGuest[]
+  cartItems CartItem[]
+  orders    Order[]
+  requests  ServiceRequest[]
+  bills     Bill[]
+  payments  Payment[]
+
+  @@index([tableId, status])
+  @@index([hotelId, status])
+}
+
+model SessionGuest {
+  id          String       @id @default(cuid())
+  hotelId     String
+  hotel       Hotel        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  sessionId   String
+  session     TableSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  customerId  String?
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+  displayName String // "Rahul" — shown in shared cart
+  deviceId    String // random id kept in a cookie
+  isHost      Boolean      @default(false) // first guest; sees the join code
+  joinedAt    DateTime     @default(now())
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+
+  @@unique([sessionId, deviceId])
+}
+
+// Live shared cart (synced over WebSocket) before checkout. `id` is client-generated so upserts are idempotent.
+model CartItem {
+  id        String       @id
+  hotelId   String
+  hotel     Hotel        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  sessionId String
+  session   TableSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  guestId   String
+  guest     SessionGuest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      MenuItem     @relation(fields: [itemId], references: [id])
+  variantId String?
+  addonIds  String[]
+  quantity  Int          @default(1)
+  note      String? // "less spicy"
+  updatedAt DateTime     @updatedAt
+
+  @@index([sessionId])
+}
+
+// ─────────────────────────────────────────────
+// ORDERS (KOT) & KITCHEN
+// ─────────────────────────────────────────────
+
+model Order {
+  id           String       @id @default(cuid())
+  hotelId      String
+  hotel        Hotel        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  sessionId    String
+  session      TableSession @relation(fields: [sessionId], references: [id])
+  businessDate DateTime     @db.Date
+  orderNumber  Int // daily running number per hotel, shown on KDS
+  source       OrderSource  @default(QR_CUSTOMER)
+  takenById    String? // waiter who took / confirmed it
+  takenBy      Staff?       @relation("OrderTakenBy", fields: [takenById], references: [id])
+  status       OrderStatus  @default(PLACED)
+  note         String?
+  clientId     String // idempotency key: safe retries + offline sync
+  etaAt        DateTime? // live ETA shown to customer
+  placedAt     DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  items    OrderItem[]
+  payments Payment[]
+
+  @@unique([hotelId, clientId])
+  @@unique([hotelId, businessDate, orderNumber])
+  @@index([hotelId, status, placedAt])
+  @@index([sessionId])
+}
+
+model OrderItem {
+  id           String        @id @default(cuid())
+  hotelId      String
+  hotel        Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  orderId      String
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemId       String
+  item         MenuItem      @relation(fields: [itemId], references: [id])
+  guestId      String? // who ordered it — enables split by guest
+  guest        SessionGuest? @relation(fields: [guestId], references: [id])
+  stationId    String? // copied from item at order time
+  nameSnapshot String // name/price/tax as they were when ordered
+  variantName  String?
+  unitPrice    Int // paise incl. variant + addons
+  quantity     Int           @default(1)
+  taxBps       Int           @default(0) // sum of item tax rates at order time
+  taxSnapshot  Json? // [{ name: "CGST", rateBps: 250 }, ...]
+  note         String?
+  status       ItemStatus    @default(QUEUED)
+
+  startedAt    DateTime?
+  readyAt      DateTime?
+  pickedUpAt   DateTime?
+  pickedUpById String?
+  pickedUpBy   Staff?        @relation("ItemPickedUpBy", fields: [pickedUpById], references: [id])
+  servedAt     DateTime?
+  cancelReason String?
+  updatedAt    DateTime      @updatedAt
+
+  // Out-of-stock replacement chain
+  replacesItemId String?    @unique
+  replacesItem   OrderItem? @relation("Replacement", fields: [replacesItemId], references: [id])
+  replacedBy     OrderItem? @relation("Replacement")
+
+  addons      OrderItemAddon[]
+  billSplitId String?
+  billSplit   BillSplit?       @relation(fields: [billSplitId], references: [id])
+
+  @@index([stationId, status])
+  @@index([hotelId, status])
+  @@index([orderId])
+}
+
+model OrderItemAddon {
+  id           String    @id @default(cuid())
+  hotelId      String
+  hotel        Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  orderItemId  String
+  orderItem    OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  addonId      String
+  addon        Addon     @relation(fields: [addonId], references: [id])
+  nameSnapshot String
+  price        Int
+
+  @@index([orderItemId])
+}
+
+// ─────────────────────────────────────────────
+// SERVICE REQUESTS (call waiter, water, bill)
+// At most one OPEN request per (session, type) (partial unique index).
+// ─────────────────────────────────────────────
+
+model ServiceRequest {
+  id          String        @id @default(cuid())
+  hotelId     String
+  hotel       Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  sessionId   String
+  session     TableSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type        RequestType
+  note        String?
+  status      RequestStatus @default(OPEN)
+  handledById String?
+  handledBy   Staff?        @relation(fields: [handledById], references: [id])
+  createdAt   DateTime      @default(now())
+  ackAt       DateTime?
+  doneAt      DateTime?
+
+  @@index([hotelId, status])
+}
+
+// ─────────────────────────────────────────────
+// BILLING & PAYMENTS
+// At most one non-VOID bill per session (partial unique index).
+// ─────────────────────────────────────────────
+
+model Bill {
+  id               String       @id @default(cuid())
+  hotelId          String
+  hotel            Hotel        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  sessionId        String
+  session          TableSession @relation(fields: [sessionId], references: [id])
+  billNumber       String? // GST invoice number, assigned on finalize: {prefix}/{FY}/{seq}
+  subtotal         Int // sum of line amounts as priced on the menu
+  discount         Int          @default(0)
+  serviceCharge    Int          @default(0)
+  serviceChargeBps Int          @default(0)
+  taxTotal         Int
+  roundOff         Int          @default(0)
+  total            Int
+  pricesIncludeTax Boolean      @default(false)
+  splitType        SplitType    @default(NONE)
+  status           BillStatus   @default(OPEN)
+  sentToPhone      String? // WhatsApp/SMS digital bill
+  createdAt        DateTime     @default(now())
+  finalizedAt      DateTime?
+  closedAt         DateTime?
+
+  taxLines BillTaxLine[]
+  splits   BillSplit[]
+  payments Payment[]
+
+  @@unique([hotelId, billNumber])
+  @@index([sessionId])
+  @@index([hotelId, createdAt])
+  @@index([hotelId, status, closedAt]) // end-of-day report
+}
+
+// GST breakup printed on the invoice, one row per (tax name, rate).
+model BillTaxLine {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  billId  String
+  bill    Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+  name    String // CGST
+  rateBps Int
+  taxable Int
+  amount  Int
+
+  @@index([billId])
+}
+
+model BillSplit {
+  id       String      @id @default(cuid())
+  hotelId  String
+  hotel    Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  billId   String
+  bill     Bill        @relation(fields: [billId], references: [id], onDelete: Cascade)
+  label    String // "Rahul", "Split 1 of 3"
+  amount   Int
+  isPaid   Boolean     @default(false)
+  items    OrderItem[] // BY_ITEM / BY_GUEST
+  payments Payment[]
+
+  @@index([billId])
+}
+
+// A payment can exist before its bill (pay-now orders), so billId is optional; sessionId is always set.
+model Payment {
+  id             String        @id @default(cuid())
+  hotelId        String
+  hotel          Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  sessionId      String
+  session        TableSession  @relation(fields: [sessionId], references: [id])
+  orderId        String? // pay-now: the order this payment releases to the kitchen
+  order          Order?        @relation(fields: [orderId], references: [id])
+  billId         String?
+  bill           Bill?         @relation(fields: [billId], references: [id])
+  splitId        String?
+  split          BillSplit?    @relation(fields: [splitId], references: [id])
+  clientId       String // idempotency key
+  method         PaymentMethod
+  amount         Int
+  status         PaymentStatus @default(PENDING)
+  gatewayOrderId String?       @unique // Razorpay order id
+  gatewayRef     String? // Razorpay payment id / UPI txn id
+  collectedById  String?
+  collectedBy    Staff?        @relation(fields: [collectedById], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([hotelId, clientId])
+  @@index([billId])
+  @@index([sessionId, status])
+}
+
+// ─────────────────────────────────────────────
+// INFRA: counters, idempotency, sync, audit
+// ─────────────────────────────────────────────
+
+// Atomic per-hotel sequences. key = "order:2026-10-30" | "bill:2627"
+model Counter {
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  key     String
+  value   Int    @default(0)
+
+  @@id([hotelId, key])
+}
+
+// Stored responses for retried mutations. Swept after 48h.
+model IdempotencyKey {
+  hotelId    String
+  hotel      Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  key        String
+  route      String
+  statusCode Int
+  response   Json
+  createdAt  DateTime @default(now())
+
+  @@id([hotelId, key])
+  @@index([createdAt])
+}
+
+// Offline commands the server refused (platform health "failed syncs").
+model SyncRejection {
+  id        String   @id @default(cuid())
+  hotelId   String
+  hotel     Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  deviceId  String?
+  clientId  String
+  command   Json
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([hotelId, createdAt])
+}
+
+// Voids, cancellations, discounts, price changes.
+model AuditLog {
+  id        String   @id @default(cuid())
+  hotelId   String
+  hotel     Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  actorId   String? // staff id
+  action    String // ORDER_CANCELLED, DISCOUNT_APPLIED, ITEM_OUT_OF_STOCK
+  entity    String
+  entityId  String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([hotelId, createdAt])
+  @@index([hotelId, action, createdAt]) // audit screen filter
+}

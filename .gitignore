@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.next/
+.next-*/
+out/
+.turbo/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+playwright-report/
+test-results/
+.code-review-graph/
+hub-data/
+apps/hub/.env
+uploads/

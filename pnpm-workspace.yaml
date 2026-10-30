@@ -1,0 +1,14 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "e2e"
+
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - prisma
+  - esbuild
+
+# Optional native speedup for BullMQ's msgpack; pure-JS fallback is fine.
+ignoredBuiltDependencies:
+  - msgpackr-extract
