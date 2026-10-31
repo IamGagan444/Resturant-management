@@ -16,7 +16,8 @@
     "seed": "tsx src/seed.ts",
     "postinstall": "prisma generate",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bootstrap": "tsx src/bootstrap.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

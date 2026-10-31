@@ -15,6 +15,7 @@
     "db:migrate": "pnpm --filter @rms/db migrate",
     "db:deploy": "pnpm --filter @rms/db migrate:deploy",
     "db:seed": "pnpm --filter @rms/db seed",
+    "db:bootstrap": "pnpm --filter @rms/db bootstrap",
     "e2e": "pnpm --filter @rms/e2e e2e",
     "hub": "pnpm --filter @rms/hub start"
   },

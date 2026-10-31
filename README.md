@@ -48,6 +48,10 @@ Seeded logins:
 13. **Audit log.** Manage → **Audit log** lists voids, cancellations, discounts, stock and price changes (who, when, why), plus any offline taps the server refused.
 14. **Super admin.** Sign in with the admin email. From there you can onboard a hotel, change its status or plan, and view platform health.
 
+## Deploying
+
+Production runs on one server with Docker Compose (`deploy/`): Caddy (automatic HTTPS), API, guest app, static console, Postgres, Redis and nightly backups. Step by step for AWS: [docs/deploy-aws.md](docs/deploy-aws.md). Production setup creates only the super admin and plans (`pnpm db:bootstrap`), never the demo hotel.
+
 ## Repo layout
 
 ```
@@ -168,5 +172,4 @@ Known gaps:
 - **WhatsApp / SMS** are pre-filled links on the staff device. Sending automatically needs a provider (WhatsApp Business API, MSG91).
 - **Translations:** the Odia and Telugu text needs a native speaker's review. The staff console is English only.
 - **Refunds** for an accidental double UPI payment are done in the Razorpay dashboard.
-- **S3** has not been run against a real bucket; the `S3_*` values in `.env` are empty.
 - **`PAYMENTS_MOCK` isn't set in `.env`,** so `pnpm dev` runs with UPI off until the hotel's Razorpay keys are entered (Manage → Settings). The e2e stack always uses the mock.

@@ -1,0 +1,17 @@
+**/node_modules
+**/.next
+**/.next-*
+**/out
+**/.turbo
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+**/uploads
+**/hub-data
+.git
+.code-review-graph
+**/.env
+**/.env.*
+!**/.env.example
+deploy/backups

@@ -9,6 +9,7 @@
  */
 import { config } from "dotenv";
 import { hash } from "@node-rs/argon2";
+import { ensurePlatform } from "./bootstrap";
 import { PrismaClient, type FoodType, type Table } from "@prisma/client";
 import { businessDate } from "@rms/domain";
 
@@ -22,34 +23,7 @@ async function main() {
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;
   if (!adminPassword || adminPassword === "change-me") throw new Error("Set SEED_ADMIN_PASSWORD in .env");
 
-  await prisma.platformUser.upsert({
-    where: { email: adminEmail },
-    update: {},
-    create: { email: adminEmail, name: "Platform Admin", passwordHash: await hash(adminPassword), role: "SUPER_ADMIN" },
-  });
-
-  const starter = await prisma.plan.upsert({
-    where: { name: "Starter" },
-    update: {},
-    create: {
-      name: "Starter",
-      priceMonthly: 99900,
-      maxTables: 15,
-      maxStaff: 10,
-      features: { kds: true, offlineMode: false, inventory: false, roomService: false },
-    },
-  });
-  await prisma.plan.upsert({
-    where: { name: "Pro" },
-    update: {},
-    create: {
-      name: "Pro",
-      priceMonthly: 249900,
-      maxTables: 60,
-      maxStaff: 50,
-      features: { kds: true, offlineMode: true, inventory: false, roomService: true },
-    },
-  });
+  const { starter } = await ensurePlatform(prisma, { email: adminEmail, password: adminPassword });
 
   await prisma.hotel.deleteMany({ where: { slug: SLUG } });
   const hotel = await prisma.hotel.create({

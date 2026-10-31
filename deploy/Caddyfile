@@ -1,0 +1,31 @@
+# HTTPS certificates are issued and renewed automatically (Let's Encrypt) for each host below.
+# Hosts come from deploy/.env.
+{
+	email {$ACME_EMAIL}
+}
+
+# Guest app (the address printed in table QR codes)
+{$CUSTOMER_HOST} {
+	encode zstd gzip
+	reverse_proxy customer:3000
+}
+
+# Staff console: static files; pages are folders (trailingSlash export)
+{$CONSOLE_HOST} {
+	encode zstd gzip
+	root * /srv/console
+	# the service worker must never be cached, or devices keep an old app
+	header /sw.js Cache-Control "no-cache"
+	header /_next/static/* Cache-Control "public, max-age=31536000, immutable"
+	try_files {path} {path}/index.html {path}.html
+	file_server
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
+}
+
+# API + live updates (WebSocket upgrades are proxied automatically)
+{$API_HOST} {
+	reverse_proxy api:4000
+}

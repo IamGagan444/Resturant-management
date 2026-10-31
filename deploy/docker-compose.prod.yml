@@ -1,0 +1,157 @@
+# Production on one server: docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+# Only Caddy is reachable from outside (80/443). Postgres and Redis live on the private compose network.
+name: rms
+
+x-app-env: &app-env
+  NODE_ENV: production
+  PORT: "4000"
+  DATABASE_URL: postgresql://rms:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/rms?schema=public
+  REDIS_URL: redis://redis:6379
+  API_URL: https://${API_HOST:?set API_HOST}
+  CUSTOMER_URL: https://${CUSTOMER_HOST:?set CUSTOMER_HOST}
+  CONSOLE_URL: https://${CONSOLE_HOST:?set CONSOLE_HOST}
+  COOKIE_SECURE: "true"
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+  STORAGE_DRIVER: ${STORAGE_DRIVER:-s3}
+  UPLOAD_DIR: /data/uploads
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  S3_REGION: ${S3_REGION:-}
+  S3_BUCKET: ${S3_BUCKET:-}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+  S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
+
+x-api-image: &api-image
+  image: rms-api
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+    target: api
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rms
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: rms
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rms -d rms"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  # Runs on every deploy, then exits: applies migrations, makes sure the super admin and plans exist.
+  migrate:
+    <<: *api-image
+    restart: "no"
+    working_dir: /app
+    command: ["sh", "-c", "pnpm db:deploy && pnpm db:bootstrap"]
+    environment:
+      <<: *app-env
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *api-image
+    restart: unless-stopped
+    environment: *app-env
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      start_period: 30s
+      retries: 5
+
+  customer:
+    image: rms-customer
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: customer
+      args:
+        API_URL: https://${API_HOST}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_URL: https://${API_HOST}
+    depends_on:
+      - api
+
+  web:
+    image: rms-web
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: web
+      args:
+        API_URL: https://${API_HOST}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL}
+      CUSTOMER_HOST: ${CUSTOMER_HOST}
+      CONSOLE_HOST: ${CONSOLE_HOST}
+      API_HOST: ${API_HOST}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - customer
+
+  # Nightly database dump: kept on the server (last 7) and, if a bucket is set, copied to S3.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ["sh", "/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: rms
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: rms
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      AWS_ACCESS_KEY_ID: ${BACKUP_AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${BACKUP_AWS_REGION:-ap-south-1}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - backups:/backups
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
+  backups:
+  caddy_data:
+  caddy_config:
