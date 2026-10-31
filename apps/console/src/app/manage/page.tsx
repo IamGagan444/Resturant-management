@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { BarChart3, ChefHat, ClipboardList, ConciergeBell, LayoutGrid, Menu, MonitorSmartphone, QrCode, ReceiptText, Settings, Users, UtensilsCrossed, type LucideIcon } from "lucide-react";
 import { useGuard } from "@/lib/auth";
-import { BarChart3, ChefHat, ClipboardList, ConciergeBell, LayoutGrid, MonitorSmartphone, QrCode, ReceiptText, Settings, Users, UtensilsCrossed, type LucideIcon } from "lucide-react";
 import { NavLink, TopBar } from "@/components/ui";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MenuTab } from "@/components/manage/MenuTab";
 import { TablesTab } from "@/components/manage/TablesTab";
 import { StaffTab } from "@/components/manage/StaffTab";
@@ -15,6 +17,14 @@ const TABS = { menu: "Menu", tables: "Tables & QR", staff: "Staff", settings: "S
 type Tab = keyof typeof TABS;
 const TAB_ICON: Record<Tab, LucideIcon> = { menu: UtensilsCrossed, tables: QrCode, staff: Users, settings: Settings, devices: MonitorSmartphone, audit: ClipboardList };
 
+const LINKS: { href: string; label: string; icon: LucideIcon; group: "manage" | "screens" }[] = [
+  { href: "/floor/", label: "Live floor", icon: LayoutGrid, group: "manage" },
+  { href: "/reports/", label: "Day report", icon: BarChart3, group: "manage" },
+  { href: "/kds/", label: "Kitchen", icon: ChefHat, group: "screens" },
+  { href: "/waiter/", label: "Floor", icon: ConciergeBell, group: "screens" },
+  { href: "/cashier/", label: "Counter", icon: ReceiptText, group: "screens" },
+];
+
 export default function ManagePage() {
   const me = useGuard(["OWNER", "MANAGER"]);
   const [tab, setTab] = useState<Tab>("menu");
@@ -22,53 +32,81 @@ export default function ManagePage() {
   return (
     <div className="min-h-dvh">
       <TopBar title={me.hotel.name} subtitle="Manage">
-        <NavLink href="/floor/" icon={LayoutGrid}>
-          Live floor
-        </NavLink>
-        <NavLink href="/reports/" icon={BarChart3}>
-          Day report
-        </NavLink>
+        {/* wide screens: every shortcut; phones: one menu so the header never overflows */}
+        <span className="hidden items-center sm:flex">
+          {LINKS.filter((l) => l.group === "manage").map((l) => (
+            <NavLink key={l.href} href={l.href} icon={l.icon}>
+              {l.label}
+            </NavLink>
+          ))}
+        </span>
         <span className="line mx-1 hidden h-6 border-l lg:block" aria-hidden />
         <span className="hidden items-center lg:flex">
-          <NavLink href="/kds/" icon={ChefHat}>
-            Kitchen
-          </NavLink>
-          <NavLink href="/waiter/" icon={ConciergeBell}>
-            Floor
-          </NavLink>
-          <NavLink href="/cashier/" icon={ReceiptText}>
-            Counter
-          </NavLink>
+          {LINKS.filter((l) => l.group === "screens").map((l) => (
+            <NavLink key={l.href} href={l.href} icon={l.icon}>
+              {l.label}
+            </NavLink>
+          ))}
         </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="Go to"
+            className="muted grid h-10 w-10 shrink-0 place-items-center rounded-xl transition hover:bg-(--sunken) hover:text-(--ink) data-[state=open]:bg-(--sunken) lg:hidden"
+          >
+            <Menu className="h-5 w-5" aria-hidden />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuLabel>Manager</DropdownMenuLabel>
+            {LINKS.filter((l) => l.group === "manage").map((l) => (
+              <DropdownMenuItem key={l.href} onSelect={() => (location.href = l.href)}>
+                <l.icon aria-hidden /> {l.label}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Staff screens</DropdownMenuLabel>
+            {LINKS.filter((l) => l.group === "screens").map((l) => (
+              <DropdownMenuItem key={l.href} onSelect={() => (location.href = l.href)}>
+                <l.icon aria-hidden /> {l.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </TopBar>
-      <div className="line sticky top-16 z-10 border-b bg-(--bg)/85 backdrop-blur-xl">
-        <nav className="scroll-x mx-auto flex max-w-6xl gap-1 px-3 py-2 sm:px-6" aria-label="Manage sections">
-          {(Object.keys(TABS) as Tab[]).map((t) => {
-            const Icon = TAB_ICON[t];
-            return (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                aria-current={tab === t}
-                className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold whitespace-nowrap transition ${
-                  tab === t ? "surface text-brand shadow-soft ring-1 ring-(--line)" : "muted hover:bg-(--sunken) hover:text-(--ink)"
-                }`}
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-                {TABS[t]}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-      <main className="mx-auto max-w-6xl px-3 py-5 sm:px-6 sm:py-8">
-        {tab === "menu" && <MenuTab />}
-        {tab === "tables" && <TablesTab />}
-        {tab === "staff" && <StaffTab />}
-        {tab === "settings" && <SettingsTab />}
-        {tab === "devices" && <DevicesTab />}
-        {tab === "audit" && <AuditTab />}
-      </main>
+      <Tabs value={tab} onValueChange={(t) => setTab(t as Tab)}>
+        <div className="line sticky top-16 z-10 border-b bg-(--bg)/85 backdrop-blur-xl">
+          <TabsList className="mx-auto max-w-6xl px-3 py-2 sm:px-6" aria-label="Manage sections">
+            {(Object.keys(TABS) as Tab[]).map((t) => {
+              const Icon = TAB_ICON[t];
+              return (
+                <TabsTrigger key={t} value={t}>
+                  <Icon aria-hidden />
+                  {TABS[t]}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </div>
+        <main className="mx-auto max-w-6xl px-3 py-5 sm:px-6 sm:py-8">
+          <TabsContent value="menu">
+            <MenuTab />
+          </TabsContent>
+          <TabsContent value="tables">
+            <TablesTab />
+          </TabsContent>
+          <TabsContent value="staff">
+            <StaffTab />
+          </TabsContent>
+          <TabsContent value="settings">
+            <SettingsTab />
+          </TabsContent>
+          <TabsContent value="devices">
+            <DevicesTab />
+          </TabsContent>
+          <TabsContent value="audit">
+            <AuditTab />
+          </TabsContent>
+        </main>
+      </Tabs>
     </div>
   );
 }

@@ -10,6 +10,8 @@ import { useGuard } from "@/lib/auth";
 import { chime, unlockSound, useStaffSocket } from "@/lib/realtime";
 import { Bell, CheckCheck, CheckCircle2, Circle, ClipboardList, Flame, PackageX, StickyNote } from "lucide-react";
 import { Button, OfflineBanner, RejectionToast, TopBar } from "@/components/ui";
+import { confirm } from "@/components/ui/feedback";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const AGE_STYLE: Record<AgeLevel, string> = {
   fresh: "border-fresh/70",
@@ -73,7 +75,13 @@ export default function KdsPage() {
 
   /** One tap: this order's guest is asked to pick something else, and the dish is hidden from every menu. */
   async function ranOut(item: KdsTicket["items"][number]) {
-    if (!confirm(`${item.name} ran out? The guest will be asked to choose something else.`)) return;
+    const ok = await confirm({
+      title: `${item.name} ran out?`,
+      description: "The guest is asked to choose something else, and the dish is hidden from every menu until you mark it back in stock.",
+      confirmLabel: "Mark as ran out",
+      destructive: true,
+    });
+    if (!ok) return;
     patch([item.id], null);
     await send({ type: "item.transition", orderItemId: item.id, to: "OUT_OF_STOCK" }).catch(refetch);
     await send({ type: "menu.availability", menuItemId: item.itemId, isAvailable: false }).catch(refetch);
@@ -128,6 +136,12 @@ export default function KdsPage() {
 
       {showStock ? (
         <StockPanel />
+      ) : tickets.isLoading ? (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,290px),1fr))] gap-4 p-3 sm:p-4" role="status" aria-label="Loading">
+          {Array.from({ length: 4 }, (_, i) => (
+            <Skeleton key={i} className="h-64 rounded-2xl" />
+          ))}
+        </div>
       ) : list.length === 0 ? (
         <div className="muted flex flex-col items-center gap-3 py-24 text-center">
           <CheckCheck className="h-14 w-14 text-fresh" aria-hidden />

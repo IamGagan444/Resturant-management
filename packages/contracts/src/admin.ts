@@ -33,15 +33,15 @@ export type Me = z.infer<typeof Me>;
 
 // ── Hotel settings (manager) ───────────────────
 
+/** Indian GST number, e.g. 21ABCDE1234F1Z5. */
+export const Gstin = z.string().regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/, "Enter a valid 15-character GSTIN, e.g. 21ABCDE1234F1Z5");
+
 export const HotelSettingsInput = z
   .object({
     name: z.string().trim().min(1).max(80),
-    phone: z.string().max(20).nullable(),
-    address: z.string().max(300).nullable(),
-    gstin: z
-      .string()
-      .regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/, "Invalid GSTIN")
-      .nullable(),
+    phone: Phone.nullable(),
+    address: z.string().trim().max(300).nullable(),
+    gstin: Gstin.nullable(),
     invoicePrefix: z.string().regex(/^[A-Z0-9]{1,4}$/, "1–4 capital letters/digits"),
     defaultLanguage: Language,
     requireWaiterConfirm: z.boolean(),
@@ -85,7 +85,7 @@ export const StaffCreateInput = z.object({
   role: StaffRole,
   phone: Phone.nullish(),
   email: z.string().email().nullish(),
-  password: z.string().min(8).max(200).nullish(), // owners/managers who use the web admin
+  password: z.string().min(8, "At least 8 characters").max(200).nullish(), // owners/managers who use the web admin
   pin: Pin,
   stationId: Id.nullish(),
   language: Language.default("en"),
@@ -113,9 +113,9 @@ export const AvailabilityInput = z.object({ isAvailable: z.boolean(), clientId: 
 export const CreateHotelInput = z.object({
   name: z.string().trim().min(1).max(80),
   slug: Slug,
-  phone: z.string().max(20).nullish(),
-  address: z.string().max(300).nullish(),
-  gstin: z.string().max(15).nullish(),
+  phone: Phone.nullish(),
+  address: z.string().trim().max(300).nullish(),
+  gstin: Gstin.nullish(),
   planId: Id.nullish(),
   status: HotelStatus.default("TRIAL"),
   trialEndsAt: z.string().datetime().nullish(),
@@ -132,6 +132,9 @@ export type CreateHotelInput = z.infer<typeof CreateHotelInput>;
 export const UpdateHotelInput = z
   .object({
     name: z.string().trim().min(1).max(80),
+    phone: Phone.nullable(),
+    address: z.string().trim().max(300).nullable(),
+    gstin: Gstin.nullable(),
     status: HotelStatus,
     planId: Id.nullable(),
     trialEndsAt: z.string().datetime().nullable(),
@@ -139,6 +142,47 @@ export const UpdateHotelInput = z
   })
   .partial();
 export type UpdateHotelInput = z.infer<typeof UpdateHotelInput>;
+
+export const ResetPasswordInput = z.object({ password: z.string().min(8, "At least 8 characters").max(200) });
+export type ResetPasswordInput = z.infer<typeof ResetPasswordInput>;
+
+/** One signed-in browser or device of a restaurant's staff, as the super admin sees it. */
+export interface PlatformSession {
+  id: string;
+  person: { id: string; name: string; role: StaffRole; email: string | null };
+  hotel: { id: string; name: string };
+  device: string | null; // paired device name, or null for a web sign-in
+  userAgent: string | null;
+  ip: string | null;
+  lastActiveAt: string;
+  expiresAt: string;
+}
+
+export interface PlatformHotel {
+  id: string;
+  name: string;
+  slug: string;
+  status: HotelStatus;
+  phone: string | null;
+  address: string | null;
+  gstin: string | null;
+  plan: { id: string; name: string } | null;
+  trialEndsAt: string | null;
+  owner: { id: string; name: string; email: string | null; phone: string | null } | null;
+  tables: number;
+  staff: number;
+  ordersLast7d: number;
+  createdAt: string;
+}
+
+export interface PlatformOverview {
+  hotels: { total: number; byStatus: Record<HotelStatus, number>; newLast30d: number };
+  activity: { ordersLast24h: number; ordersLast7d: number; liveSessions: number; staffSignedIn: number };
+  problems: { failedPaymentsLast24h: number; failedSyncsLast24h: number };
+  trialsEndingSoon: { id: string; name: string; trialEndsAt: string }[];
+  topHotels: { id: string; name: string; orders: number }[];
+  recentHotels: { id: string; name: string; status: HotelStatus; createdAt: string }[];
+}
 
 export const PlanInput = z.object({
   name: z.string().trim().min(1).max(40),

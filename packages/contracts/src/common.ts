@@ -13,11 +13,19 @@ export const Bps = z.number().int().min(0).max(10_000);
 
 export const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM");
 
-export const Phone = z.string().regex(/^\+?\d{10,15}$/, "Invalid phone");
+/** Mobile number. Spaces, dashes and brackets people type ("98765 43210") are dropped before checking. */
+export const Phone = z.preprocess(
+  (v) => (typeof v === "string" ? v.replace(/[\s\-()]/g, "") : v),
+  z.string().regex(/^\+?\d{10,15}$/, "Enter a 10-digit mobile number"),
+);
 
 export const Pin = z.string().regex(/^\d{4,6}$/, "PIN must be 4–6 digits");
 
-export const Slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).min(3).max(48);
+export const Slug = z
+  .string()
+  .min(3, "At least 3 characters")
+  .max(48, "At most 48 characters")
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Lowercase letters, numbers and single dashes only");
 
 /** Translations keyed by language code: { hi: { name, description } } */
 export const Translations = z.record(

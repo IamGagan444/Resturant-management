@@ -26,9 +26,13 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
   const [needCode, setNeedCode] = useState(lookup.hasOpenSession);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [phoneError, setPhoneError] = useState(false);
+  // same rule as the API (contracts Phone), without shipping zod to guests' phones
+  const phoneOk = (p: string) => !p.trim() || /^\+?\d{10,15}$/.test(p.replace(/[\s\-()]/g, ""));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!phoneOk(phone)) return setPhoneError(true);
     setBusy(true);
     setError(null);
     try {
@@ -67,7 +71,12 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
         <p className="muted mt-4">{needCode ? t("needCodePrompt") : t("startOrderingPrompt")}</p>
       <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-semibold">{t("yourName")}</span>
+          <span className="text-sm font-semibold">
+            {t("yourName")}
+            <span className="ml-0.5 text-red-600" aria-hidden>
+              *
+            </span>
+          </span>
           <input
             required
             maxLength={40}
@@ -86,13 +95,26 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
             inputMode="tel"
             autoComplete="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="tap surface line rounded-2xl border px-4 text-base shadow-xs"
+            onChange={(e) => (setPhone(e.target.value), setPhoneError(false))}
+            onBlur={() => setPhoneError(!phoneOk(phone))}
+            aria-invalid={phoneError || undefined}
+            aria-describedby={phoneError ? "phone-error" : undefined}
+            className={`tap surface rounded-2xl border px-4 text-base shadow-xs ${phoneError ? "border-red-500" : "line"}`}
           />
+          {phoneError && (
+            <span id="phone-error" role="alert" className="text-xs font-medium text-red-600">
+              {t("invalidPhone")}
+            </span>
+          )}
         </label>
         {needCode && (
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold">{t("tableCode")}</span>
+            <span className="text-sm font-semibold">
+              {t("tableCode")}
+              <span className="ml-0.5 text-red-600" aria-hidden>
+                *
+              </span>
+            </span>
             <input
               required
               inputMode="numeric"

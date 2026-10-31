@@ -7,7 +7,8 @@ import { api, rupees } from "@/lib/api";
 import { useGuard } from "@/lib/auth";
 import { chime, unlockSound, useStaffSocket } from "@/lib/realtime";
 import { AlarmClock, BarChart3, Bell, CheckCircle2, Flame, HandHelping, Move, Settings2, Users } from "lucide-react";
-import { Button, ErrorText, NavLink, OfflineBanner, Spinner, TopBar } from "@/components/ui";
+import { Button, ErrorText, NavLink, OfflineBanner, TopBar } from "@/components/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const STATUS_STYLE: Record<FloorTable["status"], string> = {
   FREE: "line",
@@ -157,7 +158,9 @@ export default function FloorPage() {
       </div>
 
       {!data ? (
-        <Spinner label="Loading floor…" />
+        <div className="mx-3 mb-4 flex-1 sm:mx-6" role="status" aria-label="Loading floor">
+          <Skeleton className="h-full min-h-[70dvh] rounded-3xl" />
+        </div>
       ) : (
         <Canvas editing={editing} onMove={(id, p) => setMoved((m) => ({ ...m, [id]: p }))}>
           {tables.map((t, i) => {

@@ -17,9 +17,10 @@ async function staffDevice(browser: Browser, kind: "Kitchen screen" | "Waiter ph
   await page.getByLabel("Email").fill(OWNER.email);
   await page.getByLabel("Password").fill(OWNER.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByRole("button", { name: "Devices" }).click();
+  await page.getByRole("tab", { name: "Devices" }).click();
   await page.getByLabel("Name").fill(`${kind} (e2e)`);
-  await page.getByLabel("Used as").selectOption({ label: kind });
+  await page.getByRole("combobox", { name: /Used as/ }).click();
+  await page.getByRole("option", { name: kind }).click();
   await page.getByRole("button", { name: "Pair" }).click();
   await expect(page.getByText("Who's working?")).toBeVisible();
   await page.getByRole("button", { name: new RegExp(who) }).click();

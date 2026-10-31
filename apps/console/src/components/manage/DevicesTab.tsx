@@ -2,67 +2,46 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { DeviceKind } from "@rms/contracts";
+import { DevicePairInput, HubPairInput, type DeviceKind } from "@rms/contracts";
+import { ChefHat, ConciergeBell, MonitorSmartphone, ReceiptText, Router, Trash2, UserRoundCog, type LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { signOut } from "@/lib/auth";
-import { ChefHat, ConciergeBell, ReceiptText, Router, UserRoundCog, type LucideIcon } from "lucide-react";
-import { Badge, Button, Card, CardHeader, ErrorText, Field } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, EmptyState, Field, FormError, SelectField, orNull, useForm } from "@/components/ui";
+import { Loadable, confirm, notify } from "@/components/ui/feedback";
+import { CardSkeleton, ListSkeleton } from "@/components/ui/skeleton";
 
-interface Device {
-  id: string;
-  name: string;
-  kind: DeviceKind;
-  stationId: string | null;
-  lastSeenAt: string | null;
-}
-interface Station {
-  id: string;
-  name: string;
-}
+interface Device { id: string; name: string; kind: DeviceKind; stationId: string | null; lastSeenAt: string | null }
+interface Station { id: string; name: string }
 
-const KIND_LABEL: Record<DeviceKind, string> = {
-  KDS: "Kitchen screen",
-  WAITER: "Waiter phone",
-  POS: "Counter",
-  MANAGER: "Manager",
-  HUB: "Local hub",
-};
-const KIND_ICON: Record<DeviceKind, LucideIcon> = {
-  KDS: ChefHat,
-  WAITER: ConciergeBell,
-  POS: ReceiptText,
-  MANAGER: UserRoundCog,
-  HUB: Router,
-};
+const KIND_LABEL: Record<DeviceKind, string> = { KDS: "Kitchen screen", WAITER: "Waiter phone", POS: "Counter", MANAGER: "Manager", HUB: "Local hub" };
+const KIND_ICON: Record<DeviceKind, LucideIcon> = { KDS: ChefHat, WAITER: ConciergeBell, POS: ReceiptText, MANAGER: UserRoundCog, HUB: Router };
 const PAIRABLE = ["KDS", "WAITER", "POS", "MANAGER"] as const;
 
 /** Pair the device you're holding. After pairing, staff sign in here with PIN only. */
 export function DevicesTab() {
   const qc = useQueryClient();
-  const devices = useQuery({
-    queryKey: ["admin", "devices"],
-    queryFn: () => api<Device[]>("GET", "/v1/admin/devices"),
-  });
-  const stations = useQuery({
-    queryKey: ["admin", "stations"],
-    queryFn: () => api<Station[]>("GET", "/v1/admin/stations"),
-  });
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<DeviceKind>("KDS");
-  const [stationId, setStationId] = useState("");
-  const [error, setError] = useState<unknown>(null);
+  const devices = useQuery({ queryKey: ["admin", "devices"], queryFn: () => api<Device[]>("GET", "/v1/admin/devices") });
+  const stations = useQuery({ queryKey: ["admin", "stations"], queryFn: () => api<Station[]>("GET", "/v1/admin/stations") });
 
-  async function pair(e: React.FormEvent) {
-    e.preventDefault();
+  const form = useForm({
+    initial: { name: "", kind: "KDS" as (typeof PAIRABLE)[number], stationId: "" },
+    schema: DevicePairInput,
+    build: (v) => ({ name: v.name.trim(), kind: v.kind, stationId: v.kind === "KDS" ? orNull(v.stationId) : null }),
+  });
+  const pair = form.submit(async (body) => {
+    await api("POST", "/v1/auth/devices/pair", body);
+    await signOut(); // hand the device over: next screen is the staff PIN picker
+  });
+
+  async function remove(d: Device) {
+    if (!(await confirm({ title: `Remove ${d.name}?`, description: "Whoever is signed in there is signed out, and it needs pairing again.", confirmLabel: "Remove device", destructive: true })))
+      return;
     try {
-      await api("POST", "/v1/auth/devices/pair", {
-        name,
-        kind,
-        stationId: kind === "KDS" && stationId ? stationId : null,
-      });
-      await signOut(); // hand the device over: next screen is the staff PIN picker
-    } catch (err) {
-      setError(err);
+      await api("DELETE", `/v1/admin/devices/${d.id}`);
+      notify.ok(`${d.name} removed`);
+      void qc.invalidateQueries({ queryKey: ["admin", "devices"] });
+    } catch (e) {
+      notify.error(e);
     }
   }
 
@@ -70,91 +49,69 @@ export function DevicesTab() {
     <div className="space-y-6">
       <Card>
         <CardHeader title="Pair this device" hint="Do this once on each tablet or phone. You'll be signed out and staff can then sign in with their PIN." />
-        <form onSubmit={pair} className="grid gap-3 rounded-xl bg-(--sunken) p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-4">
-          <Field label="Name">
-            <input required placeholder="Tandoor tablet" value={name} onChange={(e) => setName(e.target.value)} />
+        <form onSubmit={pair} className="grid gap-4 rounded-xl bg-(--sunken) p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-4 lg:items-start" noValidate>
+          <Field label="Name" required error={form.error("name")}>
+            <input {...form.text("name")} placeholder="Tandoor tablet" maxLength={40} />
           </Field>
-          <Field label="Used as">
-            <select value={kind} onChange={(e) => setKind(e.target.value as DeviceKind)}>
-              {PAIRABLE.map((k) => (
-                <option key={k} value={k}>
-                  {KIND_LABEL[k]}
-                </option>
-              ))}
-            </select>
+          <Field label="Used as" required>
+            <SelectField value={form.values.kind} onChange={(k) => form.set("kind", k as (typeof PAIRABLE)[number])} options={PAIRABLE.map((k) => ({ value: k, label: KIND_LABEL[k] }))} />
           </Field>
-          {kind === "KDS" && (
-            <Field label="Station">
-              <select value={stationId} onChange={(e) => setStationId(e.target.value)}>
-                <option value="">All stations</option>
-                {stations.data?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+          {form.values.kind === "KDS" && (
+            <Field label="Station" hint="Which tickets this screen shows">
+              <SelectField value={form.values.stationId} onChange={(s) => form.set("stationId", s)} emptyLabel="All stations" options={(stations.data ?? []).map((s) => ({ value: s.id, label: s.name }))} />
             </Field>
           )}
-          <Button type="submit" className="self-end">
-            Pair
+          <Button type="submit" className="lg:mt-6.5" disabled={form.busy}>
+            {form.busy ? "Pairing…" : "Pair"}
           </Button>
+          {form.formError && (
+            <div className="sm:col-span-2 lg:col-span-4">
+              <FormError message={form.formError} />
+            </div>
+          )}
         </form>
-        <ErrorText error={error} />
       </Card>
       <HubCard />
       <Card>
         <CardHeader title="Paired devices" />
-        {devices.data?.length === 0 && <p className="muted text-sm">No devices paired yet.</p>}
-        <ul className="grid gap-2 md:grid-cols-2">
-          {devices.data?.map((d) => {
-            const Icon = KIND_ICON[d.kind];
-            return (
-              <li key={d.id} className="line flex items-center gap-3 rounded-xl border p-3">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand">
-                  <Icon className="h-5 w-5" aria-hidden />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold">{d.name}</span>
-                  <span className="muted block truncate text-sm">
-                    {KIND_LABEL[d.kind]}
-                    {d.stationId ? ` · ${stations.data?.find((s) => s.id === d.stationId)?.name ?? ""}` : ""}
-                  </span>
-                </span>
-                <Button
-                  variant="ghost"
-                  className="muted px-3 text-sm hover:text-late"
-                  onClick={() =>
-                    confirm(`Remove ${d.name}? It will need pairing again.`) &&
-                    api("DELETE", `/v1/admin/devices/${d.id}`).then(
-                      () =>
-                        qc.invalidateQueries({
-                          queryKey: ["admin", "devices"],
-                        }),
-                      setError,
-                    )
-                  }
-                >
-                  Remove
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
+        <Loadable query={devices} skeleton={<ListSkeleton rows={3} cols={2} />}>
+          {(list) =>
+            list.length === 0 ? (
+              <EmptyState icon={MonitorSmartphone} title="No devices paired yet" hint="Open this console on the kitchen tablet or a waiter's phone and pair it above." />
+            ) : (
+              <ul className="grid gap-2 md:grid-cols-2">
+                {list.map((d) => {
+                  const Icon = KIND_ICON[d.kind];
+                  return (
+                    <li key={d.id} className="line flex items-center gap-3 rounded-xl border p-3">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand">
+                        <Icon className="h-5 w-5" aria-hidden />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold">{d.name}</span>
+                        <span className="muted block truncate text-sm">
+                          {KIND_LABEL[d.kind]}
+                          {d.stationId ? ` · ${stations.data?.find((s) => s.id === d.stationId)?.name ?? ""}` : ""}
+                          {d.lastSeenAt && ` · seen ${new Date(d.lastSeenAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`}
+                        </span>
+                      </span>
+                      <Button variant="ghost" className="muted px-0 hover:text-late" aria-label={`Remove ${d.name}`} onClick={() => void remove(d)}>
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          }
+        </Loadable>
       </Card>
     </div>
   );
 }
 
-interface HubInfo {
-  url: string | null;
-  deviceId: string | null;
-  lastSeenAt: string | null;
-}
-interface HubPaired {
-  token: string;
-  url: string;
-  cloudUrl: string;
-}
+interface HubInfo { url: string | null; deviceId: string | null; lastSeenAt: string | null }
+interface HubPaired { token: string; url: string; cloudUrl: string }
 
 /**
  * Local hub: a small always-on box (mini PC / Raspberry Pi) on the restaurant Wi-Fi.
@@ -162,27 +119,30 @@ interface HubPaired {
  */
 function HubCard() {
   const qc = useQueryClient();
-  const hub = useQuery({
-    queryKey: ["admin", "hub"],
-    queryFn: () => api<HubInfo>("GET", "/v1/admin/hub"),
-  });
-  const [url, setUrl] = useState("");
+  const hub = useQuery({ queryKey: ["admin", "hub"], queryFn: () => api<HubInfo>("GET", "/v1/admin/hub") });
   const [paired, setPaired] = useState<HubPaired | null>(null);
-  const [error, setError] = useState<unknown>(null);
   const refresh = () => void qc.invalidateQueries({ queryKey: ["admin", "hub"] });
   const online = hub.data?.lastSeenAt && Date.now() - new Date(hub.data.lastSeenAt).getTime() < 60_000;
 
-  async function pair(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
+  const form = useForm({ initial: { url: "" }, schema: HubPairInput, build: (v) => ({ url: v.url.trim() }) });
+  const pair = form.submit(async (body) => {
+    setPaired(await api<HubPaired>("POST", "/v1/admin/hub", body));
+    form.reset();
+    refresh();
+  });
+
+  async function remove() {
+    if (!(await confirm({ title: "Remove the local hub?", description: "Screens will have no backup during internet outages.", confirmLabel: "Remove hub", destructive: true }))) return;
     try {
-      setPaired(await api<HubPaired>("POST", "/v1/admin/hub", { url: url.trim() }));
+      await api("DELETE", "/v1/admin/hub");
+      notify.ok("Local hub removed");
       refresh();
-    } catch (err) {
-      setError(err);
+    } catch (e) {
+      notify.error(e);
     }
   }
 
+  if (hub.isLoading) return <CardSkeleton lines={1} />;
   return (
     <Card>
       <CardHeader
@@ -206,25 +166,25 @@ HUB_TOKEN=${paired.token}`}</pre>
           </Button>
         </div>
       ) : (
-        <form onSubmit={pair} className="flex flex-wrap items-end gap-2 [&>label]:min-w-64 [&>label]:flex-1">
-          <Field label="Hub address on your Wi-Fi" hint="e.g. https://hub.yourrestaurant.in:4100">
-            <input required type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder={hub.data?.url ?? "https://"} />
+        <form onSubmit={pair} className="flex flex-wrap items-start gap-2" noValidate>
+          <Field label="Hub address on your Wi-Fi" required error={form.error("url")} hint="e.g. https://hub.yourrestaurant.in:4100" className="min-w-64 flex-1">
+            <input {...form.text("url")} type="url" placeholder={hub.data?.url ?? "https://"} />
           </Field>
-          <Button type="submit">{hub.data?.deviceId ? "Replace hub" : "Set up hub"}</Button>
+          <Button type="submit" className="mt-6.5" disabled={form.busy}>
+            {hub.data?.deviceId ? "Replace hub" : "Set up hub"}
+          </Button>
           {hub.data?.deviceId && (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() =>
-                confirm("Remove the local hub? Screens will have no backup during outages.") && api("DELETE", "/v1/admin/hub").then(refresh, setError)
-              }
-            >
+            <Button type="button" variant="ghost" className="mt-6.5" onClick={() => void remove()}>
               Remove
             </Button>
           )}
+          {form.formError && !form.error("url") && (
+            <div className="w-full">
+              <FormError message={form.formError} />
+            </div>
+          )}
         </form>
       )}
-      <ErrorText error={error} />
     </Card>
   );
 }

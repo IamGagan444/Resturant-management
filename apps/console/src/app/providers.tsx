@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NetworkError } from "@/lib/api";
 import { onModeChange, startNet } from "@/lib/net";
 import { onFlushed, startOutbox } from "@/lib/outbox";
+import { ConfirmHost, Toaster } from "@/components/ui/feedback";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(
@@ -36,5 +37,11 @@ export function Providers({ children }: { children: ReactNode }) {
     };
   }, [client]);
 
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      {children}
+      <Toaster />
+      <ConfirmHost />
+    </QueryClientProvider>
+  );
 }

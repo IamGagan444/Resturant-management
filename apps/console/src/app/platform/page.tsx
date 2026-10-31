@@ -1,196 +1,163 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { HotelStatus } from "@rms/contracts";
+import { useQuery } from "@tanstack/react-query";
+import type { HotelStatus, PlatformOverview } from "@rms/contracts";
+import { AlertTriangle, ArrowRight, Building2, CalendarClock, CloudOff, KeySquare, Rocket, ShoppingBag, TrendingUp, Utensils } from "lucide-react";
 import { api } from "@/lib/api";
-import { useGuard } from "@/lib/auth";
-import { Activity, AlertTriangle, Building2, CloudOff, ShoppingBag, Utensils } from "lucide-react";
-import { Badge, Button, Card, CardHeader, ErrorText, Field, Stat, TopBar } from "@/components/ui";
+import { Badge, Card, CardHeader, LinkButton, Stat } from "@/components/ui";
+import { Loadable } from "@/components/ui/feedback";
+import { CardSkeleton, StatsSkeleton } from "@/components/ui/skeleton";
+import { PageTitle, STATUS_LABEL, STATUS_TONE, shortDate, timeAgo } from "@/components/platform/common";
 
-interface HotelRow {
-  id: string;
-  name: string;
-  slug: string;
-  status: HotelStatus;
-  plan: { id: string; name: string } | null;
-  trialEndsAt: string | null;
-  tables: number;
-  staff: number;
-}
-interface Plan { id: string; name: string; priceMonthly: number }
-interface Health { activeHotels: number; ordersLast24h: number; failedPaymentsLast24h: number; failedSyncsLast24h: number; liveSessions: number }
+const STATUS_BAR: Record<HotelStatus, string> = { TRIAL: "bg-brand", ACTIVE: "bg-fresh", SUSPENDED: "bg-warn", CANCELLED: "bg-late" };
 
-const STATUSES: HotelStatus[] = ["TRIAL", "ACTIVE", "SUSPENDED", "CANCELLED"];
-
-/** Super admin: onboard hotels, change plan/status, watch platform health. */
-export default function PlatformPage() {
-  const me = useGuard("platform");
-  const qc = useQueryClient();
-  const hotels = useQuery({ queryKey: ["p", "hotels"], queryFn: () => api<HotelRow[]>("GET", "/v1/platform/hotels"), enabled: Boolean(me) });
-  const plans = useQuery({ queryKey: ["p", "plans"], queryFn: () => api<Plan[]>("GET", "/v1/platform/plans"), enabled: Boolean(me) });
-  const health = useQuery({ queryKey: ["p", "health"], queryFn: () => api<Health>("GET", "/v1/platform/health"), enabled: Boolean(me), refetchInterval: 60_000 });
-  const [error, setError] = useState<unknown>(null);
-  const refresh = () => void qc.invalidateQueries({ queryKey: ["p"] });
-  const patch = (id: string, body: object) => api("PATCH", `/v1/platform/hotels/${id}`, body).then(refresh, setError);
-
-  if (!me) return null;
-  return (
-    <div className="min-h-dvh">
-      <TopBar title="Platform" subtitle="Super admin" />
-      <main className="mx-auto max-w-6xl space-y-6 px-3 py-5 sm:px-6 sm:py-8">
-        {health.data && (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            <Stat label="Active hotels" value={health.data.activeHotels} icon={Building2} />
-            <Stat label="Live tables" value={health.data.liveSessions} icon={Utensils} />
-            <Stat label="Orders (24h)" value={health.data.ordersLast24h} icon={ShoppingBag} />
-            <Stat label="Failed payments (24h)" value={health.data.failedPaymentsLast24h} bad={health.data.failedPaymentsLast24h > 0} icon={AlertTriangle} />
-            <Stat label="Failed syncs (24h)" value={health.data.failedSyncsLast24h} bad={health.data.failedSyncsLast24h > 0} icon={CloudOff} />
-          </div>
-        )}
-
-        <Card className="p-0 sm:p-0">
-          <div className="px-4 pt-4 sm:px-5 sm:pt-5">
-            <CardHeader title="Hotels" hint="Change a hotel's status, plan or trial end; it applies immediately." action={<Badge tone="brand">{hotels.data?.length ?? 0} total</Badge>} />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="muted line border-y bg-(--sunken) text-xs tracking-wide uppercase">
-                <tr className="[&>th]:px-4 [&>th]:py-2.5 [&>th]:font-semibold">
-                  <th>Name</th>
-                  <th>URL</th>
-                  <th>Status</th>
-                  <th>Plan</th>
-                  <th>Trial ends</th>
-                  <th>Tables / staff</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-(--line) [&_td]:px-4 [&_td]:py-2.5">
-                {hotels.data?.map((h) => (
-                  <tr key={h.id} className="transition hover:bg-(--sunken)/60">
-                    <td className="font-semibold">
-                      <span className="flex items-center gap-2.5">
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand/10 text-xs font-bold text-brand">{h.name.slice(0, 2).toUpperCase()}</span>
-                        {h.name}
-                      </span>
-                    </td>
-                    <td className="muted font-mono text-xs">/h/{h.slug}</td>
-                    <td>
-                      <select aria-label={`Status of ${h.name}`} value={h.status} onChange={(e) => void patch(h.id, { status: e.target.value })}>
-                        {STATUSES.map((s) => (
-                          <option key={s}>{s}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <select aria-label={`Plan of ${h.name}`} value={h.plan?.id ?? ""} onChange={(e) => void patch(h.id, { planId: e.target.value || null })}>
-                        <option value="">—</option>
-                        {plans.data?.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        type="date"
-                        aria-label={`Trial end for ${h.name}`}
-                        value={h.trialEndsAt?.slice(0, 10) ?? ""}
-                        onChange={(e) => void patch(h.id, { trialEndsAt: e.target.value ? new Date(`${e.target.value}T23:59:59Z`).toISOString() : null })}
-                      />
-                    </td>
-                    <td className="tabular-nums">
-                      {h.tables} / {h.staff}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {hotels.data?.length === 0 && (
-              <p className="muted flex items-center justify-center gap-2 py-10 text-sm">
-                <Activity className="h-4 w-4" aria-hidden />
-                No hotels yet. Onboard the first one below.
-              </p>
-            )}
-          </div>
-          <div className="px-4 pb-4 sm:px-5">
-            <ErrorText error={error} />
-          </div>
-        </Card>
-
-        <CreateHotel plans={plans.data ?? []} onCreated={refresh} />
-      </main>
-    </div>
-  );
-}
-
-function CreateHotel({ plans, onCreated }: { plans: Plan[]; onCreated: () => void }) {
-  const empty = { name: "", slug: "", planId: "", ownerName: "", ownerEmail: "", ownerPassword: "", ownerPin: "" };
-  const [f, setF] = useState(empty);
-  const [error, setError] = useState<unknown>(null);
-  const [done, setDone] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    try {
-      await api("POST", "/v1/platform/hotels", {
-        name: f.name,
-        slug: f.slug,
-        planId: f.planId || null,
-        status: "TRIAL",
-        trialEndsAt: new Date(Date.now() + 14 * 86_400_000).toISOString(),
-        owner: { name: f.ownerName, email: f.ownerEmail, password: f.ownerPassword, pin: f.ownerPin },
-      });
-      setDone(`${f.name} created. Owner signs in with ${f.ownerEmail}.`);
-      setF(empty);
-      onCreated();
-    } catch (err) {
-      setError(err);
-    }
-  }
-
-  const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+/** Super admin dashboard: platform health at a glance, plus what needs attention. */
+export default function PlatformDashboard() {
+  const overview = useQuery({ queryKey: ["p", "overview"], queryFn: () => api<PlatformOverview>("GET", "/v1/platform/overview"), refetchInterval: 60_000 });
 
   return (
-    <Card>
-      <CardHeader title="Onboard a hotel" hint="Creates the hotel, its owner login and a 14-day trial." />
-      <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Field label="Hotel name">
-          <input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value, slug: f.slug || slugify(e.target.value) })} />
-        </Field>
-        <Field label="URL name" hint="Used in QR links">
-          <input required pattern="[a-z0-9]+(-[a-z0-9]+)*" value={f.slug} onChange={(e) => setF({ ...f, slug: slugify(e.target.value) })} />
-        </Field>
-        <Field label="Plan">
-          <select value={f.planId} onChange={(e) => setF({ ...f, planId: e.target.value })}>
-            <option value="">—</option>
-            {plans.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Owner name">
-          <input required value={f.ownerName} onChange={(e) => setF({ ...f, ownerName: e.target.value })} />
-        </Field>
-        <Field label="Owner email">
-          <input required type="email" value={f.ownerEmail} onChange={(e) => setF({ ...f, ownerEmail: e.target.value })} />
-        </Field>
-        <Field label="Owner password">
-          <input required type="password" minLength={8} value={f.ownerPassword} onChange={(e) => setF({ ...f, ownerPassword: e.target.value })} />
-        </Field>
-        <Field label="Owner PIN">
-          <input required inputMode="numeric" pattern="\d{4,6}" value={f.ownerPin} onChange={(e) => setF({ ...f, ownerPin: e.target.value.replace(/\D/g, "") })} />
-        </Field>
-        <Button type="submit" className="self-end">
-          Create hotel (14-day trial)
-        </Button>
-      </form>
-      <ErrorText error={error} />
-      {done && <p className="mt-3 rounded-lg bg-fresh/10 px-3 py-2 text-sm font-semibold text-fresh">{done}</p>}
-    </Card>
+    <>
+      <PageTitle
+        title="Dashboard"
+        hint="Restaurants, orders and anything that needs your attention."
+        action={
+          <LinkButton href="/platform/onboard/" variant="primary">
+            <Rocket className="h-4 w-4" aria-hidden />
+            Onboard a restaurant
+          </LinkButton>
+        }
+      />
+      <Loadable
+        query={overview}
+        skeleton={
+          <div className="space-y-6">
+            <StatsSkeleton count={4} />
+            <div className="grid gap-6 xl:grid-cols-2">
+              <CardSkeleton lines={4} />
+              <CardSkeleton lines={4} />
+            </div>
+          </div>
+        }
+      >
+        {(o) => {
+          const problems = o.problems.failedPaymentsLast24h + o.problems.failedSyncsLast24h;
+          return (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <Stat label="Restaurants" value={o.hotels.total} hint={`${o.hotels.newLast30d} new in 30 days`} icon={Building2} />
+                <Stat label="Orders (24h)" value={o.activity.ordersLast24h} hint={`${o.activity.ordersLast7d} in 7 days`} icon={ShoppingBag} />
+                <Stat label="Live tables" value={o.activity.liveSessions} hint="Guests seated right now" icon={Utensils} />
+                <Stat label="Signed-in people" value={o.activity.staffSignedIn} hint="Owners and staff with a live sign-in" icon={KeySquare} />
+              </div>
+
+              {problems > 0 && (
+                <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border border-late/40 bg-late/8 p-4">
+                  <AlertTriangle className="h-5 w-5 shrink-0 text-late" aria-hidden />
+                  <p className="flex-1 text-sm font-medium">
+                    In the last 24 hours: {o.problems.failedPaymentsLast24h} failed payment{o.problems.failedPaymentsLast24h === 1 ? "" : "s"},{" "}
+                    {o.problems.failedSyncsLast24h} offline action{o.problems.failedSyncsLast24h === 1 ? "" : "s"} refused.
+                  </p>
+                  <CloudOff className="muted h-4 w-4" aria-hidden />
+                </div>
+              )}
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                <Card>
+                  <CardHeader title="Restaurants by status" />
+                  <div className="flex h-3 overflow-hidden rounded-full bg-(--sunken)">
+                    {(Object.keys(o.hotels.byStatus) as HotelStatus[]).map((s) =>
+                      o.hotels.byStatus[s] ? (
+                        <span key={s} className={STATUS_BAR[s]} style={{ width: `${(o.hotels.byStatus[s] / Math.max(1, o.hotels.total)) * 100}%` }} />
+                      ) : null,
+                    )}
+                  </div>
+                  <ul className="mt-4 grid grid-cols-2 gap-3">
+                    {(Object.keys(o.hotels.byStatus) as HotelStatus[]).map((s) => (
+                      <li key={s} className="flex items-center gap-2 text-sm">
+                        <span className={`h-2.5 w-2.5 rounded-full ${STATUS_BAR[s]}`} aria-hidden />
+                        <span className="muted flex-1">{STATUS_LABEL[s]}</span>
+                        <span className="font-bold tabular-nums">{o.hotels.byStatus[s]}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+
+                <Card>
+                  <CardHeader title="Trials ending soon" hint="Within the next 7 days" />
+                  {o.trialsEndingSoon.length === 0 ? (
+                    <p className="muted text-sm">No trials ending this week.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {o.trialsEndingSoon.map((t) => {
+                        const overdue = new Date(t.trialEndsAt).getTime() < Date.now();
+                        return (
+                          <li key={t.id} className="line flex items-center gap-3 rounded-xl border p-3">
+                            <CalendarClock className={`h-4 w-4 shrink-0 ${overdue ? "text-late" : "text-warn"}`} aria-hidden />
+                            <span className="min-w-0 flex-1 truncate font-semibold">{t.name}</span>
+                            <Badge tone={overdue ? "late" : "warn"}>{overdue ? "ended" : "ends"} {shortDate(t.trialEndsAt)}</Badge>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </Card>
+
+                <Card>
+                  <CardHeader title="Busiest this week" hint="Orders in the last 7 days" />
+                  {o.topHotels.length === 0 ? (
+                    <p className="muted text-sm">No orders yet this week.</p>
+                  ) : (
+                    <ol className="space-y-3">
+                      {o.topHotels.map((h, i) => (
+                        <li key={h.id} className="flex items-center gap-3 text-sm">
+                          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-(--sunken) text-xs font-bold">{i + 1}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold">{h.name}</span>
+                            <span className="mt-1 block h-1.5 rounded-full bg-(--sunken)">
+                              <span className="block h-full rounded-full bg-brand" style={{ width: `${(h.orders / Math.max(1, o.topHotels[0]!.orders)) * 100}%` }} />
+                            </span>
+                          </span>
+                          <span className="flex items-center gap-1 font-bold tabular-nums">
+                            <TrendingUp className="h-3.5 w-3.5 text-fresh" aria-hidden />
+                            {h.orders}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </Card>
+
+                <Card>
+                  <CardHeader
+                    title="Recently onboarded"
+                    action={
+                      <a href="/platform/restaurants/" className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">
+                        All restaurants <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                      </a>
+                    }
+                  />
+                  {o.recentHotels.length === 0 ? (
+                    <p className="muted text-sm">No restaurants yet. Onboard the first one.</p>
+                  ) : (
+                    <ul className="divide-y divide-(--line)">
+                      {o.recentHotels.map((h) => (
+                        <li key={h.id} className="flex items-center gap-3 py-2.5">
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand/10 text-xs font-bold text-brand">{h.name.slice(0, 2).toUpperCase()}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold">{h.name}</span>
+                            <span className="muted text-xs">{timeAgo(h.createdAt)}</span>
+                          </span>
+                          <Badge tone={STATUS_TONE[h.status]}>{STATUS_LABEL[h.status]}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Card>
+              </div>
+            </div>
+          );
+        }}
+      </Loadable>
+    </>
   );
 }

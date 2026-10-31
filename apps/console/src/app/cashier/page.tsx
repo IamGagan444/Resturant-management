@@ -8,6 +8,8 @@ import { useGuard } from "@/lib/auth";
 import { chime, unlockSound, useStaffSocket } from "@/lib/realtime";
 import { ArrowLeft, BarChart3, Banknote, Bell, CheckCircle2, CreditCard, MessageCircle, Printer, ReceiptText, Smartphone } from "lucide-react";
 import { Badge, Button, Card, EmptyState, ErrorText, Field, NavLink, OfflineBanner, TopBar } from "@/components/ui";
+import { QueryError } from "@/components/ui/feedback";
+import { ListSkeleton } from "@/components/ui/skeleton";
 
 const pct = (bps: number) => `${(bps / 100).toFixed(bps % 100 ? 1 : 0)}%`;
 
@@ -51,7 +53,9 @@ export default function CashierPage() {
             Open bills
             <span className="rounded-full bg-(--sunken) px-2 py-0.5 tabular-nums">{list.length}</span>
           </h2>
-          {list.length === 0 && <EmptyState icon={ReceiptText} title="No open bills." hint="Tables appear here as soon as guests order." />}
+          {bills.isLoading && <ListSkeleton rows={4} />}
+          {bills.isError && !bills.data && <QueryError error={bills.error} onRetry={() => void bills.refetch()} retrying={bills.isFetching} />}
+          {bills.isSuccess && list.length === 0 && <EmptyState icon={ReceiptText} title="No open bills." hint="Tables appear here as soon as guests order." />}
           <ul className="space-y-2">
             {list.map((b) => (
               <li key={b.id}>

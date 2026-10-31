@@ -178,7 +178,9 @@ model RefreshToken {
   expiresAt   DateTime
   revokedAt   DateTime?
   replacedBy  String? // id of the token issued on rotation (reuse detection)
-  createdAt   DateTime    @default(now())
+  userAgent   String? // browser that signed in (shown to the super admin)
+  ip          String?
+  createdAt   DateTime    @default(now()) // a token is replaced on every refresh, so this is "last active"
 
   @@index([subjectType, subjectId])
 }

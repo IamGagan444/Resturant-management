@@ -5,7 +5,9 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { AuditAction, type AuditEntry, type AuditPage, type SyncRejectionView } from "@rms/contracts";
 import { api, rupees } from "@/lib/api";
 import { ClipboardList } from "lucide-react";
-import { Badge, Button, Card, CardHeader, EmptyState, ErrorText } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, EmptyState, SelectField } from "@/components/ui";
+import { QueryError } from "@/components/ui/feedback";
+import { ListSkeleton } from "@/components/ui/skeleton";
 
 const LABEL: Record<AuditAction, string> = {
   ORDER_CANCELLED: "Order cancelled",
@@ -63,18 +65,19 @@ export function AuditTab() {
           title="Audit log"
           hint="Voids, cancellations, discounts, price and stock changes: who did what, and when."
           action={
-            <select aria-label="Filter by action" value={action} onChange={(e) => setAction(e.target.value as AuditAction | "")}>
-              <option value="">All actions</option>
-              {AuditAction.options.map((a) => (
-                <option key={a} value={a}>
-                  {LABEL[a]}
-                </option>
-              ))}
-            </select>
+            <SelectField
+              label="Filter by action"
+              className="w-52"
+              value={action}
+              onChange={(a) => setAction(a as AuditAction | "")}
+              emptyLabel="All actions"
+              options={AuditAction.options.map((a) => ({ value: a, label: LABEL[a] }))}
+            />
           }
         />
-        <ErrorText error={log.error} />
-        {entries.length === 0 && !log.isLoading && <EmptyState icon={ClipboardList} title="Nothing recorded yet" />}
+        {log.isError && !log.data && <QueryError error={log.error} onRetry={() => void log.refetch()} retrying={log.isFetching} />}
+        {log.isLoading && <ListSkeleton rows={6} />}
+        {entries.length === 0 && log.isSuccess && <EmptyState icon={ClipboardList} title="Nothing recorded yet" />}
         <ul className={`line divide-y divide-(--line) rounded-xl border ${entries.length ? "" : "hidden"}`}>
           {entries.map((e) => (
             <li key={e.id} className="grid items-center gap-1 px-3 py-2.5 text-sm sm:grid-cols-[8.5rem_11rem_1fr] sm:gap-3">
@@ -103,6 +106,7 @@ export function AuditTab() {
           title="Offline actions that didn't go through"
           hint="Taps made without internet that the server refused when they synced, e.g. a dish someone else had already served."
         />
+        {rejected.isLoading && <ListSkeleton rows={2} />}
         {rejected.data?.length === 0 && <p className="muted text-sm">None. Everything synced.</p>}
         <ul className="space-y-2 text-sm">
           {rejected.data?.map((r) => {
