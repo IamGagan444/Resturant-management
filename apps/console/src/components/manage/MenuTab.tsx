@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FoodType } from "@rms/contracts";
 import { api, rupees, toPaise } from "@/lib/api";
-import { Button, Card, ErrorText, Field } from "@/components/ui";
+import { ImageIcon, Plus, Trash2, X } from "lucide-react";
+import { Badge, Button, Card, CardHeader, EmptyState, ErrorText, Field } from "@/components/ui";
 import { Sheet } from "@/components/Sheet";
 
 interface Category { id: string; name: string; availableFrom: string | null; availableTo: string | null; isActive: boolean }
@@ -28,6 +29,9 @@ interface Item {
   taxIds: string[];
   addonGroupIds: string[];
 }
+
+/** Checkbox as a tappable chip; highlighted while checked. */
+const CHIP = "line flex h-10 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm font-medium transition has-checked:border-brand/50 has-checked:bg-brand/8";
 
 function useAdmin<T>(key: string) {
   return useQuery({ queryKey: ["admin", key], queryFn: () => api<T>("GET", `/v1/admin/${key}`) });
@@ -56,10 +60,10 @@ export function MenuTab() {
   return (
     <div className="space-y-6">
       <Card>
-        <h2 className="mb-3 text-lg font-bold">Categories</h2>
-        <div className="mb-3 flex flex-wrap gap-2">
+        <CardHeader title="Categories" hint="Sections of your menu, in the order guests see them." />
+        <div className="mb-4 flex flex-wrap gap-2">
           {categories.data?.map((c) => (
-            <span key={c.id} className="line inline-flex items-center gap-2 rounded-full border px-3 py-1">
+            <span key={c.id} className="line inline-flex h-9 items-center gap-2 rounded-full border bg-(--sunken) pr-1.5 pl-3.5 text-sm font-medium">
               {c.name}
               {c.availableFrom && (
                 <span className="muted text-xs">
@@ -68,42 +72,62 @@ export function MenuTab() {
               )}
               <button
                 aria-label={`Delete ${c.name}`}
-                className="muted"
+                className="muted grid h-6 w-6 place-items-center rounded-full hover:bg-late/15 hover:text-late"
                 onClick={() => api("DELETE", `/v1/admin/categories/${c.id}`).then(refresh, setError)}
               >
-                ✕
+                <X className="h-3.5 w-3.5" aria-hidden />
               </button>
             </span>
           ))}
         </div>
         <form onSubmit={addCategory} className="flex gap-2">
-          <input required placeholder="New category" aria-label="New category name" value={catName} onChange={(e) => setCatName(e.target.value)} className="flex-1" />
-          <Button type="submit">Add</Button>
+          <input required placeholder="New category" aria-label="New category name" value={catName} onChange={(e) => setCatName(e.target.value)} className="min-w-0 flex-1" />
+          <Button type="submit">
+            <Plus className="h-4 w-4" aria-hidden />
+            Add
+          </Button>
         </form>
         <ErrorText error={error} />
       </Card>
 
       <Card>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Items</h2>
-          <Button onClick={() => setEditing("new")} disabled={!categories.data?.length}>
-            + Add item
-          </Button>
-        </div>
+        <CardHeader
+          title="Items"
+          hint="Tap a dish to edit its price, photo, sizes or stock."
+          action={
+            <Button onClick={() => setEditing("new")} disabled={!categories.data?.length}>
+              <Plus className="h-4 w-4" aria-hidden />
+              Add item
+            </Button>
+          }
+        />
+        {items.data?.length === 0 && <EmptyState icon={ImageIcon} title="No dishes yet" hint="Add a category above, then your first dish." />}
         {categories.data?.map((c) => {
           const list = items.data?.filter((i) => i.categoryId === c.id) ?? [];
           if (!list.length) return null;
           return (
-            <div key={c.id} className="mb-4">
-              <h3 className="muted mb-1 text-sm font-semibold uppercase">{c.name}</h3>
-              <ul className="line divide-y divide-(--line) rounded-xl border">
+            <div key={c.id} className="mb-6 last:mb-0">
+              <h3 className="muted mb-2 text-xs font-bold tracking-wider uppercase">{c.name}</h3>
+              <ul className="grid gap-2 sm:grid-cols-2">
                 {list.map((i) => (
                   <li key={i.id}>
-                    <button className="flex w-full items-center gap-3 px-3 py-2 text-left" onClick={() => setEditing(i)}>
-                      <span className="flex-1">
-                        {i.name} {!i.isAvailable && <span className="text-xs text-late">out of stock</span>}
+                    <button
+                      className="line flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition hover:border-brand/40 hover:bg-(--sunken)"
+                      onClick={() => setEditing(i)}
+                    >
+                      {i.imageUrl ? (
+                        <img src={i.imageUrl} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+                      ) : (
+                        <span className="muted grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-(--sunken)">
+                          <ImageIcon className="h-5 w-5" aria-hidden />
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold">{i.name}</span>
+                        <span className="muted block truncate text-sm">{i.variants.length ? i.variants.map((v) => rupees(v.price)).join(" / ") : rupees(i.price)}</span>
                       </span>
-                      <span className="muted text-sm">{i.variants.length ? i.variants.map((v) => rupees(v.price)).join(" / ") : rupees(i.price)}</span>
+                      {!i.isAvailable && <Badge tone="late">out of stock</Badge>}
+                      {i.isBestseller && i.isAvailable && <Badge tone="brand">bestseller</Badge>}
                     </button>
                   </li>
                 ))}
@@ -251,63 +275,76 @@ function ItemForm({ item, categories, onClose, onSaved }: { item: Item | null; c
         <Field label="Description">
           <textarea rows={2} value={f.description} onChange={(e) => set("description", e.target.value)} />
         </Field>
-        <Field label="Photo">
-          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
-        </Field>
-        {f.imageUrl && (
-          // admin preview; plain img is fine here
-          <img src={f.imageUrl} alt="" className="h-24 w-32 rounded-lg object-cover" />
-        )}
+        <div className="flex items-center gap-4">
+          {f.imageUrl ? (
+            // admin preview; plain img is fine here
+            <img src={f.imageUrl} alt="" className="h-20 w-24 shrink-0 rounded-xl object-cover" />
+          ) : (
+            <span className="muted line grid h-20 w-24 shrink-0 place-items-center rounded-xl border border-dashed bg-(--sunken)">
+              <ImageIcon className="h-6 w-6" aria-hidden />
+            </span>
+          )}
+          <Field label="Photo">
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
+          </Field>
+        </div>
 
         <fieldset className="line rounded-xl border p-3">
-          <legend className="px-1 font-semibold">Sizes (Half / Full…)</legend>
+          <legend className="px-1 text-sm font-semibold">Sizes (Half / Full…)</legend>
           {f.variants.map((v, i) => (
             <div key={i} className="mb-2 flex gap-2">
               <input aria-label="Size name" placeholder="Half" value={v.name} onChange={(e) => set("variants", f.variants.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} className="flex-1" />
               <input aria-label="Size price" placeholder="₹" inputMode="decimal" value={v.price} onChange={(e) => set("variants", f.variants.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))} className="w-24" />
-              <button type="button" aria-label="Remove size" onClick={() => set("variants", f.variants.filter((_, j) => j !== i))}>
-                ✕
+              <button
+                type="button"
+                aria-label="Remove size"
+                className="muted grid w-10 shrink-0 place-items-center rounded-lg hover:bg-late/10 hover:text-late"
+                onClick={() => set("variants", f.variants.filter((_, j) => j !== i))}
+              >
+                <X className="h-4 w-4" aria-hidden />
               </button>
             </div>
           ))}
           <Button type="button" variant="outline" onClick={() => set("variants", [...f.variants, { id: undefined, name: "", price: "" }])}>
-            + Size
+            <Plus className="h-4 w-4" aria-hidden />
+            Size
           </Button>
         </fieldset>
 
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-2">
           {taxes.data?.map((t) => (
-            <label key={t.id} className="flex items-center gap-2">
+            <label key={t.id} className={CHIP}>
               <input type="checkbox" checked={f.taxIds.includes(t.id)} onChange={() => toggleIn("taxIds", t.id)} />
               {t.name} {t.rateBps / 100}%
             </label>
           ))}
         </div>
         {groups.data && groups.data.length > 0 && (
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap gap-2">
             {groups.data.map((g) => (
-              <label key={g.id} className="flex items-center gap-2">
+              <label key={g.id} className={CHIP}>
                 <input type="checkbox" checked={f.addonGroupIds.includes(g.id)} onChange={() => toggleIn("addonGroupIds", g.id)} />
                 {g.name}
               </label>
             ))}
           </div>
         )}
-        <div className="flex flex-wrap gap-4">
-          <label className="flex items-center gap-2">
+        <div className="flex flex-wrap gap-2">
+          <label className={CHIP}>
             <input type="checkbox" checked={f.isBestseller} onChange={(e) => set("isBestseller", e.target.checked)} /> Bestseller
           </label>
-          <label className="flex items-center gap-2">
+          <label className={CHIP}>
             <input type="checkbox" checked={f.isAvailable} onChange={(e) => set("isAvailable", e.target.checked)} /> In stock
           </label>
         </div>
         <ErrorText error={error} />
-        <div className="flex gap-2">
+        <div className="line sticky bottom-0 -mx-5 mt-1 flex gap-2 border-t bg-(--surface) px-5 pt-3">
           <Button type="submit" disabled={busy} className="flex-1">
             Save
           </Button>
           {item && (
             <Button type="button" variant="danger" onClick={() => api("DELETE", `/v1/admin/items/${item.id}`).then(onSaved, setError)}>
+              <Trash2 className="h-4 w-4" aria-hidden />
               Delete
             </Button>
           )}
@@ -349,11 +386,14 @@ function AddonGroups() {
 
   return (
     <Card>
-      <h2 className="mb-3 text-lg font-bold">Add-on groups</h2>
-      <ul className="mb-4 space-y-1 text-sm">
+      <CardHeader title="Add-on groups" hint="Choices like breads, toppings or extra cheese, attached to dishes." />
+      <ul className="mb-5 grid gap-2 sm:grid-cols-2">
         {groups.data?.map((g) => (
-          <li key={g.id}>
-            <strong>{g.name}</strong> <span className="muted">(choose {g.minSelect}–{g.maxSelect})</span>: {g.addons.map((a) => `${a.name}${a.price ? ` +${rupees(a.price)}` : ""}`).join(", ")}
+          <li key={g.id} className="line rounded-xl border p-3 text-sm">
+            <p className="font-semibold">
+              {g.name} <span className="muted text-xs font-medium">choose {g.minSelect}–{g.maxSelect}</span>
+            </p>
+            <p className="muted mt-0.5">{g.addons.map((a) => `${a.name}${a.price ? ` +${rupees(a.price)}` : ""}`).join(", ")}</p>
           </li>
         ))}
       </ul>

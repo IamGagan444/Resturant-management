@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { HotelStatus } from "@rms/contracts";
 import { api } from "@/lib/api";
 import { useGuard } from "@/lib/auth";
-import { Button, Card, ErrorText, Field, TopBar } from "@/components/ui";
+import { Activity, AlertTriangle, Building2, CloudOff, ShoppingBag, Utensils } from "lucide-react";
+import { Badge, Button, Card, CardHeader, ErrorText, Field, Stat, TopBar } from "@/components/ui";
 
 interface HotelRow {
   id: string;
@@ -36,25 +37,27 @@ export default function PlatformPage() {
   if (!me) return null;
   return (
     <div className="min-h-dvh">
-      <TopBar title="Platform" />
-      <main className="mx-auto max-w-6xl space-y-6 p-4">
+      <TopBar title="Platform" subtitle="Super admin" />
+      <main className="mx-auto max-w-6xl space-y-6 px-3 py-5 sm:px-6 sm:py-8">
         {health.data && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <Tile label="Active hotels" value={health.data.activeHotels} />
-            <Tile label="Live tables" value={health.data.liveSessions} />
-            <Tile label="Orders (24h)" value={health.data.ordersLast24h} />
-            <Tile label="Failed payments (24h)" value={health.data.failedPaymentsLast24h} bad={health.data.failedPaymentsLast24h > 0} />
-            <Tile label="Failed syncs (24h)" value={health.data.failedSyncsLast24h} bad={health.data.failedSyncsLast24h > 0} />
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <Stat label="Active hotels" value={health.data.activeHotels} icon={Building2} />
+            <Stat label="Live tables" value={health.data.liveSessions} icon={Utensils} />
+            <Stat label="Orders (24h)" value={health.data.ordersLast24h} icon={ShoppingBag} />
+            <Stat label="Failed payments (24h)" value={health.data.failedPaymentsLast24h} bad={health.data.failedPaymentsLast24h > 0} icon={AlertTriangle} />
+            <Stat label="Failed syncs (24h)" value={health.data.failedSyncsLast24h} bad={health.data.failedSyncsLast24h > 0} icon={CloudOff} />
           </div>
         )}
 
-        <Card>
-          <h2 className="mb-3 text-lg font-bold">Hotels</h2>
+        <Card className="p-0 sm:p-0">
+          <div className="px-4 pt-4 sm:px-5 sm:pt-5">
+            <CardHeader title="Hotels" hint="Change a hotel's status, plan or trial end; it applies immediately." action={<Badge tone="brand">{hotels.data?.length ?? 0} total</Badge>} />
+          </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="muted">
-                <tr>
-                  <th className="py-2">Name</th>
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="muted line border-y bg-(--sunken) text-xs tracking-wide uppercase">
+                <tr className="[&>th]:px-4 [&>th]:py-2.5 [&>th]:font-semibold">
+                  <th>Name</th>
                   <th>URL</th>
                   <th>Status</th>
                   <th>Plan</th>
@@ -62,11 +65,16 @@ export default function PlatformPage() {
                   <th>Tables / staff</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-(--line)">
+              <tbody className="divide-y divide-(--line) [&_td]:px-4 [&_td]:py-2.5">
                 {hotels.data?.map((h) => (
-                  <tr key={h.id}>
-                    <td className="py-2 font-semibold">{h.name}</td>
-                    <td className="muted">/h/{h.slug}</td>
+                  <tr key={h.id} className="transition hover:bg-(--sunken)/60">
+                    <td className="font-semibold">
+                      <span className="flex items-center gap-2.5">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand/10 text-xs font-bold text-brand">{h.name.slice(0, 2).toUpperCase()}</span>
+                        {h.name}
+                      </span>
+                    </td>
+                    <td className="muted font-mono text-xs">/h/{h.slug}</td>
                     <td>
                       <select aria-label={`Status of ${h.name}`} value={h.status} onChange={(e) => void patch(h.id, { status: e.target.value })}>
                         {STATUSES.map((s) => (
@@ -92,29 +100,28 @@ export default function PlatformPage() {
                         onChange={(e) => void patch(h.id, { trialEndsAt: e.target.value ? new Date(`${e.target.value}T23:59:59Z`).toISOString() : null })}
                       />
                     </td>
-                    <td>
+                    <td className="tabular-nums">
                       {h.tables} / {h.staff}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {hotels.data?.length === 0 && (
+              <p className="muted flex items-center justify-center gap-2 py-10 text-sm">
+                <Activity className="h-4 w-4" aria-hidden />
+                No hotels yet. Onboard the first one below.
+              </p>
+            )}
           </div>
-          <ErrorText error={error} />
+          <div className="px-4 pb-4 sm:px-5">
+            <ErrorText error={error} />
+          </div>
         </Card>
 
         <CreateHotel plans={plans.data ?? []} onCreated={refresh} />
       </main>
     </div>
-  );
-}
-
-function Tile({ label, value, bad }: { label: string; value: number; bad?: boolean }) {
-  return (
-    <Card className={bad ? "border-late" : ""}>
-      <p className="muted text-xs">{label}</p>
-      <p className={`text-3xl font-black ${bad ? "text-late" : ""}`}>{value}</p>
-    </Card>
   );
 }
 
@@ -148,8 +155,8 @@ function CreateHotel({ plans, onCreated }: { plans: Plan[]; onCreated: () => voi
 
   return (
     <Card>
-      <h2 className="mb-3 text-lg font-bold">Onboard a hotel</h2>
-      <form onSubmit={submit} className="grid gap-3 sm:grid-cols-3">
+      <CardHeader title="Onboard a hotel" hint="Creates the hotel, its owner login and a 14-day trial." />
+      <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Hotel name">
           <input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value, slug: f.slug || slugify(e.target.value) })} />
         </Field>
@@ -183,7 +190,7 @@ function CreateHotel({ plans, onCreated }: { plans: Plan[]; onCreated: () => voi
         </Button>
       </form>
       <ErrorText error={error} />
-      {done && <p className="mt-2 text-fresh">{done}</p>}
+      {done && <p className="mt-3 rounded-lg bg-fresh/10 px-3 py-2 text-sm font-semibold text-fresh">{done}</p>}
     </Card>
   );
 }

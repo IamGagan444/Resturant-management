@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { BillView, StartUpiPaymentInput } from "@rms/contracts";
 import { useI18n } from "@/lib/i18n";
 import { PaymentCancelled, isBusyPaying, payByUpi } from "@/lib/upi";
+import { CheckCircle2, ReceiptText, Smartphone } from "lucide-react";
 import { Button, rupees } from "./ui";
 
 const pct = (bps: number) => `${(bps / 100).toFixed(bps % 100 ? 1 : 0)}%`;
@@ -25,8 +26,16 @@ export function Bill({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!bill) return <p className="muted py-16 text-center">{t("loadingBill")}</p>;
-  if (bill.lines.length === 0) return <p className="muted py-16 text-center">{t("nothingOnBill")}</p>;
+  if (!bill) return <p className="muted py-20 text-center">{t("loadingBill")}</p>;
+  if (bill.lines.length === 0)
+    return (
+      <div className="muted flex flex-col items-center gap-3 py-20 text-center">
+        <span className="grid h-16 w-16 place-items-center rounded-full bg-(--sunken)">
+          <ReceiptText className="h-7 w-7" aria-hidden />
+        </span>
+        <p>{t("nothingOnBill")}</p>
+      </div>
+    );
 
   async function pay(target: StartUpiPaymentInput["target"]) {
     setBusy(true);
@@ -44,21 +53,26 @@ export function Bill({
   const prepaid = bill.status !== "PAID" && bill.due === 0 && bill.paid > 0; // everything paid up front (pay-now)
 
   return (
-    <div className="pb-40">
-      <article className="surface line rounded-2xl border p-4">
-        <h3 className="mb-3 font-semibold">{t("table", { label: bill.tableLabel })}</h3>
-        <ul className="space-y-1 text-sm">
+    <div className="mx-auto max-w-xl pt-2 pb-44">
+      <article className="surface line overflow-hidden rounded-3xl border shadow-soft">
+        <div className="h-1.5 bg-linear-to-r from-brand-2 to-brand" aria-hidden />
+        <div className="p-5">
+        <h3 className="mb-4 flex items-center gap-2 font-bold">
+          <ReceiptText className="h-4.5 w-4.5 text-brand" aria-hidden />
+          {t("table", { label: bill.tableLabel })}
+        </h3>
+        <ul className="space-y-2 text-sm">
           {bill.lines.map((l) => (
-            <li key={l.orderItemId} className="flex justify-between gap-2">
+            <li key={l.orderItemId} className="flex justify-between gap-3">
               <span>
                 {l.quantity} × {l.name}
                 {l.variantName ? ` (${l.variantName})` : ""}
               </span>
-              <span>{rupees(l.amount)}</span>
+              <span className="tabular-nums">{rupees(l.amount)}</span>
             </li>
           ))}
         </ul>
-        <dl className="line mt-3 space-y-1 border-t pt-3 text-sm">
+        <dl className="line mt-4 space-y-1.5 border-t border-dashed pt-4 text-sm">
           <Row label={t("subtotal")} value={bill.subtotal} />
           {bill.discount > 0 && <Row label={t("discount")} value={-bill.discount} />}
           {bill.serviceCharge > 0 && <Row label={t("serviceCharge", { pct: pct(bill.serviceChargeBps) })} value={bill.serviceCharge} />}
@@ -66,43 +80,50 @@ export function Bill({
             <Row key={`${tl.name}${tl.rateBps}`} label={`${tl.name} ${pct(tl.rateBps)}`} value={tl.amount} />
           ))}
           {bill.roundOff !== 0 && <Row label={t("roundOff")} value={bill.roundOff} />}
-          <div className="flex justify-between pt-2 text-lg font-bold">
+          <div className="line flex justify-between border-t pt-3 text-xl font-extrabold">
             <dt>{t("total")}</dt>
-            <dd>{rupees(bill.total)}</dd>
+            <dd className="tabular-nums">{rupees(bill.total)}</dd>
           </div>
           {bill.paid > 0 && <Row label={t("paid")} value={-bill.paid} />}
         </dl>
+        </div>
       </article>
 
       {bill.status === "PAID" ? (
-        <p className="mt-6 text-center text-lg font-semibold text-veg">{t("paidThankYou")}</p>
+        <p className="mt-6 flex items-center justify-center gap-2 text-center text-lg font-semibold text-veg">
+          <CheckCircle2 className="h-5 w-5" aria-hidden />
+          {t("paidThankYou")}
+        </p>
       ) : prepaid ? (
         <div className="mt-6 space-y-3 text-center">
-          <p>{t("allPaid")}</p>
-          <Button className="w-full text-lg" onClick={onLeave}>
+          <p className="font-medium">{t("allPaid")}</p>
+          <Button className="h-14 w-full text-base" onClick={onLeave}>
             {t("doneLeaving")}
           </Button>
         </div>
       ) : (
         <div className="mt-6 space-y-3">
           {bill.paymentInFlight && !busy && (
-            <p role="status" className="rounded-lg bg-amber-500/15 p-2 text-sm">
+            <p role="status" className="rounded-2xl bg-amber-500/12 p-3 text-sm font-medium">
               {t("someonePaying")}
             </p>
           )}
           {error && (
-            <p role="alert" className="text-sm text-red-600">
+            <p role="alert" className="rounded-2xl bg-red-500/10 p-3 text-sm font-medium text-red-600">
               {error}
             </p>
           )}
           {unpaidSplits.length > 0 ? (
             <section aria-label={t("billSplit")} className="space-y-2">
-              <h4 className="font-semibold">{t("billSplit")}</h4>
+              <h4 className="text-sm font-bold">{t("billSplit")}</h4>
               {bill.splits.map((s) =>
                 s.isPaid ? (
-                  <div key={s.id} className="line flex justify-between rounded-xl border px-4 py-3 text-sm">
+                  <div key={s.id} className="line surface flex justify-between rounded-2xl border px-4 py-3 text-sm font-medium">
                     <span>{s.label}</span>
-                    <span className="text-veg">{t("partPaid")}</span>
+                    <span className="flex items-center gap-1 text-veg">
+                      <CheckCircle2 className="h-4 w-4" aria-hidden />
+                      {t("partPaid")}
+                    </span>
                   </div>
                 ) : (
                   <Button
@@ -118,7 +139,8 @@ export function Bill({
             </section>
           ) : (
             upiEnabled && (
-              <Button className="w-full text-lg" disabled={busy || bill.due <= 0} onClick={() => pay({ kind: "BILL", billId: bill.id })}>
+              <Button className="h-14 w-full text-base" disabled={busy || bill.due <= 0} onClick={() => pay({ kind: "BILL", billId: bill.id })}>
+                <Smartphone className="h-5 w-5" aria-hidden />
                 {busy ? t("openingUpi") : t("payByUpi", { amount: rupees(bill.due) })}
               </Button>
             )
@@ -134,9 +156,9 @@ export function Bill({
 
 function Row({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex justify-between">
+    <div className="flex justify-between gap-2">
       <dt className="muted">{label}</dt>
-      <dd>{value < 0 ? `−${rupees(-value)}` : rupees(value)}</dd>
+      <dd className="tabular-nums">{value < 0 ? `−${rupees(-value)}` : rupees(value)}</dd>
     </div>
   );
 }

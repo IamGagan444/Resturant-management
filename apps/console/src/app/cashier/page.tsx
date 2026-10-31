@@ -6,7 +6,8 @@ import type { BillView, SendBillResult, SplitBillInput } from "@rms/contracts";
 import { api, newClientId, rupees, toPaise } from "@/lib/api";
 import { useGuard } from "@/lib/auth";
 import { chime, unlockSound, useStaffSocket } from "@/lib/realtime";
-import { Button, Card, ErrorText, Field, OfflineBanner, TopBar } from "@/components/ui";
+import { ArrowLeft, BarChart3, Banknote, Bell, CheckCircle2, CreditCard, MessageCircle, Printer, ReceiptText, Smartphone } from "lucide-react";
+import { Badge, Button, Card, EmptyState, ErrorText, Field, NavLink, OfflineBanner, TopBar } from "@/components/ui";
 
 const pct = (bps: number) => `${(bps / 100).toFixed(bps % 100 ? 1 : 0)}%`;
 
@@ -26,6 +27,7 @@ export default function CashierPage() {
   if (!me) return null;
   const list = bills.data ?? [];
   const bill = list.find((b) => b.id === selected) ?? null;
+  const open = Boolean(settled || bill);
 
   const onChange = (b?: BillView) => {
     if (b?.status === "PAID") setSettled(b);
@@ -35,45 +37,68 @@ export default function CashierPage() {
   return (
     <div className="min-h-dvh">
       <TopBar title="Counter" online={online}>
-        <a href="/reports/" className="muted text-sm underline">
+        <NavLink href="/reports/" icon={BarChart3}>
           Day report
-        </a>
-        <Button variant="outline" onClick={() => (unlockSound(), chime())}>
-          🔔
+        </NavLink>
+        <Button variant="ghost" className="px-0" aria-label="Turn on sound alerts" title="Turn on sound alerts" onClick={() => (unlockSound(), chime())}>
+          <Bell className="h-5 w-5" aria-hidden />
         </Button>
       </TopBar>
       <OfflineBanner online={online} />
-      <div className="grid gap-4 p-4 md:grid-cols-[1fr_1.2fr]">
-        <ul className="no-print space-y-2">
-          {list.length === 0 && <p className="muted py-12 text-center">No open bills.</p>}
-          {list.map((b) => (
-            <li key={b.id}>
-              <button
-                onClick={() => (setSelected(b.id), setSettled(null))}
-                aria-current={b.id === selected}
-                className={`surface flex w-full items-center justify-between rounded-xl border-2 p-4 text-left ${b.id === selected ? "border-brand" : "line"}`}
-              >
-                <span>
-                  <span className="text-xl font-black">{b.tableLabel}</span>
-                  <span className="muted ml-2 text-sm">{b.lines.length} items</span>
-                  {b.splits.length > 0 && <span className="ml-2 rounded bg-brand/10 px-1.5 text-xs text-brand">split</span>}
-                  {b.paymentInFlight && <span className="ml-2 rounded bg-warn/20 px-1.5 text-xs">UPI…</span>}
-                </span>
-                <span className="text-right">
-                  <span className="block text-lg font-bold">{rupees(b.due)}</span>
-                  {b.paid > 0 && <span className="muted text-xs">paid {rupees(b.paid)}</span>}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        {settled ? (
-          <SettledPanel bill={settled} onDone={() => (setSettled(null), setSelected(null))} />
-        ) : bill ? (
-          <BillPanel key={bill.id} bill={bill} onChange={onChange} />
-        ) : (
-          <p className="muted hidden py-12 text-center md:block">Select a table</p>
-        )}
+      <div className="mx-auto grid max-w-7xl gap-5 px-3 py-4 sm:px-6 sm:py-6 md:grid-cols-[minmax(280px,1fr)_1.35fr] md:items-start">
+        <section className={`no-print md:sticky md:top-20 ${open ? "hidden md:block" : ""}`} aria-label="Open bills">
+          <h2 className="muted mb-3 flex items-center justify-between text-xs font-bold tracking-wider uppercase">
+            Open bills
+            <span className="rounded-full bg-(--sunken) px-2 py-0.5 tabular-nums">{list.length}</span>
+          </h2>
+          {list.length === 0 && <EmptyState icon={ReceiptText} title="No open bills." hint="Tables appear here as soon as guests order." />}
+          <ul className="space-y-2">
+            {list.map((b) => (
+              <li key={b.id}>
+                <button
+                  onClick={() => (setSelected(b.id), setSettled(null))}
+                  aria-current={b.id === selected}
+                  className={`surface flex w-full items-center gap-3 rounded-2xl border p-3.5 text-left shadow-soft transition hover:border-brand/40 ${
+                    b.id === selected ? "border-brand ring-2 ring-brand/20" : "line"
+                  }`}
+                >
+                  <span className="grid h-12 min-w-12 shrink-0 place-items-center rounded-xl bg-brand/10 px-2 text-lg font-extrabold text-brand">{b.tableLabel}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="muted block text-sm">{b.lines.length} items</span>
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {b.splits.length > 0 && <Badge tone="brand">split</Badge>}
+                      {b.paymentInFlight && <Badge tone="warn">UPI…</Badge>}
+                    </span>
+                  </span>
+                  <span className="text-right">
+                    <span className="block text-lg font-extrabold tabular-nums">{rupees(b.due)}</span>
+                    {b.paid > 0 && <span className="muted text-xs">paid {rupees(b.paid)}</span>}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <div className={open ? "" : "hidden md:block"}>
+          {open && (
+            <button
+              className="no-print muted mb-3 inline-flex h-10 items-center gap-1.5 rounded-xl pr-3 text-sm font-semibold hover:text-(--ink) md:hidden"
+              onClick={() => (setSelected(null), setSettled(null))}
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              All tables
+            </button>
+          )}
+          {settled ? (
+            <SettledPanel bill={settled} onDone={() => (setSettled(null), setSelected(null))} />
+          ) : bill ? (
+            <BillPanel key={bill.id} bill={bill} onChange={onChange} />
+          ) : (
+            <div className="line rounded-2xl border border-dashed">
+              <EmptyState icon={ReceiptText} title="Select a table" hint="Its running bill, payments and split options show here." />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -107,23 +132,23 @@ function BillPanel({ bill, onChange }: { bill: BillView; onChange: (b?: BillView
 
   return (
     <Card>
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-2xl font-black">Table {bill.tableLabel}</h2>
-        <span className="muted text-sm">{bill.status.replace("_", " ").toLowerCase()}</span>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-2xl font-extrabold tracking-tight">Table {bill.tableLabel}</h2>
+        <Badge className="capitalize">{bill.status.replace("_", " ").toLowerCase()}</Badge>
       </div>
-      <ul className="mt-3 space-y-1">
+      <ul className="mt-4 space-y-1.5">
         {bill.lines.map((l) => (
-          <li key={l.orderItemId} className="flex justify-between gap-2">
-            <span>
+          <li key={l.orderItemId} className="flex justify-between gap-3">
+            <span className="min-w-0">
               {l.quantity} × {l.name}
               {l.variantName ? ` (${l.variantName})` : ""}
               {l.guestName && <span className="muted text-xs"> · {l.guestName}</span>}
             </span>
-            <span>{rupees(l.amount)}</span>
+            <span className="tabular-nums">{rupees(l.amount)}</span>
           </li>
         ))}
       </ul>
-      <dl className="line mt-3 space-y-1 border-t pt-3 text-sm">
+      <dl className="line mt-4 space-y-1 rounded-xl border border-dashed bg-(--sunken)/50 p-3 text-sm">
         <Row k="Subtotal" v={rupees(bill.subtotal)} />
         {bill.discount > 0 && <Row k="Discount" v={`−${rupees(bill.discount)}`} />}
         {bill.serviceCharge > 0 && <Row k={`Service charge ${pct(bill.serviceChargeBps)}`} v={rupees(bill.serviceCharge)} />}
@@ -131,40 +156,45 @@ function BillPanel({ bill, onChange }: { bill: BillView; onChange: (b?: BillView
           <Row key={t.name + t.rateBps} k={`${t.name} ${pct(t.rateBps)}`} v={rupees(t.amount)} />
         ))}
         {bill.roundOff !== 0 && <Row k="Round off" v={`${bill.roundOff < 0 ? "−" : ""}${rupees(Math.abs(bill.roundOff))}`} />}
-        <div className="flex justify-between pt-1 text-xl font-black">
+        <div className="line mt-1 flex justify-between border-t pt-2 text-xl font-extrabold">
           <dt>Total</dt>
-          <dd>{rupees(bill.total)}</dd>
+          <dd className="tabular-nums">{rupees(bill.total)}</dd>
         </div>
         {bill.paid > 0 && <Row k="Paid" v={rupees(bill.paid)} />}
-        <div className="flex justify-between text-lg font-bold text-brand">
+        <div className="flex justify-between text-lg font-bold text-brand tabular-nums">
           <dt>Due</dt>
           <dd>{rupees(bill.due)}</dd>
         </div>
       </dl>
 
-      <div className="no-print mt-4 space-y-3">
-        {bill.paymentInFlight && <p className="rounded-lg bg-warn/15 p-2 text-sm">A guest is paying by UPI right now. Wait for it to finish before taking cash.</p>}
+      <div className="no-print mt-5 space-y-3">
+        {bill.paymentInFlight && (
+          <p className="flex items-center gap-2 rounded-xl bg-warn/12 p-3 text-sm font-medium">
+            <Smartphone className="h-4 w-4 shrink-0 text-warn" aria-hidden />A guest is paying by UPI right now. Wait for it to finish before taking cash.
+          </p>
+        )}
 
         {prepaid ? (
           <Button variant="success" className="w-full" disabled={busy} onClick={() => void run(() => api<BillView>("POST", `/v1/s/sessions/${bill.sessionId}/close`))}>
+            <CheckCircle2 className="h-5 w-5" aria-hidden />
             Paid in full · close table
           </Button>
         ) : unpaidSplits.length > 0 ? (
           <section className="space-y-2" aria-label="Split parts">
-            <h3 className="font-semibold">Split · collect per part</h3>
+            <h3 className="text-sm font-bold">Split · collect per part</h3>
             {bill.splits.map((s) => (
-              <div key={s.id} className="line flex items-center gap-2 rounded-xl border p-2">
-                <span className="flex-1">
+              <div key={s.id} className="line flex items-center gap-2 rounded-xl border p-2.5">
+                <span className="flex-1 font-semibold">
                   {s.label}
-                  <span className="muted block text-sm">{s.isPaid ? "paid" : `${rupees(s.amount - s.paid)} due`}</span>
+                  <span className={`block text-sm font-medium ${s.isPaid ? "text-fresh" : "muted"}`}>{s.isPaid ? "paid" : `${rupees(s.amount - s.paid)} due`}</span>
                 </span>
                 {!s.isPaid && (
                   <>
-                    <Button variant="success" disabled={busy || bill.paymentInFlight} onClick={() => void collect("CASH", s.amount - s.paid, s.id)}>
-                      💵
+                    <Button variant="success" aria-label={`Cash for ${s.label}`} disabled={busy || bill.paymentInFlight} onClick={() => void collect("CASH", s.amount - s.paid, s.id)}>
+                      <Banknote className="h-5 w-5" aria-hidden />
                     </Button>
-                    <Button disabled={busy || bill.paymentInFlight} onClick={() => void collect("CARD", s.amount - s.paid, s.id)}>
-                      💳
+                    <Button aria-label={`Card for ${s.label}`} disabled={busy || bill.paymentInFlight} onClick={() => void collect("CARD", s.amount - s.paid, s.id)}>
+                      <CreditCard className="h-5 w-5" aria-hidden />
                     </Button>
                   </>
                 )}
@@ -179,22 +209,24 @@ function BillPanel({ bill, onChange }: { bill: BillView; onChange: (b?: BillView
         ) : (
           <>
             <Field label="Collect amount (₹)">
-              <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-lg font-semibold tabular-nums" />
             </Field>
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="success" disabled={busy || bill.due <= 0 || bill.paymentInFlight} onClick={() => void collect("CASH", toPaise(amount))}>
-                💵 Cash
+              <Button variant="success" className="h-14 text-base" disabled={busy || bill.due <= 0 || bill.paymentInFlight} onClick={() => void collect("CASH", toPaise(amount))}>
+                <Banknote className="h-5 w-5" aria-hidden />
+                Cash
               </Button>
-              <Button disabled={busy || bill.due <= 0 || bill.paymentInFlight} onClick={() => void collect("CARD", toPaise(amount))}>
-                💳 Card
+              <Button className="h-14 text-base" disabled={busy || bill.due <= 0 || bill.paymentInFlight} onClick={() => void collect("CARD", toPaise(amount))}>
+                <CreditCard className="h-5 w-5" aria-hidden />
+                Card
               </Button>
             </div>
             {bill.due > 0 && <SplitControls bill={bill} busy={busy} onSplit={split} />}
           </>
         )}
 
-        <details className="line rounded-xl border p-3">
-          <summary className="cursor-pointer font-semibold">Discount / service charge</summary>
+        <details className="line rounded-xl border p-3 open:bg-(--sunken)/40">
+          <summary className="cursor-pointer text-sm font-semibold">Discount / service charge</summary>
           <div className="mt-3 grid gap-2">
             <Field label="Discount (₹)">
               <input inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
@@ -217,7 +249,8 @@ function BillPanel({ bill, onChange }: { bill: BillView; onChange: (b?: BillView
           </div>
         </details>
         <Button variant="outline" className="w-full" onClick={() => window.print()}>
-          🖨 Print
+          <Printer className="h-4 w-4" aria-hidden />
+          Print
         </Button>
         <ErrorText error={error} />
       </div>
@@ -237,7 +270,7 @@ function SplitControls({ bill, busy, onSplit }: { bill: BillView; busy: boolean;
     return (
       <div className="line space-y-2 rounded-xl border p-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">Split by item</h3>
+          <h3 className="text-sm font-bold">Split by item</h3>
           <select aria-label="Number of groups" value={groups} onChange={(e) => setGroups(Number(e.target.value))}>
             {[2, 3, 4, 5, 6].map((n) => (
               <option key={n} value={n}>
@@ -291,8 +324,8 @@ function SplitControls({ bill, busy, onSplit }: { bill: BillView; busy: boolean;
   }
 
   return (
-    <details className="line rounded-xl border p-3">
-      <summary className="cursor-pointer font-semibold">Split bill</summary>
+    <details className="line rounded-xl border p-3 open:bg-(--sunken)/40">
+      <summary className="cursor-pointer text-sm font-semibold">Split bill</summary>
       <div className="mt-3 flex flex-wrap gap-2">
         {[2, 3, 4, 5].map((n) => (
           <Button key={n} variant="outline" disabled={busy} onClick={() => onSplit({ type: "EQUAL", parts: n })}>
@@ -327,10 +360,10 @@ function SettledPanel({ bill, onDone }: { bill: BillView; onDone: () => void }) 
 
   return (
     <Card>
-      <p className="text-center text-4xl" aria-hidden>
-        ✅
-      </p>
-      <h2 className="mt-2 text-center text-2xl font-black">Table {bill.tableLabel} paid</h2>
+      <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-fresh/12 text-fresh">
+        <CheckCircle2 className="h-9 w-9" aria-hidden />
+      </span>
+      <h2 className="mt-3 text-center text-2xl font-extrabold tracking-tight">Table {bill.tableLabel} paid</h2>
       <p className="muted text-center">
         {bill.billNumber} · {rupees(bill.total)}
       </p>
@@ -340,10 +373,11 @@ function SettledPanel({ bill, onDone }: { bill: BillView; onDone: () => void }) 
         </Field>
         {links ? (
           <div className="grid grid-cols-2 gap-2">
-            <a className="tap flex items-center justify-center rounded-xl bg-fresh px-4 font-semibold text-white" href={links.whatsappUrl} target="_blank" rel="noreferrer">
+            <a className="tap flex items-center justify-center gap-2 rounded-xl bg-fresh px-4 font-semibold text-white hover:brightness-110" href={links.whatsappUrl} target="_blank" rel="noreferrer">
+              <MessageCircle className="h-4 w-4" aria-hidden />
               WhatsApp
             </a>
-            <a className="tap line flex items-center justify-center rounded-xl border px-4 font-semibold" href={links.smsUrl}>
+            <a className="tap line flex items-center justify-center rounded-xl border px-4 font-semibold hover:bg-(--sunken)" href={links.smsUrl}>
               SMS
             </a>
           </div>
@@ -368,9 +402,9 @@ function SettledPanel({ bill, onDone }: { bill: BillView; onDone: () => void }) 
 
 function Row({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex justify-between">
+    <div className="flex justify-between gap-2">
       <dt className="muted">{k}</dt>
-      <dd>{v}</dd>
+      <dd className="tabular-nums">{v}</dd>
     </div>
   );
 }
