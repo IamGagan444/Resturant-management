@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Button, Card, ErrorText, Field } from "@/components/ui";
+import { CheckCircle2, Save } from "lucide-react";
+import { Badge, Button, Card, CardHeader, ErrorText, Field, Spinner } from "@/components/ui";
 
 interface Settings {
   name: string;
@@ -35,7 +36,7 @@ export function SettingsTab() {
   useEffect(() => {
     if (s.data) setF(s.data);
   }, [s.data]);
-  if (!f) return null;
+  if (!f) return <Spinner />;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -65,11 +66,11 @@ export function SettingsTab() {
   }
 
   const check = (k: "requireWaiterConfirm" | "allowPayLater" | "pricesIncludeTax", label: string, hint: string) => (
-    <label className="flex items-start gap-3">
-      <input type="checkbox" className="mt-1 h-5 w-5" checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />
+    <label className="line flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition has-checked:border-brand/40 has-checked:bg-brand/5">
+      <input type="checkbox" className="mt-0.5" checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />
       <span>
-        <span className="font-medium">{label}</span>
-        <span className="muted block text-xs">{hint}</span>
+        <span className="font-semibold">{label}</span>
+        <span className="muted mt-0.5 block text-sm">{hint}</span>
       </span>
     </label>
   );
@@ -77,7 +78,7 @@ export function SettingsTab() {
   return (
     <form onSubmit={save} className="space-y-6">
       <Card>
-        <h2 className="mb-3 text-lg font-bold">Restaurant</h2>
+        <CardHeader title="Restaurant" hint="Shown on guest menus and printed on every GST bill." />
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name">
             <input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
@@ -101,7 +102,7 @@ export function SettingsTab() {
       </Card>
 
       <Card>
-        <h2 className="mb-3 text-lg font-bold">Ordering & billing</h2>
+        <CardHeader title="Ordering & billing" />
         <div className="space-y-3">
           {check("requireWaiterConfirm", "Waiter confirms first QR order", "Stops prank orders: the kitchen only sees a table's orders after a waiter confirms guests are seated.")}
           {check("allowPayLater", "Allow pay later", "Guests order now and pay at the end.")}
@@ -119,10 +120,11 @@ export function SettingsTab() {
       </Card>
 
       <Card>
-        <h2 className="mb-1 text-lg font-bold">UPI payments (Razorpay)</h2>
-        <p className="muted mb-3 text-sm">
-          {f.razorpayConfigured ? `Connected (${f.razorpayKeyId}). Enter new keys only to replace them.` : "Not connected. Guests can still pay at the counter."}
-        </p>
+        <CardHeader
+          title="UPI payments (Razorpay)"
+          hint={f.razorpayConfigured ? `Connected (${f.razorpayKeyId}). Enter new keys only to replace them.` : "Not connected. Guests can still pay at the counter."}
+          action={f.razorpayConfigured ? <Badge tone="fresh">Connected</Badge> : <Badge>Not connected</Badge>}
+        />
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Key ID">
             <input value={rzp.keyId} onChange={(e) => setRzp({ ...rzp, keyId: e.target.value })} autoComplete="off" />
@@ -136,9 +138,21 @@ export function SettingsTab() {
         </div>
       </Card>
 
-      <ErrorText error={error} />
-      {msg && <p className="text-fresh">{msg}</p>}
-      <Button type="submit">Save settings</Button>
+      <div className="line sticky bottom-3 z-10 flex flex-wrap items-center gap-3 rounded-2xl border bg-(--surface)/90 p-3 shadow-lift backdrop-blur-xl">
+        <Button type="submit">
+          <Save className="h-4 w-4" aria-hidden />
+          Save settings
+        </Button>
+        {msg && (
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-fresh">
+            <CheckCircle2 className="h-4 w-4" aria-hidden />
+            {msg}
+          </span>
+        )}
+        <div className="w-full empty:hidden">
+          <ErrorText error={error} />
+        </div>
+      </div>
     </form>
   );
 }

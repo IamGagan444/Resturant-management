@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { SessionView, TableLookup } from "@rms/contracts";
 import { ApiError, api, deviceId } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { UtensilsCrossed } from "lucide-react";
 import { Button, LangPicker } from "./ui";
 
 export interface Joined {
@@ -49,29 +50,35 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center p-6">
-      <div className="flex items-center justify-between gap-2">
-        <p className="muted text-sm">{lookup.hotel.name}</p>
+    <main className="relative mx-auto flex min-h-dvh max-w-md flex-col px-6 pt-5 pb-8">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--color-brand)_16%,transparent),transparent_70%)]"
+      />
+      <div className="flex justify-end">
         <LangPicker />
       </div>
-      <h1 className="mt-1 text-2xl font-bold">{t("table", { label: lookup.table.label })}</h1>
-      <p className="muted mt-2">
-        {needCode ? t("needCodePrompt") : t("startOrderingPrompt")}
-      </p>
-      <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-medium">{t("yourName")}</span>
+      <div className="my-auto py-8">
+        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-linear-to-br from-brand-2 to-brand text-white shadow-lift">
+          <UtensilsCrossed className="h-7 w-7" aria-hidden />
+        </span>
+        <p className="font-display mt-6 text-3xl leading-tight font-semibold">{lookup.hotel.name}</p>
+        <h1 className="mt-2 inline-flex rounded-full bg-brand/10 px-3 py-1 text-sm font-bold text-brand">{t("table", { label: lookup.table.label })}</h1>
+        <p className="muted mt-4">{needCode ? t("needCodePrompt") : t("startOrderingPrompt")}</p>
+      <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold">{t("yourName")}</span>
           <input
             required
             maxLength={40}
             autoComplete="given-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="tap surface line rounded-xl border px-4 text-base"
+            className="tap surface line rounded-2xl border px-4 text-base shadow-xs"
           />
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-medium">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold">
             {t("phone")} <span className="muted font-normal">{t("phoneHint")}</span>
           </span>
           <input
@@ -80,12 +87,12 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
             autoComplete="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="tap surface line rounded-xl border px-4 text-base"
+            className="tap surface line rounded-2xl border px-4 text-base shadow-xs"
           />
         </label>
         {needCode && (
-          <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium">{t("tableCode")}</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-semibold">{t("tableCode")}</span>
             <input
               required
               inputMode="numeric"
@@ -93,7 +100,7 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
               maxLength={4}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              className="tap surface line rounded-xl border px-4 text-center text-2xl tracking-[0.5em]"
+              className="tap surface line h-16 rounded-2xl border px-4 text-center text-3xl font-bold tracking-[0.5em] shadow-xs"
               aria-describedby="code-help"
             />
             <span id="code-help" className="muted text-xs">
@@ -102,14 +109,15 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
           </label>
         )}
         {error && (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="rounded-2xl bg-red-500/10 p-3 text-sm font-medium text-red-600">
             {error}
           </p>
         )}
-        <Button type="submit" disabled={busy || !name.trim()} className="mt-2 text-lg">
+        <Button type="submit" disabled={busy || !name.trim()} className="mt-2 h-14 text-base">
           {busy ? t("joining") : needCode ? t("joinTable") : t("startOrdering")}
         </Button>
       </form>
+      </div>
     </main>
   );
 }

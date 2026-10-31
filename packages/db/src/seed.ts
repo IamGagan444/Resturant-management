@@ -70,13 +70,13 @@ async function main() {
   for (let i = 1; i <= 8; i++) {
     tables.push(
       await prisma.table.create({
-        data: { hotelId, floorId: ground.id, label: `T${i}`, seats: i <= 4 ? 4 : 6, posX: ((i - 1) % 4) * 2, posY: Math.floor((i - 1) / 4) * 2 },
+        data: { hotelId, floorId: ground.id, label: `T${i}`, seats: i <= 4 ? 4 : 6, posX: 14 + ((i - 1) % 4) * 24, posY: 18 + Math.floor((i - 1) / 4) * 28 },
       }),
     );
   }
   for (let i = 1; i <= 4; i++) {
     tables.push(
-      await prisma.table.create({ data: { hotelId, floorId: roof.id, label: `R${i}`, seats: 2, posX: (i - 1) * 2, posY: 0 } }),
+      await prisma.table.create({ data: { hotelId, floorId: roof.id, label: `R${i}`, seats: 2, posX: 14 + (i - 1) * 24, posY: 18 } }),
     );
   }
 

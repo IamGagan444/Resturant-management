@@ -18,8 +18,8 @@ export default async function TablePage({ params }: { params: Promise<{ slug: st
   const menu = await getMenu(slug);
   if (!menu) {
     return (
-      <main className="mx-auto max-w-md p-8 text-center">
-        <h1 className="text-lg font-semibold">This restaurant isn&apos;t available right now</h1>
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center p-8 text-center">
+        <h1 className="font-display text-2xl font-semibold">This restaurant isn&apos;t available right now</h1>
         <p className="muted mt-2">Please ask the staff for help.</p>
       </main>
     );

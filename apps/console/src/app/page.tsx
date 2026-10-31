@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { homeFor, useMe } from "@/lib/auth";
+import { Spinner } from "@/components/ui";
 
 /** Entry: send each user to their screen. */
 export default function Home() {
@@ -12,5 +13,5 @@ export default function Home() {
     if (me.data) router.replace(homeFor(me.data));
     else if (me.isError) router.replace("/device/");
   }, [me.data, me.isError, router]);
-  return <p className="muted p-8 text-center">Loading…</p>;
+  return <Spinner />;
 }

@@ -7,7 +7,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Me, StaffRole } from "@rms/contracts";
 import { ApiError, api } from "@/lib/api";
 import { homeFor } from "@/lib/auth";
-import { Button } from "@/components/ui";
+import { ChefHat, ConciergeBell, CreditCard, Crown, Delete, MonitorSmartphone, UserRoundCog, type LucideIcon } from "lucide-react";
+import { AuthAside } from "@/components/AuthAside";
+import { BrandMark, Button, Spinner } from "@/components/ui";
 
 interface DeviceInfo {
   device: { id: string; name: string; kind: string; stationId: string | null };
@@ -15,7 +17,7 @@ interface DeviceInfo {
   staff: { id: string; name: string; role: StaffRole }[];
 }
 
-const ROLE_ICON: Record<StaffRole, string> = { OWNER: "👑", MANAGER: "🧑‍💼", CASHIER: "💳", COOK: "👨‍🍳", WAITER: "🛎️" };
+const ROLE_ICON: Record<StaffRole, LucideIcon> = { OWNER: Crown, MANAGER: UserRoundCog, CASHIER: CreditCard, COOK: ChefHat, WAITER: ConciergeBell };
 
 /** Shared tablet/phone: tap your face, type your PIN. Two steps, no typing of phone numbers. */
 export default function DevicePage() {
@@ -47,79 +49,97 @@ export default function DevicePage() {
     if (next.length === 6) void submit(next);
   }
 
-  if (info.isLoading) return <p className="muted p-8 text-center">Loading…</p>;
+  if (info.isLoading) return <Spinner />;
   if (info.error instanceof ApiError && info.error.code === "DEVICE_NOT_PAIRED") {
     return (
-      <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-4 p-6 text-center">
-        <div className="text-5xl" aria-hidden>
-          📟
-        </div>
-        <h1 className="text-xl font-bold">This device isn&apos;t set up yet</h1>
-        <p className="muted">A manager signs in once here and pairs it as a kitchen screen, waiter phone or counter.</p>
-        <Link href="/login/" className="tap bg-brand flex items-center justify-center rounded-xl font-semibold text-white">
-          Manager sign in
-        </Link>
-      </main>
+      <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
+        <AuthAside />
+        <main className="flex flex-col justify-center px-6 py-12 sm:px-12">
+          <div className="mx-auto w-full max-w-sm text-center lg:text-left">
+            <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-brand/12 text-brand lg:mx-0">
+              <MonitorSmartphone className="h-8 w-8" aria-hidden />
+            </span>
+            <h1 className="mt-6 text-2xl font-bold tracking-tight">This device isn&apos;t set up yet</h1>
+            <p className="muted mt-2">A manager signs in once here and pairs it as a kitchen screen, waiter phone or counter.</p>
+            <Link
+              href="/login/"
+              className="tap mt-8 flex items-center justify-center rounded-xl bg-brand px-4 font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_16px_-8px_var(--color-brand)] hover:brightness-110"
+            >
+              Manager sign in
+            </Link>
+          </div>
+        </main>
+      </div>
     );
   }
-  if (!info.data) return <p className="p-8 text-center text-late">Could not reach the server. Retrying…</p>;
+  if (!info.data) return <p className="p-8 text-center font-medium text-late">Could not reach the server. Retrying…</p>;
 
   return (
-    <main className="mx-auto max-w-2xl p-6">
-      <p className="muted text-sm">
-        {info.data.hotel.name} · {info.data.device.name}
-      </p>
+    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col px-5 py-8 sm:px-8 sm:py-12">
+      <div className="flex items-center gap-3">
+        <BrandMark />
+        <p className="muted min-w-0 truncate text-sm font-medium">
+          {info.data.hotel.name} · {info.data.device.name}
+        </p>
+      </div>
       {!picked ? (
         <>
-          <h1 className="mt-1 mb-6 text-2xl font-bold">Who&apos;s working?</h1>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {info.data.staff.map((s) => (
-              <li key={s.id}>
-                <button onClick={() => setPicked(s)} className="surface line flex h-32 w-full flex-col items-center justify-center gap-2 rounded-2xl border text-lg font-semibold active:scale-95">
-                  <span className="text-4xl" aria-hidden>
-                    {ROLE_ICON[s.role]}
-                  </span>
-                  {s.name}
-                  <span className="muted text-xs font-normal">{s.role.toLowerCase()}</span>
-                </button>
-              </li>
-            ))}
+          <h1 className="mt-8 mb-6 text-3xl font-bold tracking-tight">Who&apos;s working?</h1>
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+            {info.data.staff.map((s) => {
+              const Icon = ROLE_ICON[s.role];
+              return (
+                <li key={s.id}>
+                  <button
+                    onClick={() => setPicked(s)}
+                    className="surface line group flex h-36 w-full flex-col items-center justify-center gap-2 rounded-2xl border text-lg font-semibold shadow-soft transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-lift active:scale-95"
+                  >
+                    <span className="grid h-12 w-12 place-items-center rounded-full bg-brand/10 text-brand transition group-hover:bg-brand group-hover:text-white">
+                      <Icon className="h-6 w-6" aria-hidden />
+                    </span>
+                    <span className="max-w-full truncate px-2">{s.name}</span>
+                    <span className="muted -mt-1 text-xs font-medium capitalize">{s.role.toLowerCase()}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
-          <Link href="/login/" className="muted mt-8 block text-center text-sm underline">
+          <Link href="/login/" className="muted mt-auto block pt-10 text-center text-sm font-medium hover:text-(--ink)">
             Sign in with email instead
           </Link>
         </>
       ) : (
-        <div className="mx-auto max-w-xs text-center">
-          <h1 className="mt-1 text-2xl font-bold">Hi {picked.name}</h1>
+        <div className="mx-auto mt-8 w-full max-w-xs text-center">
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-brand text-2xl font-bold text-white shadow-lift">{picked.name.slice(0, 1).toUpperCase()}</span>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight">Hi {picked.name}</h1>
           <p className="muted">Enter your PIN</p>
-          <div className="my-6 flex justify-center gap-3" aria-label={`${pin.length} digits entered`}>
+          <div className="my-7 flex justify-center gap-3" aria-label={`${pin.length} digits entered`}>
             {Array.from({ length: Math.max(4, pin.length) }, (_, i) => (
-              <span key={i} className={`h-4 w-4 rounded-full ${i < pin.length ? "bg-brand" : "bg-stone-300 dark:bg-stone-700"}`} />
+              <span key={i} className={`h-3.5 w-3.5 rounded-full transition ${i < pin.length ? "scale-110 bg-brand" : "bg-(--line)"}`} />
             ))}
           </div>
           {error && (
-            <p role="alert" className="mb-3 text-late">
+            <p role="alert" className="mb-4 rounded-lg bg-late/10 px-3 py-2 text-sm font-medium text-late">
               {error}
             </p>
           )}
           <div className="grid grid-cols-3 gap-3">
             {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-              <Button key={d} variant="outline" className="h-16 text-2xl" onClick={() => press(d)}>
+              <Button key={d} variant="outline" className="h-16 rounded-2xl text-2xl font-bold" onClick={() => press(d)}>
                 {d}
               </Button>
             ))}
-            <Button variant="ghost" className="h-16" onClick={() => (setPicked(null), setPin(""), setError(null))}>
+            <Button variant="ghost" className="h-16 rounded-2xl text-sm" onClick={() => (setPicked(null), setPin(""), setError(null))}>
               Back
             </Button>
-            <Button variant="outline" className="h-16 text-2xl" onClick={() => press("0")}>
+            <Button variant="outline" className="h-16 rounded-2xl text-2xl font-bold" onClick={() => press("0")}>
               0
             </Button>
-            <Button variant="ghost" className="h-16 text-2xl" aria-label="Delete" onClick={() => setPin((p) => p.slice(0, -1))}>
-              ⌫
+            <Button variant="ghost" className="h-16 rounded-2xl" aria-label="Delete" onClick={() => setPin((p) => p.slice(0, -1))}>
+              <Delete className="h-6 w-6" aria-hidden />
             </Button>
           </div>
-          <Button className="mt-3 h-16 w-full text-xl" disabled={pin.length < 4} onClick={() => void submit(pin)}>
+          <Button className="mt-4 h-14 w-full rounded-2xl text-lg" disabled={pin.length < 4} onClick={() => void submit(pin)}>
             Enter
           </Button>
         </div>

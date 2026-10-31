@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StaffRole } from "@rms/contracts";
 import { api } from "@/lib/api";
-import { Button, Card, ErrorText, Field } from "@/components/ui";
+import { KeyRound, UserPlus } from "lucide-react";
+import { Badge, Button, Card, CardHeader, ErrorText, Field } from "@/components/ui";
 
 interface Staff { id: string; name: string; role: StaffRole; phone: string | null; email: string | null; isActive: boolean; stationId: string | null }
 interface Station { id: string; name: string }
@@ -44,31 +45,40 @@ export function StaffTab() {
   return (
     <div className="space-y-6">
       <Card>
-        <h2 className="mb-3 text-lg font-bold">Team</h2>
-        <ul className="line mb-4 divide-y divide-(--line) rounded-xl border">
+        <CardHeader title="Team" hint="Everyone signs in on shared devices with their own PIN." />
+        <ul className="mb-6 grid gap-2 md:grid-cols-2">
           {staff.data?.map((s) => (
-            <li key={s.id} className={`flex flex-wrap items-center gap-3 px-3 py-2 ${s.isActive ? "" : "opacity-50"}`}>
-              <span className="flex-1 font-semibold">{s.name}</span>
-              <span className="muted text-sm">
-                {s.role.toLowerCase()}
-                {s.stationId ? ` · ${stations.data?.find((x) => x.id === s.stationId)?.name ?? ""}` : ""}
+            <li key={s.id} className={`line flex flex-wrap items-center gap-3 rounded-xl border p-3 ${s.isActive ? "" : "opacity-50"}`}>
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand/10 font-bold text-brand">{s.name.slice(0, 1).toUpperCase()}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold">{s.name}</span>
+                <span className="mt-0.5 flex items-center gap-1.5">
+                  <Badge className="capitalize">{s.role.toLowerCase()}</Badge>
+                  {s.stationId && <span className="muted truncate text-xs">{stations.data?.find((x) => x.id === s.stationId)?.name ?? ""}</span>}
+                </span>
               </span>
               <Button
                 variant="outline"
+                className="px-3 text-sm"
                 onClick={() => {
                   const pin = prompt(`New PIN for ${s.name} (4–6 digits)`);
                   if (pin) api("POST", `/v1/admin/staff/${s.id}/reset-pin`, { pin }).then(refresh, setError);
                 }}
               >
+                <KeyRound className="h-4 w-4" aria-hidden />
                 Reset PIN
               </Button>
-              <Button variant="ghost" onClick={() => api("PATCH", `/v1/admin/staff/${s.id}`, { isActive: !s.isActive }).then(refresh, setError)}>
+              <Button variant="ghost" className="px-3 text-sm" onClick={() => api("PATCH", `/v1/admin/staff/${s.id}`, { isActive: !s.isActive }).then(refresh, setError)}>
                 {s.isActive ? "Deactivate" : "Activate"}
               </Button>
             </li>
           ))}
         </ul>
-        <form onSubmit={add} className="grid gap-3 sm:grid-cols-3">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-bold">
+          <UserPlus className="h-4 w-4 text-brand" aria-hidden />
+          Add a team member
+        </h3>
+        <form onSubmit={add} className="grid gap-3 rounded-xl bg-(--sunken) p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3">
           <Field label="Name">
             <input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
           </Field>
@@ -149,14 +159,14 @@ function Assignments({ staff }: { staff: Staff[] }) {
 
   return (
     <Card>
-      <h2 className="mb-3 text-lg font-bold">Today&apos;s table assignments</h2>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <CardHeader title="Today's table assignments" hint="Unassigned tables alert every waiter." />
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {tables.data
           ?.filter((t) => t.isActive)
           .map((t) => (
             <label key={t.id} className="flex items-center gap-2">
-              <span className="w-12 font-bold">{t.label}</span>
-              <select className="flex-1" value={map[t.id] ?? ""} onChange={(e) => (setSaved(false), setMap({ ...map, [t.id]: e.target.value }))}>
+              <span className="grid h-11 min-w-12 shrink-0 place-items-center rounded-xl bg-(--sunken) px-2 font-bold">{t.label}</span>
+              <select className="min-w-0 flex-1" value={map[t.id] ?? ""} onChange={(e) => (setSaved(false), setMap({ ...map, [t.id]: e.target.value }))}>
                 <option value="">Any waiter</option>
                 {waiters.map((w) => (
                   <option key={w.id} value={w.id}>
