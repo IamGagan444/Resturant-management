@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { SignJWT, jwtVerify } from "jose";
 import { unscopedDb, type StaffRole } from "@rms/db";
 import { env } from "../env";
+import { redis } from "../jobs/queue";
 import { unauthorized } from "./errors";
 import { randomToken, sha256 } from "./crypto";
 
@@ -53,17 +54,37 @@ async function sign(claims: object, key: Uint8Array, ttlSec: number): Promise<st
     .sign(key);
 }
 
-export const signAccess = (c: AccessClaims) => sign(c, accessKey, ACCESS_TTL_SEC);
+// `ims`: issue time in ms, so a forced sign-out can tell apart tokens made in the same second
+export const signAccess = (c: AccessClaims) => sign({ ...c, ims: Date.now() }, accessKey, ACCESS_TTL_SEC);
 export const signGuest = (c: GuestClaims) => sign(c, guestKey, GUEST_TTL_SEC);
 
 export async function verifyAccessToken(token: string): Promise<AccessClaims | null> {
   try {
     const { payload } = await jwtVerify(token, accessKey, { algorithms: ["HS256"] });
-    if (payload.typ === "staff" || payload.typ === "platform") return payload as unknown as AccessClaims;
-    return null;
+    if (payload.typ !== "staff" && payload.typ !== "platform") return null;
+    const cut = await signedOutAt(String(payload.sub));
+    const issuedMs = typeof payload.ims === "number" ? payload.ims : (payload.iat ?? 0) * 1000;
+    if (cut && issuedMs <= cut) return null;
+    return payload as unknown as AccessClaims;
   } catch {
     return null;
   }
+}
+
+/**
+ * Forced sign-out. Access tokens are stateless for 15 min, so "sign out now" leaves a cut-off time per user:
+ * tokens issued before it stop working at once. Refresh tokens that weren't revoked simply get a new one.
+ */
+const cutKey = (sub: string) => `auth:signed-out:${sub}`;
+
+export async function forceSignOut(subjectId: string): Promise<void> {
+  await redis.set(cutKey(subjectId), String(Date.now()), "EX", ACCESS_TTL_SEC + 60);
+}
+
+async function signedOutAt(sub: string): Promise<number | null> {
+  // Redis trouble must not lock everyone out: give up after a moment and trust the token.
+  const v = await Promise.race([redis.get(cutKey(sub)).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 250))]);
+  return v ? Number(v) : null;
 }
 
 export async function verifyGuestToken(token: string): Promise<GuestClaims | null> {
@@ -117,6 +138,8 @@ export async function issueSession(reply: FastifyReply, claims: AccessClaims): P
       deviceId: claims.typ === "staff" ? claims.did : null,
       tokenHash: sha256(refresh),
       expiresAt: new Date(Date.now() + REFRESH_TTL_SEC * 1000),
+      userAgent: reply.request.headers["user-agent"]?.slice(0, 300) ?? null,
+      ip: reply.request.ip ?? null,
     },
   });
   reply.setCookie(COOKIE.access, accessToken, { ...cookieBase(), maxAge: ACCESS_TTL_SEC });

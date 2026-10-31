@@ -5,6 +5,8 @@ import { ArrowLeftRight, CloudOff, RefreshCw, Router, type LucideIcon } from "lu
 import { signOut } from "@/lib/auth";
 import { useNet } from "@/lib/net";
 import { onRejected } from "@/lib/outbox";
+import { describeError } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 
 type Variant = "primary" | "outline" | "ghost" | "danger" | "success";
 
@@ -19,12 +21,12 @@ const BUTTON_VARIANT: Record<Variant, string> = {
 };
 
 export function Button({ variant = "primary", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
-  return <button className={`${BUTTON_BASE} ${BUTTON_VARIANT[variant]} ${className}`} {...props} />;
+  return <button className={cn(BUTTON_BASE, BUTTON_VARIANT[variant], className)} {...props} />;
 }
 
 /** A link that looks like a button (same variants). */
 export function LinkButton({ variant = "outline", className = "", ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { variant?: Variant }) {
-  return <a className={`${BUTTON_BASE} ${BUTTON_VARIANT[variant]} ${className}`} {...props} />;
+  return <a className={cn(BUTTON_BASE, BUTTON_VARIANT[variant], className)} {...props} />;
 }
 
 /** Product mark used in headers and sign-in screens. */
@@ -127,15 +129,7 @@ export function OfflineBanner({ online }: { online: boolean }) {
   return null;
 }
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1.5 text-sm">
-      <span className="font-semibold text-(--ink)/85">{label}</span>
-      {children}
-      {hint && <span className="muted text-xs">{hint}</span>}
-    </label>
-  );
-}
+export { Field, FormError, SelectField, orNull, useForm } from "./form";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <section className={`surface line rounded-2xl border p-4 shadow-soft sm:p-5 ${className}`}>{children}</section>;
@@ -206,7 +200,7 @@ export function ErrorText({ error }: { error: unknown }) {
   if (!error) return null;
   return (
     <p role="alert" className="mt-2 rounded-lg bg-late/10 px-3 py-2 text-sm font-medium text-late">
-      {error instanceof Error ? error.message : String(error)}
+      {describeError(error)}
     </p>
   );
 }

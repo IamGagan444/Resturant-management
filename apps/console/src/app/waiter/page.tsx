@@ -24,7 +24,9 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { Button, EmptyState, OfflineBanner, RejectionToast, Spinner, TopBar } from "@/components/ui";
+import { Button, EmptyState, OfflineBanner, RejectionToast, TopBar } from "@/components/ui";
+import { notify } from "@/components/ui/feedback";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/Sheet";
 
 type Board = WaiterBoard;
@@ -82,7 +84,7 @@ export default function WaiterPage() {
       s.on(ev, refetch);
   });
 
-  const act = (p: Promise<unknown>) => void p.finally(refetch);
+  const act = (p: Promise<unknown>) => void p.catch(notify.error).finally(refetch);
   /** Optimistic board change; the queue delivers the command now or after an outage. */
   const patch = (fn: (b: Board) => Board) => qc.setQueryData<Board>(["board"], (b) => (b ? fn(b) : b));
   const queue = (p: Promise<void>) => void p.catch(refetch);
@@ -123,7 +125,17 @@ export default function WaiterPage() {
         </button>
       )}
 
-      {!b && <Spinner />}
+      {!b && (
+        <div className="mx-auto max-w-3xl space-y-3 px-3 py-5 sm:px-6" role="status" aria-label="Loading">
+          <Skeleton className="h-24 rounded-2xl" />
+          <Skeleton className="h-24 rounded-2xl" />
+          <div className="grid grid-cols-2 gap-2.5 min-[420px]:grid-cols-3 sm:grid-cols-4">
+            {Array.from({ length: 8 }, (_, i) => (
+              <Skeleton key={i} className="h-28 rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      )}
       {b && (
         <div className="mx-auto max-w-3xl space-y-7 px-3 py-5 sm:px-6">
           {b.ready.length === 0 && b.requests.length === 0 && b.pendingOrders.length === 0 && (

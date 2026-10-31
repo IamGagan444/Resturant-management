@@ -1,3 +1,4 @@
+import "./messages";
 export * from "./enums";
 export * from "./common";
 export * from "./menu";

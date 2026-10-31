@@ -46,7 +46,11 @@ Seeded logins:
 11. **Language.** Guests pick English, हिन्दी, ଓଡ଼ିଆ or తెలుగు from the menu header. The restaurant's default language is used until they choose.
 12. **Offline.** On the kitchen screen, turn the Wi-Fi off and tap a dish: it moves on screen and the banner says the tap is saved. Turn the Wi-Fi back on and it reaches the server within seconds.
 13. **Audit log.** Manage → **Audit log** lists voids, cancellations, discounts, stock and price changes (who, when, why), plus any offline taps the server refused.
-14. **Super admin.** Sign in with the admin email. From there you can onboard a hotel, change its status or plan, and view platform health.
+14. **Super admin.** Sign in with the admin email. It has four sections:
+    - **Dashboard:** restaurants by status, orders, live tables, trials ending this week, the busiest restaurants, problems in the last 24 hours.
+    - **Restaurants:** search and filter; per restaurant, edit details, change plan, status or trial, suspend or activate, reset the owner's password, sign the owner out everywhere, or delete it (you type its name to confirm).
+    - **Onboarding:** a four-step wizard (restaurant, owner, plan, review). It ends with the sign-in details to send the owner.
+    - **Sessions:** every signed-in owner and staff member, with browser or device, IP and last activity. Sign out one session or someone everywhere; it takes effect immediately.
 
 ## Deploying
 
@@ -121,6 +125,14 @@ Replays are safe by design: every action has a client id, item status only moves
 5. **Devices pick it up by themselves:** every signed-in kitchen / waiter device fetches a hub pass while online (valid 24 h, refreshed every 6 h), so nobody logs in again during an outage.
 
 The hub keeps its state in `HUB_DATA_FILE` (written atomically); queued work survives a power cut. Pairing a new hub retires the old one's token and passes.
+
+## Forms, errors and UI kit (console)
+
+- **Validation:** forms check input with the same zod schemas the API uses (`@rms/contracts`). Required fields show a `*`. Each field shows its own message. Server-side validation errors land on the same fields.
+- **Messages:** shared, plain-language messages ("Required", "Enter a 10-digit mobile number"). Phone numbers can be typed with spaces or dashes.
+- **Components:** shadcn-style, in `apps/console/src/components/ui/`: dialog, drawer (vaul), select, dropdown menu, tabs, skeleton, toasts (sonner). Forms open as a centred dialog on larger screens and as a swipe-down drawer on phones, with Save and Delete always visible.
+- **Error handling:** lists show a skeleton while loading, and an error card with "Try again" if loading fails. Actions report success or failure in a toast. A crash shows an error screen with "Try again" instead of a blank page.
+- **Menu photos:** shrunk in the browser (JPEG, longest side 1600 px) before upload.
 
 ## Performance
 

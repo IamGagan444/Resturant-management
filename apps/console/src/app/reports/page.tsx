@@ -6,7 +6,8 @@ import type { DayReport } from "@rms/contracts";
 import { api, rupees } from "@/lib/api";
 import { useGuard } from "@/lib/auth";
 import { ArrowLeft, IndianRupee, Printer, ReceiptText, RefreshCw, ShoppingBag, TrendingUp } from "lucide-react";
-import { Button, Card, CardHeader, ErrorText, NavLink, Spinner, Stat, TopBar } from "@/components/ui";
+import { Button, Card, CardHeader, ErrorText, NavLink, Stat, TopBar } from "@/components/ui";
+import { CardSkeleton, StatsSkeleton } from "@/components/ui/skeleton";
 
 const pct = (bps: number) => `${(bps / 100).toFixed(bps % 100 ? 1 : 0)}%`;
 const METHOD: Record<string, string> = { UPI: "UPI", CASH: "Cash", CARD: "Card", ROOM_CHARGE: "Room charge" };
@@ -48,7 +49,12 @@ export default function ReportsPage() {
           </Button>
         </div>
         <ErrorText error={report.error} />
-        {report.isLoading && <Spinner />}
+        {report.isLoading && (
+          <div className="space-y-5">
+            <StatsSkeleton />
+            <CardSkeleton lines={5} />
+          </div>
+        )}
 
         {r && (
           <>

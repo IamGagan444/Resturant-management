@@ -88,16 +88,16 @@ body {
   background: color-mix(in oklab, var(--color-brand) 25%, transparent);
 }
 
-.surface {
+@utility surface {
   background: var(--surface);
 }
-.muted {
+@utility muted {
   color: var(--muted);
 }
-.line {
+@utility line {
   border-color: var(--line);
 }
-.tap {
+@utility tap {
   min-height: 48px;
   min-width: 48px;
 }
@@ -122,6 +122,13 @@ body {
     outline: none;
     border-color: var(--color-brand);
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-brand) 18%, transparent);
+  }
+  [aria-invalid="true"]:not([type="checkbox"], [type="radio"]) {
+    border-color: var(--color-late);
+  }
+  [aria-invalid="true"]:focus {
+    border-color: var(--color-late);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-late) 18%, transparent);
   }
   input[type="checkbox"],
   input[type="radio"] {
