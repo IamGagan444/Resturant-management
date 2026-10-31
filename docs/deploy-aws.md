@@ -85,7 +85,7 @@ nano deploy/.env
 Fill in `deploy/.env`:
 - **Hosts:** already set to `restro.gaganpallai.in` and its two subdomains.
 - **`ACME_EMAIL`:** your email, for certificate expiry notices.
-- **Secrets:** run `openssl rand -base64 48` once for each of `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` and `ENCRYPTION_KEY`.
+- **Secrets:** run `openssl rand -base64 48` once for each of `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` and `ENCRYPTION_KEY`. For `POSTGRES_PASSWORD` use `openssl rand -hex 32` instead: it goes inside `DATABASE_URL`, where `/`, `+` and `=` break the address.
   - **Do not reuse** the values from your PC's `.env`.
   - **Keep `ENCRYPTION_KEY` safe:** it decrypts each hotel's Razorpay secrets.
 - **`ADMIN_EMAIL` / `ADMIN_PASSWORD`:** your super admin login. The password must be at least 12 characters.
