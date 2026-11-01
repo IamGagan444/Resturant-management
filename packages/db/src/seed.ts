@@ -54,9 +54,9 @@ async function main() {
   const pin = (p: string) => hash(p);
   const ownerHash = await hash("owner12345");
   await prisma.staff.create({
-    data: { hotelId, name: "Anita (Owner)", email: "owner@spicegarden.test", passwordHash: ownerHash, role: "OWNER", phone: "9000000001", pinHash: await pin("9999") },
+    data: { hotelId, name: "Anita (Owner)", email: "owner@spicegarden.test", passwordHash: ownerHash, role: "OWNER", phone: "9000000001", pinHash: await pin("999999") },
   });
-  await prisma.staff.create({ data: { hotelId, name: "Manoj", role: "MANAGER", phone: "9000000002", pinHash: await pin("1000") } });
+  await prisma.staff.create({ data: { hotelId, name: "Manoj", role: "MANAGER", phone: "9000000002", pinHash: await pin("100000") } });
   await prisma.staff.create({ data: { hotelId, name: "Kavya", role: "CASHIER", phone: "9000000003", pinHash: await pin("2000") } });
   await prisma.staff.create({ data: { hotelId, name: "Raju", role: "COOK", phone: "9000000004", pinHash: await pin("3001"), stationId: tandoor.id } });
   await prisma.staff.create({ data: { hotelId, name: "Suresh", role: "COOK", phone: "9000000005", pinHash: await pin("3002"), stationId: kitchen.id } });

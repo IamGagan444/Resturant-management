@@ -13,17 +13,17 @@ export const DialogClose = DialogPrimitive.Close;
 export function DialogContent({ className, children, hideClose = false, ...props }: ComponentProps<typeof DialogPrimitive.Content> & { hideClose?: boolean }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 animate-fade-in bg-black/45 backdrop-blur-[2px]" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 animate-fade-in bg-black/50" />
       <DialogPrimitive.Content
         className={cn(
-          "surface fixed top-1/2 left-1/2 z-50 flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 animate-sheet-up flex-col rounded-3xl shadow-lift outline-none",
+          "surface fixed top-1/2 left-1/2 z-50 flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 animate-sheet-up flex-col rounded-2xl shadow-lift outline-none",
           className,
         )}
         {...props}
       >
         {children}
         {!hideClose && (
-          <DialogPrimitive.Close className="muted absolute top-3.5 right-3.5 grid h-9 w-9 place-items-center rounded-xl hover:bg-(--sunken)" aria-label="Close">
+          <DialogPrimitive.Close className="absolute top-4 right-4 grid h-9 w-9 place-items-center rounded-full bg-(--sunken) hover:bg-(--line)" aria-label="Close">
             <X className="h-5 w-5" aria-hidden />
           </DialogPrimitive.Close>
         )}
@@ -33,11 +33,11 @@ export function DialogContent({ className, children, hideClose = false, ...props
 }
 
 export function DialogHeader({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("line border-b px-5 py-4 pr-14", className)} {...props} />;
+  return <div className={cn("px-6 pt-6 pb-2 pr-16", className)} {...props} />;
 }
 
 export function DialogTitle({ className, ...props }: ComponentProps<typeof DialogPrimitive.Title>) {
-  return <DialogPrimitive.Title className={cn("text-lg font-bold tracking-tight", className)} {...props} />;
+  return <DialogPrimitive.Title className={cn("text-2xl font-bold tracking-tight", className)} {...props} />;
 }
 
 export function DialogDescription({ className, ...props }: ComponentProps<typeof DialogPrimitive.Description>) {
@@ -45,9 +45,9 @@ export function DialogDescription({ className, ...props }: ComponentProps<typeof
 }
 
 export function DialogBody({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("min-h-0 flex-1 overflow-y-auto px-5 py-4", className)} {...props} />;
+  return <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-4", className)} {...props} />;
 }
 
 export function DialogFooter({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("line flex flex-wrap items-center justify-end gap-2 border-t px-5 py-3", className)} {...props} />;
+  return <div className={cn("flex flex-wrap items-center justify-end gap-2 px-6 pt-2 pb-6", className)} {...props} />;
 }

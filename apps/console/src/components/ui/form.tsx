@@ -111,7 +111,7 @@ export function Field({
 }) {
   return (
     <label className={cn("flex min-w-0 flex-col gap-1.5 text-sm", className)}>
-      <span className="font-semibold text-(--ink)/85">
+      <span className="font-medium text-(--ink)">
         {label}
         {required && (
           <span className="ml-0.5 text-late" aria-hidden>
@@ -136,7 +136,7 @@ export function Field({
 export function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <p role="alert" className="rounded-xl bg-late/10 px-3 py-2.5 text-sm font-medium text-late">
+    <p role="alert" className="rounded-lg bg-late/10 px-3.5 py-3 text-sm font-medium text-late">
       {message}
     </p>
   );

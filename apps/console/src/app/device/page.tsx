@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Me, StaffRole } from "@rms/contracts";
 import { ApiError, api } from "@/lib/api";
+import { describeError } from "@/lib/errors";
 import { homeFor } from "@/lib/auth";
 import { ChefHat, ConciergeBell, CreditCard, Crown, Delete, MonitorSmartphone, UserRoundCog, type LucideIcon } from "lucide-react";
 import { AuthAside } from "@/components/AuthAside";
@@ -19,9 +20,9 @@ interface DeviceInfo {
 
 /** Who each kind of paired device offers (mirrors DEVICE_ROLES in the API's auth routes). */
 const DEVICE_WHO: Record<string, { name: string; who: string }> = {
-  KDS: { name: "kitchen screen", who: "cooks, managers and the owner" },
-  WAITER: { name: "waiter phone", who: "waiters, managers and the owner" },
-  POS: { name: "counter", who: "cashiers, managers and the owner" },
+  KDS: { name: "kitchen screen", who: "cooks and managers" },
+  WAITER: { name: "waiter phone", who: "waiters and managers" },
+  POS: { name: "counter", who: "cashiers and managers" },
   MANAGER: { name: "manager device", who: "everyone" },
 };
 
@@ -84,28 +85,7 @@ export default function DevicePage() {
   }, [picked]);
 
   if (info.isLoading) return <Spinner />;
-  if (info.error instanceof ApiError && info.error.code === "DEVICE_NOT_PAIRED") {
-    return (
-      <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
-        <AuthAside />
-        <main className="flex flex-col justify-center px-6 py-12 sm:px-12">
-          <div className="mx-auto w-full max-w-sm text-center lg:text-left">
-            <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-brand/12 text-brand lg:mx-0">
-              <MonitorSmartphone className="h-8 w-8" aria-hidden />
-            </span>
-            <h1 className="mt-6 text-2xl font-bold tracking-tight">This device isn&apos;t set up yet</h1>
-            <p className="muted mt-2">A manager signs in once here and pairs it as a kitchen screen, waiter phone or counter.</p>
-            <Link
-              href="/login/"
-              className="tap mt-8 flex items-center justify-center rounded-xl bg-brand px-4 font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_16px_-8px_var(--color-brand)] hover:brightness-110"
-            >
-              Manager sign in
-            </Link>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  if (info.error instanceof ApiError && info.error.code === "DEVICE_NOT_PAIRED") return <NotPaired onPaired={() => void info.refetch()} />;
   if (!info.data) return <p className="p-8 text-center font-medium text-late">Could not reach the server. Retrying…</p>;
 
   return (
@@ -136,7 +116,7 @@ export default function DevicePage() {
                     onClick={() => setPicked(s)}
                     className="surface line group flex h-36 w-full flex-col items-center justify-center gap-2 rounded-2xl border text-lg font-semibold shadow-soft transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-lift active:scale-95"
                   >
-                    <span className="grid h-12 w-12 place-items-center rounded-full bg-brand/10 text-brand transition group-hover:bg-brand group-hover:text-white">
+                    <span className="grid h-12 w-12 place-items-center rounded-full bg-brand/10 text-brand transition group-hover:bg-brand group-hover:text-brand-ink">
                       <Icon className="h-6 w-6" aria-hidden />
                     </span>
                     <span className="max-w-full truncate px-2">{s.name}</span>
@@ -152,7 +132,7 @@ export default function DevicePage() {
         </>
       ) : (
         <div className="mx-auto mt-8 w-full max-w-xs text-center">
-          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-brand text-2xl font-bold text-white shadow-lift">{picked.name.slice(0, 1).toUpperCase()}</span>
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-brand text-2xl font-bold text-brand-ink shadow-lift">{picked.name.slice(0, 1).toUpperCase()}</span>
           <h1 className="mt-4 text-2xl font-bold tracking-tight">Hi {picked.name}</h1>
           <p className="muted">Enter your PIN, then tap Enter</p>
           <div className="my-7 flex justify-center gap-3" aria-label={`${pin.length} digits entered`}>
@@ -167,25 +147,93 @@ export default function DevicePage() {
           )}
           <div className="grid grid-cols-3 gap-3">
             {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-              <Button key={d} variant="outline" className="h-16 rounded-2xl text-2xl font-bold" onClick={() => press(d)}>
+              <Button key={d} variant="subtle" className="h-16 rounded-full text-2xl font-semibold" onClick={() => press(d)}>
                 {d}
               </Button>
             ))}
-            <Button variant="ghost" className="h-16 rounded-2xl text-sm" onClick={() => (setPicked(null), setPin(""), setError(null))}>
+            <Button variant="ghost" className="h-16 rounded-full text-sm" onClick={() => (setPicked(null), setPin(""), setError(null))}>
               Back
             </Button>
-            <Button variant="outline" className="h-16 rounded-2xl text-2xl font-bold" onClick={() => press("0")}>
+            <Button variant="subtle" className="h-16 rounded-full text-2xl font-semibold" onClick={() => press("0")}>
               0
             </Button>
-            <Button variant="ghost" className="h-16 rounded-2xl" aria-label="Delete" onClick={() => setPin((p) => p.slice(0, -1))}>
+            <Button variant="ghost" className="h-16 rounded-full" aria-label="Delete" onClick={() => setPin((p) => p.slice(0, -1))}>
               <Delete className="h-6 w-6" aria-hidden />
             </Button>
           </div>
-          <Button className="mt-4 h-14 w-full rounded-2xl text-lg" disabled={pin.length < 4} onClick={() => void submit(pin)}>
+          <Button className="mt-5 h-14 w-full text-lg" disabled={pin.length < 4} onClick={() => void submit(pin)}>
             Enter
           </Button>
         </div>
       )}
     </main>
+  );
+}
+
+/** A fresh device: type the 6-digit code from the owner's phone. Nobody signs in here to pair it. */
+function NotPaired({ onPaired }: { onPaired: () => void }) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function claim(e: React.FormEvent) {
+    e.preventDefault();
+    if (code.length !== 6 || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api("POST", "/v1/auth/devices/claim", { code });
+      onPaired();
+    } catch (err) {
+      setError(describeError(err));
+      setCode("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
+      <AuthAside />
+      <main className="flex flex-col justify-center px-6 py-12 sm:px-12">
+        <div className="mx-auto w-full max-w-sm">
+          <span className="grid h-14 w-14 place-items-center rounded-full bg-(--ink) text-(--bg)">
+            <MonitorSmartphone className="h-7 w-7" aria-hidden />
+          </span>
+          <h1 className="mt-6 text-3xl font-bold tracking-tight">Set up this device</h1>
+          <p className="muted mt-2">
+            On the owner&apos;s or a manager&apos;s phone, open <b className="text-(--ink)">Manage → Devices</b> and tap <b className="text-(--ink)">Get a pairing code</b>. Type
+            the code here.
+          </p>
+          <form onSubmit={claim} className="mt-8 space-y-4" noValidate>
+            <label htmlFor="pair-code" className="text-sm font-semibold">
+              Pairing code
+            </label>
+            <input
+              id="pair-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              placeholder="000000"
+              className="mt-2 text-center text-3xl font-bold tracking-[0.4em]"
+              aria-invalid={Boolean(error)}
+            />
+            {error && (
+              <p role="alert" className="rounded-lg bg-late/10 px-3 py-2 text-sm font-medium text-late">
+                {error}
+              </p>
+            )}
+            <Button type="submit" className="h-12 w-full" disabled={code.length !== 6 || busy}>
+              {busy ? "Pairing…" : "Pair this device"}
+            </Button>
+          </form>
+          <Link href="/login/" className="muted mt-8 block text-center text-sm font-medium hover:text-(--ink)">
+            Owner or manager? Sign in with email
+          </Link>
+        </div>
+      </main>
+    </div>
   );
 }

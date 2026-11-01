@@ -15,6 +15,14 @@ import { AuditTab } from "@/components/manage/AuditTab";
 
 const TABS = { menu: "Menu", tables: "Tables & QR", staff: "Staff", settings: "Settings", devices: "Devices", audit: "Audit log" } as const;
 type Tab = keyof typeof TABS;
+const TAB_HINT: Record<Tab, string> = {
+  menu: "Dishes, prices, photos and add-ons your guests see.",
+  tables: "Your tables, floors and the QR code on each table.",
+  staff: "Who works here, what they can do, and their PINs.",
+  settings: "Restaurant details, taxes and what goes on the bill.",
+  devices: "Kitchen screens, waiter phones and counters that staff sign in on.",
+  audit: "Who changed what, and when.",
+};
 const TAB_ICON: Record<Tab, LucideIcon> = { menu: UtensilsCrossed, tables: QrCode, staff: Users, settings: Settings, devices: MonitorSmartphone, audit: ClipboardList };
 
 const LINKS: { href: string; label: string; icon: LucideIcon; group: "manage" | "screens" }[] = [
@@ -33,15 +41,15 @@ export default function ManagePage() {
     <div className="min-h-dvh">
       <TopBar title={me.hotel.name} subtitle="Manage">
         {/* tablets and up: every shortcut (text from lg, icons below); phones: one menu */}
-        <span className="hidden items-center md:flex">
+        <span className="hidden items-center md:flex lg:hidden">
           {LINKS.filter((l) => l.group === "manage").map((l) => (
-            <NavLink key={l.href} href={l.href} icon={l.icon} labelClass="hidden lg:inline">
+            <NavLink key={l.href} href={l.href} icon={l.icon} labelClass="hidden">
               {l.label}
             </NavLink>
           ))}
           <span className="line mx-1.5 h-6 border-l" aria-hidden />
           {LINKS.filter((l) => l.group === "screens").map((l) => (
-            <NavLink key={l.href} href={l.href} icon={l.icon} labelClass="hidden lg:inline">
+            <NavLink key={l.href} href={l.href} icon={l.icon} labelClass="hidden">
               {l.label}
             </NavLink>
           ))}
@@ -49,7 +57,7 @@ export default function ManagePage() {
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="Go to"
-            className="muted grid h-10 w-10 shrink-0 place-items-center rounded-xl transition hover:bg-(--sunken) hover:text-(--ink) data-[state=open]:bg-(--sunken) md:hidden"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-(--sunken) data-[state=open]:bg-(--sunken) md:hidden"
           >
             <Menu className="h-5 w-5" aria-hidden />
           </DropdownMenuTrigger>
@@ -70,21 +78,37 @@ export default function ManagePage() {
           </DropdownMenuContent>
         </DropdownMenu>
       </TopBar>
-      <Tabs value={tab} onValueChange={(t) => setTab(t as Tab)}>
-        <div className="line sticky top-16 z-10 border-b bg-(--bg)/85 backdrop-blur-xl">
-          <TabsList className="mx-auto max-w-6xl px-3 py-2 sm:px-6" aria-label="Manage sections">
+      <Tabs value={tab} onValueChange={(t) => setTab(t as Tab)} className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)]">
+        {/* phones and tablets: a sticky row of pills; desktop: a sidebar */}
+        <aside className="line sticky top-16 z-10 border-b bg-(--surface) lg:h-[calc(100dvh-4rem)] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-4 lg:py-6">
+          <p className="muted hidden px-3 pb-2 text-xs font-medium lg:block">Restaurant</p>
+          <TabsList className="px-3 py-2.5 sm:px-6 lg:flex-col lg:gap-0.5 lg:p-0" aria-label="Manage sections">
             {(Object.keys(TABS) as Tab[]).map((t) => {
               const Icon = TAB_ICON[t];
               return (
-                <TabsTrigger key={t} value={t}>
+                <TabsTrigger key={t} value={t} className="lg:h-11 lg:w-full lg:justify-start lg:gap-3 lg:px-3.5">
                   <Icon aria-hidden />
                   {TABS[t]}
                 </TabsTrigger>
               );
             })}
           </TabsList>
-        </div>
-        <main className="mx-auto max-w-6xl px-3 py-5 sm:px-6 sm:py-8">
+          <div className="hidden lg:block">
+            <p className="muted mt-8 px-3 pb-2 text-xs font-medium">Today</p>
+            {LINKS.filter((l) => l.group === "manage").map((l) => (
+              <SideLink key={l.href} {...l} />
+            ))}
+            <p className="muted mt-6 px-3 pb-2 text-xs font-medium">Staff screens</p>
+            {LINKS.filter((l) => l.group === "screens").map((l) => (
+              <SideLink key={l.href} {...l} />
+            ))}
+          </div>
+        </aside>
+        <main className="mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
+          <header className="mb-6 px-1 sm:mb-8">
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{TABS[tab]}</h2>
+            <p className="muted mt-1.5 text-[15px]">{TAB_HINT[tab]}</p>
+          </header>
           <TabsContent value="menu">
             <MenuTab />
           </TabsContent>
@@ -106,5 +130,14 @@ export default function ManagePage() {
         </main>
       </Tabs>
     </div>
+  );
+}
+
+function SideLink({ href, label, icon: Icon }: { href: string; label: string; icon: LucideIcon }) {
+  return (
+    <a href={href} className="flex h-11 items-center gap-3 rounded-full px-3.5 text-[15px] font-medium transition hover:bg-(--sunken)">
+      <Icon className="h-4 w-4" aria-hidden />
+      {label}
+    </a>
   );
 }

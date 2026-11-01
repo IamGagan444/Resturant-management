@@ -9,19 +9,31 @@ const CUSTOMER = E2E.customer;
 const CONSOLE = E2E.console;
 const OWNER = { email: "owner@spicegarden.test", password: "owner12345" };
 
-/** Owner pairs a fresh browser as a device, then the staff member signs in with their PIN. */
+/**
+ * The owner gets a pairing code on their own browser; a fresh browser types it in and becomes the device
+ * (nobody signs in on it). Then the staff member signs in there with their PIN.
+ */
 async function staffDevice(browser: Browser, kind: "Kitchen screen" | "Waiter phone" | "Counter", who: string, pin: string, viewport = { width: 1280, height: 800 }): Promise<Page> {
+  const ownerCtx = await browser.newContext();
+  const owner = await ownerCtx.newPage();
+  await owner.goto(`${CONSOLE}/login/`);
+  await owner.getByLabel("Email").fill(OWNER.email);
+  await owner.getByLabel("Password").fill(OWNER.password);
+  await owner.getByRole("button", { name: "Sign in" }).click();
+  await owner.getByRole("tab", { name: "Devices" }).click();
+  await owner.getByLabel("Name").fill(`${kind} (e2e)`);
+  await owner.getByRole("combobox", { name: /Used as/ }).click();
+  await owner.getByRole("option", { name: kind }).click();
+  await owner.getByRole("button", { name: "Get a pairing code" }).click();
+  const code = (await owner.getByTestId("pair-code").textContent())?.trim() ?? "";
+  expect(code).toMatch(/^\d{6}$/);
+  await ownerCtx.close();
+
   const ctx = await browser.newContext({ viewport });
   const page = await ctx.newPage();
-  await page.goto(`${CONSOLE}/login/`);
-  await page.getByLabel("Email").fill(OWNER.email);
-  await page.getByLabel("Password").fill(OWNER.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByRole("tab", { name: "Devices" }).click();
-  await page.getByLabel("Name").fill(`${kind} (e2e)`);
-  await page.getByRole("combobox", { name: /Used as/ }).click();
-  await page.getByRole("option", { name: kind }).click();
-  await page.getByRole("button", { name: "Pair" }).click();
+  await page.goto(`${CONSOLE}/device/`);
+  await page.getByLabel("Pairing code").fill(code);
+  await page.getByRole("button", { name: "Pair this device" }).click();
   await expect(page.getByText("Who's working?")).toBeVisible();
   await page.getByRole("button", { name: new RegExp(who) }).click();
   for (const d of pin) await page.getByRole("button", { name: d, exact: true }).click();

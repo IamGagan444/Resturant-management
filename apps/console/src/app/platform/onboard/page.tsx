@@ -109,7 +109,7 @@ export default function OnboardPage() {
                 i === step ? "bg-(--surface) text-brand shadow-soft ring-1 ring-(--line)" : i < step ? "text-(--ink) hover:bg-(--sunken)" : "text-(--muted)",
               )}
             >
-              <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", i < step ? "bg-fresh text-white" : i === step ? "bg-brand text-white" : "bg-(--sunken)")}>
+              <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", i < step ? "bg-fresh text-white" : i === step ? "bg-brand text-brand-ink" : "bg-(--sunken)")}>
                 {i < step ? <Check className="h-4 w-4" aria-hidden /> : <s.icon className="h-4 w-4" aria-hidden />}
               </span>
               {s.title}
@@ -184,7 +184,7 @@ export default function OnboardPage() {
                   </Button>
                 </div>
               </Field>
-              <Field label="PIN" required error={form.error("owner.pin")} hint="4–6 digits, for signing in on shared devices">
+              <Field label="PIN" required error={form.error("owner.pin")} hint="6 digits, for signing in on a Manager device">
                 <input {...form.text("owner.pin")} onChange={(e) => form.set("owner.pin", e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="off" />
               </Field>
             </div>
@@ -272,7 +272,7 @@ function Done({ created, onAnother }: { created: { name: string; slug: string; e
       <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-fresh/12 text-fresh">
         <CheckCircle2 className="h-9 w-9" aria-hidden />
       </span>
-      <h1 className="font-display mt-4 text-2xl font-semibold">{created.name} is ready</h1>
+      <h1 className="font-display mt-4 text-2xl font-bold">{created.name} is ready</h1>
       <p className="muted mt-1 text-sm">Send these details to the owner privately. The password isn&apos;t shown again.</p>
       <pre className="mt-5 rounded-2xl bg-(--sunken) p-4 text-left font-mono text-sm whitespace-pre-wrap select-all">{text}</pre>
       <div className="mt-5 flex flex-wrap justify-center gap-2">

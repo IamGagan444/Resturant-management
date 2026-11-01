@@ -1,9 +1,11 @@
 /* Console service worker: lets kitchen and waiter screens open with no connection.
  *  - /_next/static/* is content-hashed → cache first, forever
- *  - pages → network first, cached copy when offline
- *  - API calls (other origins: cloud / hub) are never touched; the app's own queue handles them
+ *  - page loads (navigations) → network first, cached copy when offline
+ *  - everything else is left to the browser: API calls (other origins), and the router's
+ *    /…/index.txt page data. Answering those from here once put that raw data on screen
+ *    instead of the page, so the worker never touches them.
  */
-const CACHE = "rms-console-v1";
+const CACHE = "rms-console-v2"; // v2: drops v1, which held router .txt data
 const SHELL = ["/", "/kds/", "/waiter/", "/device/", "/login/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -44,15 +46,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // only whole-page loads; keep cached copies to real HTML pages
+  if (req.mode !== "navigate") return;
   event.respondWith(
     fetch(req)
       .then((res) => {
-        if (res.ok) {
+        if (res.ok && !res.redirected && (res.headers.get("content-type") || "").includes("text/html")) {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(req, copy));
         }
         return res;
       })
-      .catch(() => caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match("/"))),
+      .catch(() =>
+        caches
+          .match(req, { ignoreSearch: true })
+          .then((hit) => hit || caches.match("/"))
+          .then((hit) => hit || Response.error()),
+      ),
   );
 });

@@ -2,21 +2,26 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Fonts come from next/font (layout.tsx); Indian scripts fall back to the system's Noto fonts. */
+/*
+ * Design: Uber-style (awesome-design-md/uber). Black-and-white duet, one shape for everything you tap (the pill),
+ * flat 16px cards, Inter for all type (bold 700 headlines, 400/500 text). Status colours (fresh / warn / late)
+ * are the only colour, because a kitchen needs to see "late" at a glance.
+ * Fonts come from next/font (layout.tsx); Indian scripts fall back to the system's Noto fonts.
+ */
 @theme inline {
-  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", "Noto Sans Oriya", "Noto Sans Telugu", sans-serif;
-  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", "Noto Sans Oriya", "Noto Sans Telugu", sans-serif;
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 @theme {
-  --color-brand: #c2410c;
-  --color-brand-2: #ea7a2e;
-  --color-gold: #b08d57;
-  --color-fresh: #15803d;
-  --color-warn: #c27803;
-  --color-late: #c81e1e;
-  --shadow-soft: 0 1px 2px rgb(28 24 20 / 0.04), 0 4px 18px -6px rgb(28 24 20 / 0.1);
-  --shadow-lift: 0 2px 4px rgb(28 24 20 / 0.04), 0 18px 40px -12px rgb(28 24 20 / 0.22);
+  --color-brand: #000000;
+  --color-brand-ink: #ffffff;
+  --color-fresh: #05944f;
+  --color-warn: #996f00;
+  --color-warn-ink: #ffffff;
+  --color-late: #e11900;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-lift: 0 4px 16px rgb(0 0 0 / 0.16);
   --animate-sheet-up: sheet-up 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
   --animate-fade-in: fade-in 0.2s ease-out;
 }
@@ -45,59 +50,77 @@
   }
 }
 
-/* Warm ivory + charcoal. Tokens are plain variables so `bg-(--sunken)` etc. work everywhere. */
+/* Tokens are plain variables so `bg-(--sunken)` etc. work everywhere. --field is the input fill. */
 :root {
-  --bg: #f6f3ee;
+  --bg: #f6f6f6;
   --surface: #ffffff;
-  --sunken: #f1ece4;
-  --ink: #1c1814;
-  --muted: #7a7066;
-  --line: #e7e0d5;
+  --sunken: #efefef;
+  --field: #efefef;
+  --ink: #000000;
+  --muted: #5e5e5e;
+  --line: #e2e2e2;
   color-scheme: light;
 }
 
 /* System dark mode, plus forced dark on the kitchen screen (`.dark` on <html>) */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f0d0b;
-    --surface: #1a1714;
-    --sunken: #13110e;
-    --ink: #f3eee7;
-    --muted: #a59a8e;
-    --line: #2d2823;
-    --color-brand: #f0743a;
-    --color-fresh: #22a55a;
-    --color-warn: #e0a019;
-    --color-late: #ef4444;
-    --shadow-soft: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -10px rgb(0 0 0 / 0.6);
-    --shadow-lift: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 24px 48px -12px rgb(0 0 0 / 0.7);
+    --bg: #000000;
+    --surface: #141414;
+    --sunken: #222222;
+    --field: #222222;
+    --ink: #ffffff;
+    --muted: #afafaf;
+    --line: #2c2c2c;
+    --color-brand: #ffffff;
+    --color-brand-ink: #000000;
+    --color-fresh: #06c167;
+    --color-warn: #ffc043;
+    --color-warn-ink: #000000;
+    --color-late: #ff5a43;
+    --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.02);
+    --shadow-lift: 0 8px 24px rgb(0 0 0 / 0.6);
     color-scheme: dark;
   }
 }
 .dark {
-  --bg: #0f0d0b;
-  --surface: #1a1714;
-  --sunken: #13110e;
-  --ink: #f3eee7;
-  --muted: #a59a8e;
-  --line: #2d2823;
-  --color-brand: #f0743a;
-  --color-fresh: #22a55a;
-  --color-warn: #e0a019;
-  --color-late: #ef4444;
-  --shadow-soft: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -10px rgb(0 0 0 / 0.6);
-  --shadow-lift: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 24px 48px -12px rgb(0 0 0 / 0.7);
+  --bg: #000000;
+  --surface: #141414;
+  --sunken: #222222;
+  --field: #222222;
+  --ink: #ffffff;
+  --muted: #afafaf;
+  --line: #2c2c2c;
+  --color-brand: #ffffff;
+  --color-brand-ink: #000000;
+  --color-fresh: #06c167;
+  --color-warn: #ffc043;
+  --color-warn-ink: #000000;
+  --color-late: #ff5a43;
+  --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.02);
+  --shadow-lift: 0 8px 24px rgb(0 0 0 / 0.6);
   color-scheme: dark;
+}
+
+/* Inputs on a grey panel turn white (Uber's "input on soft"), so they never blend into it. */
+[class*="bg-(--sunken)"] {
+  --field: var(--surface);
 }
 
 body {
   background: var(--bg);
   color: var(--ink);
   font-feature-settings: "cv11", "ss01";
+  letter-spacing: -0.006em;
   -webkit-tap-highlight-color: transparent;
 }
 ::selection {
-  background: color-mix(in oklab, var(--color-brand) 25%, transparent);
+  background: color-mix(in oklab, var(--ink) 18%, transparent);
+}
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
 }
 
 @utility surface {
@@ -119,11 +142,11 @@ body {
   input:not([type="checkbox"], [type="radio"], [type="file"]),
   select,
   textarea {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 0.75rem;
-    padding: 0.55rem 0.85rem;
-    min-height: 44px;
+    background: var(--field);
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.9rem;
+    min-height: 48px;
     transition:
       border-color 0.15s,
       box-shadow 0.15s;
@@ -132,19 +155,20 @@ body {
   select:focus,
   textarea:focus {
     outline: none;
-    border-color: var(--color-brand);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-brand) 18%, transparent);
+    background: var(--surface);
+    border-color: var(--ink);
+    box-shadow: 0 0 0 1px var(--ink);
   }
   [aria-invalid="true"]:not([type="checkbox"], [type="radio"]) {
     border-color: var(--color-late);
   }
   [aria-invalid="true"]:focus {
     border-color: var(--color-late);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-late) 18%, transparent);
+    box-shadow: 0 0 0 1px var(--color-late);
   }
   input[type="checkbox"],
   input[type="radio"] {
-    accent-color: var(--color-brand);
+    accent-color: var(--ink);
     width: 1.1rem;
     height: 1.1rem;
   }
@@ -153,8 +177,8 @@ body {
   }
   input[type="file"]::file-selector-button {
     margin-right: 0.75rem;
-    border: 1px solid var(--line);
-    border-radius: 0.6rem;
+    border: 0;
+    border-radius: 999px;
     background: var(--sunken);
     color: var(--ink);
     padding: 0.5rem 0.9rem;

@@ -4,7 +4,7 @@ import type { ComponentProps } from "react";
 import { Tabs as TabsPrimitive } from "radix-ui";
 import { cn } from "@/lib/utils";
 
-/** shadcn Tabs, themed as a pill switcher that scrolls sideways on phones. */
+/** shadcn Tabs as Uber category pills: the chosen one is solid black. Scrolls sideways on phones. */
 export const Tabs = TabsPrimitive.Root;
 export const TabsContent = TabsPrimitive.Content;
 
@@ -16,8 +16,8 @@ export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsP
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        "inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-3.5 text-(--muted) text-sm font-semibold whitespace-nowrap transition outline-none hover:bg-(--sunken) hover:text-(--ink)",
-        "focus-visible:ring-2 focus-visible:ring-brand/40 data-[state=active]:bg-(--surface) data-[state=active]:text-brand data-[state=active]:shadow-soft data-[state=active]:ring-1 data-[state=active]:ring-(--line)",
+        "inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-[15px] font-medium whitespace-nowrap text-(--ink) transition outline-none hover:bg-(--sunken)",
+        "focus-visible:ring-2 focus-visible:ring-(--ink) data-[state=active]:bg-brand data-[state=active]:text-brand-ink data-[state=active]:hover:bg-brand",
         "[&_svg]:h-4 [&_svg]:w-4",
         className,
       )}

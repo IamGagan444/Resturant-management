@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DevicePairInput, HubPairInput, type DeviceKind } from "@rms/contracts";
-import { ChefHat, ConciergeBell, MonitorSmartphone, ReceiptText, Router, Trash2, UserRoundCog, type LucideIcon } from "lucide-react";
+import { ChefHat, ConciergeBell, KeyRound, MonitorSmartphone, ReceiptText, Router, Trash2, UserRoundCog, type LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { signOut } from "@/lib/auth";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, FormError, SelectField, orNull, useForm } from "@/components/ui";
 import { Loadable, confirm, notify } from "@/components/ui/feedback";
+import { Modal } from "@/components/ui/modal";
 import { CardSkeleton, ListSkeleton } from "@/components/ui/skeleton";
 
 interface Device { id: string; name: string; kind: DeviceKind; stationId: string | null; lastSeenAt: string | null }
@@ -28,7 +29,14 @@ export function DevicesTab() {
     schema: DevicePairInput,
     build: (v) => ({ name: v.name.trim(), kind: v.kind, stationId: v.kind === "KDS" ? orNull(v.stationId) : null }),
   });
-  const pair = form.submit(async (body) => {
+  const [code, setCode] = useState<{ code: string; expiresAt: string; name: string } | null>(null);
+  // recommended: a code for another device, so the owner's password is never typed on a staff phone
+  const getCode = form.submit(async (body) => {
+    const r = await api<{ code: string; expiresAt: string }>("POST", "/v1/admin/devices/pair-code", body);
+    setCode({ ...r, name: body.name });
+    form.reset();
+  });
+  const pairHere = form.submit(async (body) => {
     await api("POST", "/v1/auth/devices/pair", body);
     await signOut(); // hand the device over: next screen is the staff PIN picker
   });
@@ -48,8 +56,11 @@ export function DevicesTab() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader title="Pair this device" hint="Do this once on each tablet or phone. You'll be signed out and staff can then sign in with their PIN." />
-        <form onSubmit={pair} className="grid gap-4 rounded-xl bg-(--sunken) p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-4 lg:items-start" noValidate>
+        <CardHeader
+          title="Add a device"
+          hint="Do this once for each kitchen tablet, waiter phone or counter. Get a code here, then type it on the new device: you never sign in on a staff device. Staff then sign in there with their PIN."
+        />
+        <form onSubmit={getCode} className="grid gap-4 rounded-xl bg-(--sunken) p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3 lg:items-start" noValidate>
           <Field label="Name" required error={form.error("name")}>
             <input {...form.text("name")} placeholder="Tandoor tablet" maxLength={40} />
           </Field>
@@ -61,16 +72,23 @@ export function DevicesTab() {
               <SelectField value={form.values.stationId} onChange={(s) => form.set("stationId", s)} emptyLabel="All stations" options={(stations.data ?? []).map((s) => ({ value: s.id, label: s.name }))} />
             </Field>
           )}
-          <Button type="submit" className="lg:mt-6.5" disabled={form.busy}>
-            {form.busy ? "Pairing…" : "Pair"}
-          </Button>
+          <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row lg:col-span-3">
+            <Button type="submit" disabled={form.busy}>
+              <KeyRound className="h-4 w-4" aria-hidden />
+              Get a pairing code
+            </Button>
+            <Button type="button" variant="outline" disabled={form.busy} onClick={() => void pairHere()}>
+              Use the device I&apos;m holding
+            </Button>
+          </div>
           {form.formError && (
-            <div className="sm:col-span-2 lg:col-span-4">
+            <div className="sm:col-span-2 lg:col-span-3">
               <FormError message={form.formError} />
             </div>
           )}
         </form>
       </Card>
+      {code && <PairCode {...code} onClose={() => (setCode(null), void qc.invalidateQueries({ queryKey: ["admin", "devices"] }))} />}
       <HubCard />
       <Card>
         <CardHeader title="Paired devices" />
@@ -107,6 +125,36 @@ export function DevicesTab() {
         </Loadable>
       </Card>
     </div>
+  );
+}
+
+/** The code, big enough to read across a counter, with the minutes it has left. */
+function PairCode({ code, expiresAt, name, onClose }: { code: string; expiresAt: string; name: string; onClose: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const left = Math.max(0, new Date(expiresAt).getTime() - now);
+  const mm = Math.floor(left / 60000);
+  const ss = String(Math.floor((left % 60000) / 1000)).padStart(2, "0");
+  return (
+    <Modal
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={`Pairing code for ${name}`}
+      description="On the new device, open this console's address. It shows “Set up this device”: type this code there."
+      footer={
+        <Button className="flex-1 sm:flex-none" onClick={onClose}>
+          Done
+        </Button>
+      }
+    >
+      <p data-testid="pair-code" className="py-4 text-center font-mono text-5xl font-bold tracking-[0.25em] tabular-nums">
+        {left > 0 ? code : "------"}
+      </p>
+      <p className="muted text-center text-sm">{left > 0 ? `Works once, for ${mm}:${ss} more.` : "This code has expired. Close and get a new one."}</p>
+    </Modal>
   );
 }
 

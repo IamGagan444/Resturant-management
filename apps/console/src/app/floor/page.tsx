@@ -118,13 +118,13 @@ export default function FloorPage() {
       )}
 
       <div className="flex flex-wrap items-center gap-2 px-3 py-3 text-sm sm:px-6">
-        <div className={`scroll-x flex max-w-full gap-1 rounded-xl bg-(--sunken) p-1 ${floors.length > 1 ? "" : "hidden"}`}>
+        <div className={`scroll-x flex max-w-full gap-1.5 ${floors.length > 1 ? "" : "hidden"}`}>
           {floors.map((f) => (
             <button
               key={f.id}
               onClick={() => setFloorId(f.id)}
               aria-current={current === f.id}
-              className={`h-9 shrink-0 rounded-lg px-3.5 font-semibold whitespace-nowrap transition ${current === f.id ? "surface text-brand shadow-soft" : "muted hover:text-(--ink)"}`}
+              className={`h-10 shrink-0 rounded-full px-4 text-[15px] font-medium whitespace-nowrap transition ${current === f.id ? "bg-brand text-brand-ink" : "bg-(--sunken) hover:bg-(--line)"}`}
             >
               {f.name}
             </button>

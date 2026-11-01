@@ -188,18 +188,18 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
         <span className="grid h-20 w-20 animate-pop place-items-center rounded-full bg-veg/12 text-veg">
           <CheckCircle2 className="h-11 w-11" aria-hidden />
         </span>
-        <h1 className="font-display text-3xl font-semibold">{t("thankYou")}</h1>
+        <h1 className="font-display text-3xl font-bold">{t("thankYou")}</h1>
         <p className="muted max-w-xs">{t("paidThanks", { name: initialMenu.hotel.name })}</p>
         {phase.receiptUrl && (
           <div className="mt-4 flex w-full flex-col gap-2.5">
             <a
               href={phase.receiptUrl}
-              className="tap flex items-center justify-center rounded-2xl bg-brand px-4 font-semibold text-brand-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_8px_20px_-10px_var(--color-brand)]"
+              className="tap flex items-center justify-center rounded-full bg-brand px-5 font-medium text-brand-ink"
             >
               {t("viewReceipt")}
             </a>
             {share && (
-              <a href={share} target="_blank" rel="noreferrer" className="tap line surface flex items-center justify-center gap-2 rounded-2xl border px-4 font-semibold">
+              <a href={share} target="_blank" rel="noreferrer" className="tap flex items-center justify-center gap-2 rounded-full bg-(--sunken) px-5 font-medium">
                 <MessageCircle className="h-4 w-4 text-veg" aria-hidden />
                 {t("shareWhatsApp")}
               </a>
@@ -227,7 +227,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
 
       <header className="flex items-start justify-between gap-3 pt-5 md:pt-8">
         <div className="min-w-0">
-          <h1 className="font-display truncate text-[26px] leading-tight font-semibold md:text-4xl">{menu.hotel.name}</h1>
+          <h1 className="font-display truncate text-[26px] leading-tight font-bold md:text-4xl">{menu.hotel.name}</h1>
           <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm">
             <Pill className="bg-brand/10 text-brand">{t("table", { label: session?.tableLabel ?? "" })}</Pill>
             {session?.joinCode && (
@@ -288,7 +288,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 bg-linear-to-t from-(--bg) from-60% to-transparent pt-8">
         <div className="pointer-events-auto mx-auto max-w-md space-y-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:max-w-3xl md:px-6">
           {cart && cart.items.length > 0 && (
-            <Button className="h-14 w-full justify-between! rounded-2xl pr-5 pl-3 text-base" onClick={() => setCartOpen(true)}>
+            <Button className="h-14 w-full justify-between! pr-6 pl-3 text-base" onClick={() => setCartOpen(true)}>
               <span className="flex items-center gap-3">
                 <span className="grid h-9 min-w-9 place-items-center rounded-xl bg-white/20 px-2" aria-hidden>
                   <ShoppingBag className="h-5 w-5" />
@@ -302,13 +302,13 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
             </Button>
           )}
           <div className="surface line grid grid-cols-3 gap-1 rounded-2xl border p-1 shadow-lift">
-            <Button variant="ghost" className="rounded-xl px-1 text-sm" onClick={() => request("CALL_WAITER")}>
+            <Button variant="ghost" className="px-1 text-sm" onClick={() => request("CALL_WAITER")}>
               {t("btnWaiter")}
             </Button>
-            <Button variant="ghost" className="rounded-xl px-1 text-sm" onClick={() => request("WATER")}>
+            <Button variant="ghost" className="px-1 text-sm" onClick={() => request("WATER")}>
               {t("btnWater")}
             </Button>
-            <Button variant="ghost" className="rounded-xl px-1 text-sm" onClick={() => request("BILL")}>
+            <Button variant="ghost" className="px-1 text-sm" onClick={() => request("BILL")}>
               {t("btnBill")}
             </Button>
           </div>

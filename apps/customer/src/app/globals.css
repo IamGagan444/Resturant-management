@@ -1,21 +1,23 @@
 @import "tailwindcss";
 
-/* Fonts come from next/font (layout.tsx); Indian scripts fall back to the system's Noto fonts. */
+/*
+ * Design: Uber-style (awesome-design-md/uber). Black-and-white, pill buttons, flat 16px cards, Inter.
+ * The only colours are the food marks (veg / non-veg / egg), which Indian menus must show.
+ * Fonts come from next/font (layout.tsx); Indian scripts fall back to the system's Noto fonts.
+ */
 @theme inline {
-  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", "Noto Sans Oriya", "Noto Sans Telugu", sans-serif;
-  --font-display: var(--font-fraunces), ui-serif, Georgia, "Noto Serif Devanagari", serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", "Noto Sans Oriya", "Noto Sans Telugu", sans-serif;
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, "Noto Sans Devanagari", sans-serif;
 }
 
 @theme {
-  --color-brand: #c2410c;
-  --color-brand-2: #ea7a2e;
+  --color-brand: #000000;
   --color-brand-ink: #ffffff;
-  --color-gold: #b08d57;
-  --color-veg: #15803d;
-  --color-nonveg: #b91c1c;
-  --color-egg: #ca8a04;
-  --shadow-soft: 0 1px 2px rgb(28 24 20 / 0.04), 0 4px 18px -6px rgb(28 24 20 / 0.1);
-  --shadow-lift: 0 2px 4px rgb(28 24 20 / 0.04), 0 18px 40px -12px rgb(28 24 20 / 0.22);
+  --color-veg: #05944f;
+  --color-nonveg: #e11900;
+  --color-egg: #c48a00;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-lift: 0 4px 16px rgb(0 0 0 / 0.16);
   --animate-sheet-up: sheet-up 0.26s cubic-bezier(0.2, 0.9, 0.3, 1);
   --animate-fade-in: fade-in 0.2s ease-out;
   --animate-pop: pop 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.3);
@@ -39,30 +41,31 @@
   }
 }
 
-/* Warm ivory + charcoal, ember accent */
+/* White canvas, black ink, soft grey fills */
 :root {
-  --bg: #f8f5f0;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --sunken: #f1ece4;
-  --ink: #1c1814;
-  --muted: #7a7066;
-  --line: #ebe4d9;
+  --sunken: #efefef;
+  --ink: #000000;
+  --muted: #5e5e5e;
+  --line: #e2e2e2;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f0d0b;
-    --surface: #1a1714;
-    --sunken: #13110e;
-    --ink: #f3eee7;
-    --muted: #a59a8e;
-    --line: #2d2823;
-    --color-brand: #f0743a;
-    --color-veg: #22a55a;
-    --color-nonveg: #ef4444;
-    --shadow-soft: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -10px rgb(0 0 0 / 0.6);
-    --shadow-lift: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 24px 48px -12px rgb(0 0 0 / 0.7);
+    --bg: #000000;
+    --surface: #141414;
+    --sunken: #222222;
+    --ink: #ffffff;
+    --muted: #afafaf;
+    --line: #2c2c2c;
+    --color-brand: #ffffff;
+    --color-brand-ink: #000000;
+    --color-veg: #06c167;
+    --color-nonveg: #ff5a43;
+    --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.02);
+    --shadow-lift: 0 8px 24px rgb(0 0 0 / 0.6);
     color-scheme: dark;
   }
 }
@@ -71,10 +74,16 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-feature-settings: "cv11", "ss01";
+  letter-spacing: -0.006em;
   -webkit-tap-highlight-color: transparent;
 }
 ::selection {
-  background: color-mix(in oklab, var(--color-brand) 25%, transparent);
+  background: color-mix(in oklab, var(--ink) 18%, transparent);
+}
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
 }
 
 @utility surface {
@@ -105,12 +114,12 @@ body {
   select:focus,
   textarea:focus {
     outline: none;
-    border-color: var(--color-brand);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-brand) 18%, transparent);
+    border-color: var(--ink);
+    box-shadow: 0 0 0 1px var(--ink);
   }
   input[type="checkbox"],
   input[type="radio"] {
-    accent-color: var(--color-brand);
+    accent-color: var(--ink);
   }
   ::placeholder {
     color: var(--muted);

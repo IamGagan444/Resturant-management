@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Bps, HHMM, Id, Phone, Pin, Slug } from "./common";
+import { Bps, HHMM, Id, LeadPin, Phone, Pin, Slug, isLeadRole } from "./common";
 import { DeviceKind, HotelStatus, Language, StaffRole, TableStatus } from "./enums";
 
 // ── Auth ────────────────────────────────────────
@@ -16,6 +16,9 @@ export const DevicePairInput = z.object({
   stationId: Id.nullish(),
 });
 export type DevicePairInput = z.infer<typeof DevicePairInput>;
+
+/** One-time code from the owner's phone that pairs another device. */
+export const DeviceClaimInput = z.object({ code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code") });
 
 export const Me = z.discriminatedUnion("typ", [
   z.object({ typ: z.literal("platform"), id: Id, name: z.string(), email: z.string(), role: z.string() }),
@@ -80,7 +83,7 @@ export type TableInput = z.infer<typeof TableInput>;
 
 export const TableStatusInput = z.object({ status: z.enum(["FREE", "CLEANING", "RESERVED"]) });
 
-export const StaffCreateInput = z.object({
+const StaffFields = z.object({
   name: z.string().trim().min(1).max(60),
   role: StaffRole,
   phone: Phone.nullish(),
@@ -90,9 +93,13 @@ export const StaffCreateInput = z.object({
   stationId: Id.nullish(),
   language: Language.default("en"),
 });
+
+export const StaffCreateInput = StaffFields.superRefine((v, ctx) => {
+  if (isLeadRole(v.role) && !LeadPin.safeParse(v.pin).success) ctx.addIssue({ code: "custom", path: ["pin"], message: "Owners and managers need a 6-digit PIN" });
+});
 export type StaffCreateInput = z.infer<typeof StaffCreateInput>;
 
-export const StaffUpdateInput = StaffCreateInput.omit({ pin: true })
+export const StaffUpdateInput = StaffFields.omit({ pin: true })
   .partial()
   .extend({ isActive: z.boolean().optional() });
 export type StaffUpdateInput = z.infer<typeof StaffUpdateInput>;
@@ -124,7 +131,7 @@ export const CreateHotelInput = z.object({
     email: z.string().email(),
     password: z.string().min(8).max(200),
     phone: Phone.nullish(),
-    pin: Pin,
+    pin: LeadPin,
   }),
 });
 export type CreateHotelInput = z.infer<typeof CreateHotelInput>;

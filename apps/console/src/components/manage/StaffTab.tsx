@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ResetPinInput, StaffCreateInput, StaffUpdateInput, type StaffRole } from "@rms/contracts";
+import { z } from "zod";
+import { LeadPin, ResetPinInput, StaffCreateInput, StaffUpdateInput, type StaffRole } from "@rms/contracts";
 import { KeyRound, Pencil, Phone, Power, UserPlus, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, FormError, SelectField, orNull, useForm } from "@/components/ui";
@@ -180,11 +181,16 @@ function StaffForm({ person, stations, onClose, onSaved }: { person: Staff | nul
         <Field label="Name" required error={form.error("name")} className="sm:col-span-2">
           <input {...form.text("name")} autoComplete="off" maxLength={60} placeholder="e.g. Jeevan" />
         </Field>
-        <Field label="Role" required error={form.error("role")} hint={ROLES.find((r) => r.value === v.role)?.hint}>
+        <Field label="Role" required error={form.error("role")} hint={
+            !adding && mgr && !isManagerRole(person.role)
+              ? "After saving, use Reset PIN to give them a 6-digit PIN: their old one won't work for this role."
+              : ROLES.find((r) => r.value === v.role)?.hint
+          }
+        >
           <SelectField value={v.role} onChange={(r) => form.set("role", r as StaffRole)} options={ROLES} invalid={Boolean(form.error("role"))} />
         </Field>
         {adding ? (
-          <Field label="PIN" required error={form.error("pin")} hint="4–6 digits, used to sign in">
+          <Field label="PIN" required error={form.error("pin")} hint={mgr ? "6 digits: owners and managers can do everything" : "4–6 digits, used to sign in"}>
             <input {...form.text("pin")} onChange={(e) => form.set("pin", e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="off" placeholder="••••" />
           </Field>
         ) : (
@@ -221,7 +227,8 @@ function StaffForm({ person, stations, onClose, onSaved }: { person: Staff | nul
 }
 
 function ResetPin({ person, onClose }: { person: Staff; onClose: () => void }) {
-  const form = useForm({ initial: { pin: "" }, schema: ResetPinInput, build: (v) => v });
+  const lead = isManagerRole(person.role);
+  const form = useForm({ initial: { pin: "" }, schema: lead ? z.object({ pin: LeadPin }) : ResetPinInput, build: (v) => v });
   const save = form.submit(async (body) => {
     await api("POST", `/v1/admin/staff/${person.id}/reset-pin`, body);
     notify.ok(`New PIN set for ${person.name}`);
@@ -245,7 +252,7 @@ function ResetPin({ person, onClose }: { person: Staff; onClose: () => void }) {
       }
     >
       <form id="pin-form" onSubmit={save} className="space-y-4" noValidate>
-        <Field label="New PIN" required error={form.error("pin")} hint="4–6 digits">
+        <Field label="New PIN" required error={form.error("pin")} hint={lead ? "6 digits for owners and managers" : "4–6 digits"}>
           <input
             {...form.text("pin")}
             onChange={(e) => form.set("pin", e.target.value.replace(/\D/g, "").slice(0, 6))}

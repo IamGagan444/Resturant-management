@@ -58,7 +58,7 @@ export default function ReportsPage() {
 
         {r && (
           <>
-            <h2 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+            <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
               {new Date(`${r.date}T00:00:00`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             </h2>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

@@ -55,18 +55,14 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
 
   return (
     <main className="relative mx-auto flex min-h-dvh max-w-md flex-col px-6 pt-5 pb-8">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--color-brand)_16%,transparent),transparent_70%)]"
-      />
       <div className="flex justify-end">
         <LangPicker />
       </div>
       <div className="my-auto py-8">
-        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-linear-to-br from-brand-2 to-brand text-white shadow-lift">
+        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand text-brand-ink">
           <UtensilsCrossed className="h-7 w-7" aria-hidden />
         </span>
-        <p className="font-display mt-6 text-3xl leading-tight font-semibold">{lookup.hotel.name}</p>
+        <p className="font-display mt-6 text-3xl leading-tight font-bold">{lookup.hotel.name}</p>
         <h1 className="mt-2 inline-flex rounded-full bg-brand/10 px-3 py-1 text-sm font-bold text-brand">{t("table", { label: lookup.table.label })}</h1>
         <p className="muted mt-4">{needCode ? t("needCodePrompt") : t("startOrderingPrompt")}</p>
       <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
@@ -83,7 +79,7 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
             autoComplete="given-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="tap surface line rounded-2xl border px-4 text-base shadow-xs"
+            className="tap rounded-lg border border-transparent bg-(--sunken) px-4 text-base"
           />
         </label>
         <label className="flex flex-col gap-1.5">
@@ -99,7 +95,7 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
             onBlur={() => setPhoneError(!phoneOk(phone))}
             aria-invalid={phoneError || undefined}
             aria-describedby={phoneError ? "phone-error" : undefined}
-            className={`tap surface rounded-2xl border px-4 text-base shadow-xs ${phoneError ? "border-red-500" : "line"}`}
+            className={`tap rounded-lg border bg-(--sunken) px-4 text-base ${phoneError ? "border-red-500" : "border-transparent"}`}
           />
           {phoneError && (
             <span id="phone-error" role="alert" className="text-xs font-medium text-red-600">
@@ -122,7 +118,7 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
               maxLength={4}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              className="tap surface line h-16 rounded-2xl border px-4 text-center text-3xl font-bold tracking-[0.5em] shadow-xs"
+              className="tap h-16 rounded-lg border border-transparent bg-(--sunken) px-4 text-center text-3xl font-bold tracking-[0.5em]"
               aria-describedby="code-help"
             />
             <span id="code-help" className="muted text-xs">

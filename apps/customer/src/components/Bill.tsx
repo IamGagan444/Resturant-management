@@ -55,7 +55,7 @@ export function Bill({
   return (
     <div className="mx-auto max-w-xl pt-2 pb-44">
       <article className="surface line overflow-hidden rounded-3xl border shadow-soft">
-        <div className="h-1.5 bg-linear-to-r from-brand-2 to-brand" aria-hidden />
+        <div className="h-1.5 bg-brand" aria-hidden />
         <div className="p-5">
         <h3 className="mb-4 flex items-center gap-2 font-bold">
           <ReceiptText className="h-4.5 w-4.5 text-brand" aria-hidden />
