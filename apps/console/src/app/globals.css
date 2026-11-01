@@ -3,27 +3,35 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Design: Uber-style (awesome-design-md/uber). Black-and-white duet, one shape for everything you tap (the pill),
- * flat 16px cards, Inter for all type (bold 700 headlines, 400/500 text). Status colours (fresh / warn / late)
- * are the only colour, because a kitchen needs to see "late" at a glance.
+ * Design: "Restro" — colours from the logo. Tomato orange (the cloche) for actions and highlights,
+ * navy ink (the fork and chart), warm cream canvas with white cards. Figtree for headings (it matches
+ * the lowercase "restro" wordmark), Inter for text and numbers. Pill buttons, 16px cards.
+ * Status colours (fresh / warn / late) stay separate so a kitchen sees "late" at a glance.
+ * Motion is CSS-only and animates transform/opacity only (cheap on low-end phones); it switches
+ * off for people who ask for reduced motion.
  * Fonts come from next/font (layout.tsx); Indian scripts fall back to the system's Noto fonts.
  */
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", "Noto Sans Oriya", "Noto Sans Telugu", sans-serif;
-  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-figtree), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 @theme {
-  --color-brand: #000000;
+  --color-brand: #dc5228;
   --color-brand-ink: #ffffff;
-  --color-fresh: #05944f;
-  --color-warn: #996f00;
+  --color-navy: #1e2a36;
+  --color-cream: #fbf7f1;
+  --color-fresh: #138a4f;
+  --color-warn: #a86b00;
   --color-warn-ink: #ffffff;
-  --color-late: #e11900;
-  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.04);
-  --shadow-lift: 0 4px 16px rgb(0 0 0 / 0.16);
-  --animate-sheet-up: sheet-up 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+  --color-late: #d92d20;
+  --shadow-soft: 0 1px 2px rgb(30 42 54 / 0.05), 0 6px 18px -10px rgb(30 42 54 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(30 42 54 / 0.05), 0 18px 36px -14px rgb(30 42 54 / 0.28);
+  --animate-sheet-up: sheet-up 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
   --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-rise: rise 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  --animate-pop: pop 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.3) backwards;
+  --animate-grow-x: grow-x 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 @keyframes sheet-up {
@@ -49,60 +57,105 @@
     opacity: 0;
   }
 }
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes ping-ring {
+  from {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+/* logo intro: the cloche lid lifts, the trend line draws, the dot pops */
+@keyframes lid-lift {
+  0%,
+  100% {
+    transform: none;
+  }
+  40% {
+    transform: translateY(-7px) rotate(-7deg);
+  }
+  70% {
+    transform: translateY(1px);
+  }
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
 
 /* Tokens are plain variables so `bg-(--sunken)` etc. work everywhere. --field is the input fill. */
 :root {
-  --bg: #f6f6f6;
+  --bg: #fbf7f1;
   --surface: #ffffff;
-  --sunken: #efefef;
-  --field: #efefef;
-  --ink: #000000;
-  --muted: #5e5e5e;
-  --line: #e2e2e2;
+  --sunken: #f4eee5;
+  --field: #f4eee5;
+  --ink: #1e2a36;
+  --muted: #66707c;
+  --line: #ebe3d7;
   color-scheme: light;
 }
 
 /* System dark mode, plus forced dark on the kitchen screen (`.dark` on <html>) */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #000000;
-    --surface: #141414;
-    --sunken: #222222;
-    --field: #222222;
-    --ink: #ffffff;
-    --muted: #afafaf;
-    --line: #2c2c2c;
-    --color-brand: #ffffff;
-    --color-brand-ink: #000000;
-    --color-fresh: #06c167;
-    --color-warn: #ffc043;
-    --color-warn-ink: #000000;
-    --color-late: #ff5a43;
-    --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.02);
-    --shadow-lift: 0 8px 24px rgb(0 0 0 / 0.6);
+    --bg: #0f151c;
+    --surface: #17202a;
+    --sunken: #212c38;
+    --field: #212c38;
+    --ink: #f6f1ea;
+    --muted: #9aa6b2;
+    --line: #2a3542;
+    --color-brand: #ec6238;
+    --color-brand-ink: #ffffff;
+    --color-fresh: #2fbf71;
+    --color-warn: #f5b638;
+    --color-warn-ink: #1e2a36;
+    --color-late: #ff5d4d;
+    --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.03);
+    --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.7);
     color-scheme: dark;
   }
 }
 .dark {
-  --bg: #000000;
-  --surface: #141414;
-  --sunken: #222222;
-  --field: #222222;
-  --ink: #ffffff;
-  --muted: #afafaf;
-  --line: #2c2c2c;
-  --color-brand: #ffffff;
-  --color-brand-ink: #000000;
-  --color-fresh: #06c167;
-  --color-warn: #ffc043;
-  --color-warn-ink: #000000;
-  --color-late: #ff5a43;
-  --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.02);
-  --shadow-lift: 0 8px 24px rgb(0 0 0 / 0.6);
+  --bg: #0f151c;
+  --surface: #17202a;
+  --sunken: #212c38;
+  --field: #212c38;
+  --ink: #f6f1ea;
+  --muted: #9aa6b2;
+  --line: #2a3542;
+  --color-brand: #ec6238;
+  --color-brand-ink: #ffffff;
+  --color-fresh: #2fbf71;
+  --color-warn: #f5b638;
+  --color-warn-ink: #1e2a36;
+  --color-late: #ff5d4d;
+  --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.03);
+  --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.7);
   color-scheme: dark;
 }
 
-/* Inputs on a grey panel turn white (Uber's "input on soft"), so they never blend into it. */
+/* Inputs on a tinted panel turn white, so they never blend into it. */
 [class*="bg-(--sunken)"] {
   --field: var(--surface);
 }
@@ -115,12 +168,13 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 ::selection {
-  background: color-mix(in oklab, var(--ink) 18%, transparent);
+  background: color-mix(in oklab, var(--color-brand) 24%, transparent);
 }
 h1,
 h2,
 h3 {
-  letter-spacing: -0.015em;
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 @utility surface {
@@ -156,8 +210,8 @@ h3 {
   textarea:focus {
     outline: none;
     background: var(--surface);
-    border-color: var(--ink);
-    box-shadow: 0 0 0 1px var(--ink);
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-brand) 20%, transparent);
   }
   [aria-invalid="true"]:not([type="checkbox"], [type="radio"]) {
     border-color: var(--color-late);
@@ -168,7 +222,7 @@ h3 {
   }
   input[type="checkbox"],
   input[type="radio"] {
-    accent-color: var(--ink);
+    accent-color: var(--color-brand);
     width: 1.1rem;
     height: 1.1rem;
   }
@@ -192,6 +246,124 @@ h3 {
   button:not(:disabled),
   summary {
     cursor: pointer;
+  }
+}
+
+/* ---------- Motion ---------- */
+
+/* Children enter one after another (lists of cards, stat rows). */
+.stagger > * {
+  animation: var(--animate-rise);
+}
+.stagger > :nth-child(2) {
+  animation-delay: 50ms;
+}
+.stagger > :nth-child(3) {
+  animation-delay: 100ms;
+}
+.stagger > :nth-child(4) {
+  animation-delay: 150ms;
+}
+.stagger > :nth-child(5) {
+  animation-delay: 200ms;
+}
+.stagger > :nth-child(6) {
+  animation-delay: 250ms;
+}
+.stagger > :nth-child(n + 7) {
+  animation-delay: 300ms;
+}
+
+/* Things you can click lift a little on hover (mouse only, so touch never sticks). */
+@media (hover: hover) {
+  .lift {
+    transition:
+      translate 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow 0.2s;
+  }
+  .lift:hover {
+    translate: 0 -2px;
+    box-shadow: var(--shadow-lift);
+  }
+}
+
+/* Bars that fill from the left (dashboards, progress). */
+.grow-x {
+  transform-origin: left;
+  animation: var(--animate-grow-x);
+}
+
+/* A "live" dot with a ring that ripples out. */
+.live-dot {
+  position: relative;
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: ping-ring 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Slow drift for decorative cards on the sign-in panel */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--tilt, 0deg));
+  }
+  50% {
+    transform: translateY(-10px) rotate(var(--tilt, 0deg));
+  }
+}
+.float-slow {
+  --tilt: -3deg;
+  animation: float 6s ease-in-out infinite;
+}
+.float-slower {
+  --tilt: 2deg;
+  animation: float 8s ease-in-out 1s infinite;
+}
+
+/* Logo intro (RestroMark animated) */
+.mark-animated .mark-lid {
+  transform-box: fill-box;
+  transform-origin: 80% 100%;
+  animation: lid-lift 1.1s cubic-bezier(0.3, 0.7, 0.3, 1) 0.25s both;
+}
+.mark-animated .mark-trend {
+  stroke-dasharray: 1;
+  animation: draw 0.9s ease-out 0.5s both;
+}
+.mark-animated .mark-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.6) 1.2s both;
+}
+
+/* Shimmer for loading placeholders */
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.shimmer {
+  background: linear-gradient(90deg, var(--sunken) 25%, color-mix(in oklab, var(--sunken) 55%, var(--surface)) 50%, var(--sunken) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

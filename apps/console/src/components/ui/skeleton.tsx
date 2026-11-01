@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 /** shadcn Skeleton: a pulsing placeholder in the shape of what is loading. */
 export function Skeleton({ className, ...props }: ComponentProps<"div">) {
-  return <div aria-hidden className={cn("animate-pulse rounded-lg bg-(--sunken)", className)} {...props} />;
+  return <div aria-hidden className={cn("shimmer rounded-lg", className)} {...props} />;
 }
 
 /** Rows of a list (avatar/icon + two lines + action). */

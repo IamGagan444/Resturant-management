@@ -43,7 +43,7 @@ export default function PlatformDashboard() {
           const problems = o.problems.failedPaymentsLast24h + o.problems.failedSyncsLast24h;
           return (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <Stat label="Restaurants" value={o.hotels.total} hint={`${o.hotels.newLast30d} new in 30 days`} icon={Building2} />
                 <Stat label="Orders (24h)" value={o.activity.ordersLast24h} hint={`${o.activity.ordersLast7d} in 7 days`} icon={ShoppingBag} />
                 <Stat label="Live tables" value={o.activity.liveSessions} hint="Guests seated right now" icon={Utensils} />
@@ -61,13 +61,13 @@ export default function PlatformDashboard() {
                 </div>
               )}
 
-              <div className="grid gap-6 xl:grid-cols-2">
+              <div className="stagger grid gap-6 xl:grid-cols-2">
                 <Card>
                   <CardHeader title="Restaurants by status" />
                   <div className="flex h-3 overflow-hidden rounded-full bg-(--sunken)">
                     {(Object.keys(o.hotels.byStatus) as HotelStatus[]).map((s) =>
                       o.hotels.byStatus[s] ? (
-                        <span key={s} className={STATUS_BAR[s]} style={{ width: `${(o.hotels.byStatus[s] / Math.max(1, o.hotels.total)) * 100}%` }} />
+                        <span key={s} className={`grow-x ${STATUS_BAR[s]}`} style={{ width: `${(o.hotels.byStatus[s] / Math.max(1, o.hotels.total)) * 100}%` }} />
                       ) : null,
                     )}
                   </div>
@@ -114,7 +114,7 @@ export default function PlatformDashboard() {
                           <span className="min-w-0 flex-1">
                             <span className="block truncate font-semibold">{h.name}</span>
                             <span className="mt-1 block h-1.5 rounded-full bg-(--sunken)">
-                              <span className="block h-full rounded-full bg-brand" style={{ width: `${(h.orders / Math.max(1, o.topHotels[0]!.orders)) * 100}%` }} />
+                              <span className="grow-x block h-full rounded-full bg-brand" style={{ width: `${(h.orders / Math.max(1, o.topHotels[0]!.orders)) * 100}%` }} />
                             </span>
                           </span>
                           <span className="flex items-center gap-1 font-bold tabular-nums">

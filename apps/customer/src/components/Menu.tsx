@@ -101,7 +101,7 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
               </span>
             )}
           </h2>
-          <ul className="divide-y divide-(--line) md:grid md:grid-cols-2 md:gap-4 md:divide-y-0">
+          <ul className="stagger divide-y divide-(--line) md:grid md:grid-cols-2 md:gap-4 md:divide-y-0">
             {s.items.map((item) => {
               const available = item.isAvailable && s.isOpen;
               const from = item.variants.length ? Math.min(...item.variants.map((v) => v.price)) : item.price;
@@ -115,7 +115,7 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
                     <div className="flex items-center gap-2">
                       <FoodMark type={item.foodType} />
                       {item.isBestseller && (
-                        <span className="inline-flex items-center rounded-full bg-(--ink) px-2 py-0.5 text-[11px] font-semibold text-(--bg)">
+                        <span className="inline-flex items-center rounded-full bg-brand/12 px-2 py-0.5 text-[11px] font-semibold text-brand">
                           {t("bestseller")}
                         </span>
                       )}
@@ -136,12 +136,12 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
                   <div className={`relative flex w-32 shrink-0 flex-col items-center ${item.imageUrl ? "pb-4" : "justify-center"}`}>
                     {item.imageUrl && (
                       // plain lazy <img>: no next/image runtime, keeps JS small on 4G
-                      <img src={item.imageUrl} alt="" loading="lazy" className="h-28 w-32 rounded-xl object-cover" />
+                      <img src={item.imageUrl} alt="" loading="lazy" decoding="async" className="h-28 w-32 rounded-2xl bg-(--sunken) object-cover" />
                     )}
                     <Button
                       variant="outline"
                       // Uber's floating white pill: reads on a photo and on the plain list alike
-                      className={`h-10 min-h-10 w-26 bg-(--surface)! px-1 font-semibold whitespace-nowrap text-(--ink) shadow-[0_2px_8px_rgb(0_0_0/0.16)] ring-1 ring-(--line) ${available ? "text-sm tracking-wide uppercase" : "text-xs"} ${item.imageUrl ? "absolute bottom-0" : ""}`}
+                      className={`h-10 min-h-10 w-26 bg-(--surface)! px-1 font-semibold whitespace-nowrap text-(--ink) shadow-[0_2px_8px_rgb(0_0_0/0.16)] ring-1 ring-(--line) ${available ? "text-sm font-bold tracking-wide text-brand! uppercase" : "text-xs"} ${item.imageUrl ? "absolute bottom-0" : ""}`}
                       disabled={!available}
                       onClick={() => setOpen(item)}
                     >
@@ -280,7 +280,7 @@ function ItemSheet({
       {item.imageUrl && <img src={item.imageUrl} alt="" className="mb-4 aspect-[16/10] w-full rounded-2xl object-cover" />}
       <div className="mb-4 flex items-center gap-2">
         <FoodMark type={item.foodType} />
-        {item.isBestseller && <span className="text-xs font-semibold">{t("bestseller")}</span>}
+        {item.isBestseller && <span className="rounded-full bg-brand/12 px-2 py-0.5 text-xs font-semibold text-brand">{t("bestseller")}</span>}
       </div>
       {desc && <p className="muted -mt-2 mb-5 text-sm leading-relaxed">{desc}</p>}
 

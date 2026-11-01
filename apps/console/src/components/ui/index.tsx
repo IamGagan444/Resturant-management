@@ -7,14 +7,15 @@ import { useNet } from "@/lib/net";
 import { onRejected } from "@/lib/outbox";
 import { describeError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
+import { RestroMark } from "../RestroMark";
 
 type Variant = "primary" | "outline" | "subtle" | "ghost" | "danger" | "success";
 
 const BUTTON_BASE =
-  "tap inline-flex items-center justify-center gap-2 rounded-full px-5 text-[15px] font-medium transition duration-150 select-none active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ink) focus-visible:ring-offset-2 focus-visible:ring-offset-(--bg)";
+  "tap inline-flex items-center justify-center gap-2 rounded-full px-5 text-[15px] font-semibold transition duration-200 select-none active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-(--bg)";
 const BUTTON_VARIANT: Record<Variant, string> = {
-  // Uber: black pill = the main action; white pill with a hairline = secondary; grey pill = tertiary
-  primary: "bg-brand text-brand-ink hover:opacity-85",
+  // orange pill = the main action; white pill with a hairline = secondary; tinted pill = tertiary
+  primary: "bg-brand text-brand-ink shadow-[0_6px_16px_-8px_var(--color-brand)] hover:brightness-110 hover:shadow-[0_10px_22px_-8px_var(--color-brand)]",
   success: "bg-fresh text-white hover:opacity-90",
   danger: "bg-late text-white hover:opacity-90",
   outline: "bg-(--surface) text-(--ink) ring-1 ring-(--line) ring-inset hover:bg-(--sunken)",
@@ -31,16 +32,9 @@ export function LinkButton({ variant = "outline", className = "", ...props }: An
   return <a className={cn(BUTTON_BASE, BUTTON_VARIANT[variant], className)} {...props} />;
 }
 
-/** Product mark used in headers and sign-in screens. */
-export function BrandMark({ className = "h-9 w-9 text-base" }: { className?: string }) {
-  return (
-    <span
-      aria-hidden
-      className={`inline-grid shrink-0 place-items-center rounded-lg bg-brand font-display font-extrabold text-brand-ink ${className}`}
-    >
-      R
-    </span>
-  );
+/** Product mark (the Restro logo) used in headers and sign-in screens. */
+export function BrandMark({ className = "h-10 w-10", animated = false }: { className?: string; animated?: boolean }) {
+  return <RestroMark className={className} animated={animated} />;
 }
 
 /** Header link with an icon; the text hides on narrow phones so the bar never overflows. */
@@ -63,7 +57,7 @@ export function NavLink({
       href={href}
       title={typeof children === "string" ? children : undefined}
       aria-label={typeof children === "string" ? children : undefined}
-      className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition sm:px-3.5 ${active ? "bg-brand text-brand-ink" : "text-(--ink) hover:bg-(--sunken)"}`}
+      className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition sm:px-3.5 ${active ? "bg-brand/12 font-semibold text-brand" : "text-(--ink) hover:bg-(--sunken)"}`}
     >
       <Icon className="h-4.5 w-4.5" aria-hidden />
       <span className={labelClass}>{children}</span>
@@ -73,14 +67,14 @@ export function NavLink({
 
 export function TopBar({ title, subtitle, online = true, children }: { title: string; subtitle?: string; online?: boolean; children?: ReactNode }) {
   return (
-    <header className="no-print line sticky top-0 z-20 border-b bg-(--surface)">
+    <header className="no-print line sticky top-0 z-20 border-b bg-(--surface)/90 backdrop-blur-lg">
       <div className="flex h-16 items-center gap-3 px-3 sm:px-6">
         <BrandMark />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl">{title}</h1>
             <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${online ? "bg-fresh" : "animate-pulse bg-late"}`}
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${online ? "live-dot bg-fresh" : "animate-pulse bg-late"}`}
               role="img"
               aria-label={online ? "Online" : "Offline"}
               title={online ? "Online" : "Offline — reconnecting"}
@@ -148,7 +142,7 @@ export function OfflineBanner({ online }: { online: boolean }) {
 export { Field, FormError, SelectField, orNull, useForm } from "./form";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`surface rounded-2xl p-5 sm:p-6 ${className}`}>{children}</section>;
+  return <section className={`surface rounded-2xl p-5 shadow-soft sm:p-6 ${className}`}>{children}</section>;
 }
 
 /** Card title row: heading, optional one-line explanation, optional action on the right. */
@@ -180,12 +174,16 @@ export function Badge({ tone = "neutral", children, className = "" }: { tone?: T
 /** Big number tile for reports and the platform dashboard. */
 export function Stat({ label, value, hint, bad = false, icon: Icon }: { label: string; value: ReactNode; hint?: string; bad?: boolean; icon?: LucideIcon }) {
   return (
-    <div className={`surface rounded-2xl p-5 ${bad ? "ring-1 ring-late/50" : ""}`}>
+    <div className={`surface lift rounded-2xl p-5 shadow-soft ${bad ? "ring-1 ring-late/50" : ""}`}>
       <div className="flex items-center justify-between gap-2">
         <p className="muted text-sm font-medium">{label}</p>
-        {Icon && <Icon className={`h-4 w-4 ${bad ? "text-late" : "muted"}`} aria-hidden />}
+        {Icon && (
+          <span className={`grid h-9 w-9 place-items-center rounded-xl ${bad ? "bg-late/12 text-late" : "bg-brand/12 text-brand"}`}>
+            <Icon className="h-4.5 w-4.5" aria-hidden />
+          </span>
+        )}
       </div>
-      <p className={`mt-2 text-[28px] leading-none font-bold tracking-tight tabular-nums sm:text-[32px] ${bad ? "text-late" : ""}`}>{value}</p>
+      <p className={`mt-3 font-display text-[28px] leading-none font-bold tracking-tight tabular-nums sm:text-[32px] ${bad ? "text-late" : ""}`}>{value}</p>
       {hint && <p className="muted mt-0.5 text-xs">{hint}</p>}
     </div>
   );
@@ -194,7 +192,7 @@ export function Stat({ label, value, hint, bad = false, icon: Icon }: { label: s
 export function EmptyState({ icon: Icon, title, hint }: { icon: LucideIcon; title: string; hint?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-6 py-14 text-center">
-      <span className="grid h-14 w-14 place-items-center rounded-full bg-(--sunken) text-(--ink)">
+      <span className="grid h-14 w-14 animate-pop place-items-center rounded-full bg-brand/12 text-brand">
         <Icon className="h-7 w-7" aria-hidden />
       </span>
       <p className="mt-2 text-xl font-bold tracking-tight">{title}</p>
