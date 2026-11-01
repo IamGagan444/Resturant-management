@@ -83,12 +83,23 @@ export function setOutboxUser(staffId: string | null) {
 /** Queue an action and try to send it straight away. Returns at once; the UI updates optimistically. */
 export async function send(command: Command, clientId = newClientId()): Promise<void> {
   if (!me) throw new Error("Not signed in");
-  await add({ clientId, clientTs: new Date().toISOString(), command, staffId: me });
-  await refreshCount();
-  void flush();
+  const queued = add({ clientId, clientTs: new Date().toISOString(), command, staffId: me }).then(refreshCount);
+  track(queued.then(flush));
+  await queued;
 }
 
 let flushing: Promise<void> | null = null;
+let sending: Promise<unknown> = Promise.resolve();
+const track = (p: Promise<unknown>) => void (sending = Promise.allSettled([sending, p]));
+
+/**
+ * Run `fn` once the actions this device is sending right now have reached the server (or failed).
+ * Screens refetch through this, so a live update arriving mid-send can't flash a tap back to its old state.
+ * Doesn't wait for a queue that is stuck offline: that would freeze the screen.
+ */
+export function afterSending(fn: () => void) {
+  void Promise.allSettled([sending, flushing]).then(fn);
+}
 
 /** Send everything queued for the current person, oldest first. Stops quietly when there's no connection. */
 export function flush(): Promise<void> {

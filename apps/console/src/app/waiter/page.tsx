@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BoardTable, OrderItemView, PublicMenu, RequestType, WaiterBoard } from "@rms/contracts";
 import { priceLine, type PricingAddonGroup } from "@rms/domain";
 import { api, newClientId, newOrderedId, remembered, rupees } from "@/lib/api";
-import { send } from "@/lib/outbox";
+import { afterSending, send } from "@/lib/outbox";
+import { unlockOnFirstTap, useRinger } from "@/lib/ringer";
+import { RingBanner } from "@/components/RingBanner";
 import { useGuard } from "@/lib/auth";
 import { buzz, chime, unlockSound, useStaffSocket } from "@/lib/realtime";
 import {
@@ -61,7 +63,8 @@ export default function WaiterPage() {
     enabled: Boolean(me),
     refetchInterval: 30_000,
   });
-  const refetch = useCallback(() => void qc.invalidateQueries({ queryKey: ["board"] }), [qc]);
+  // after this phone's own taps have reached the server, so a live update can't flash them back
+  const refetch = useCallback(() => afterSending(() => void qc.invalidateQueries({ queryKey: ["board"] })), [qc]);
   const alert = () => {
     chime("alert");
     buzz();
@@ -103,6 +106,22 @@ export default function WaiterPage() {
     queue(send(done ? { type: "request.done", requestId: id } : { type: "request.ack", requestId: id }));
   };
 
+  // Rings until someone acts: food waiting to be picked up, a guest calling, or a new order to confirm.
+  const bd = board.data;
+  const waitingFood = bd?.ready.filter((i) => i.status === "READY") ?? [];
+  const openRequests = bd?.requests.filter((r) => r.status === "OPEN") ?? [];
+  const toConfirm = bd?.pendingOrders ?? [];
+  const ringKey = [...waitingFood.map((i) => i.id), ...openRequests.map((r) => r.id), ...toConfirm.map((o) => o.id)].sort().join();
+  const ringer = useRinger(ringKey !== "", ringKey);
+  const ringLabel = [
+    waitingFood.length && `${waitingFood.length} dish${waitingFood.length > 1 ? "es" : ""} ready to pick up`,
+    openRequests.length && `${openRequests.length} guest request${openRequests.length > 1 ? "s" : ""}`,
+    toConfirm.length && `${toConfirm.length} new order${toConfirm.length > 1 ? "s" : ""} to confirm`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  useEffect(() => unlockOnFirstTap(), []);
+
   if (!me) return null;
   const b = board.data;
 
@@ -117,6 +136,7 @@ export default function WaiterPage() {
         )}
       </TopBar>
       <OfflineBanner online={online} />
+      <RingBanner ringing={ringer.ringing} label={ringLabel} onSnooze={() => ringer.snooze()} />
       <RejectionToast />
       {escalation && (
         <button className="flex w-full items-center gap-2 bg-late px-4 py-3 text-left font-semibold text-white" onClick={() => setEscalation(null)}>

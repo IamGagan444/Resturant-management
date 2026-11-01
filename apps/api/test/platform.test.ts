@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { unscopedDb } from "@rms/db";
 import type { PlatformHotel, PlatformOverview, PlatformSession } from "@rms/contracts";
 import { closeQueue } from "../src/jobs/queue";
+import { rateLimitKey, signAccess } from "../src/lib/auth";
 import { Client, createHotel, createPlatformAdmin, getApp, resetDb } from "./helpers";
 
 /** Super admin: dashboard, restaurant CRUD, owners' sign-ins. */
@@ -72,6 +73,17 @@ describe("platform admin", () => {
     await admin.ok("DELETE", `/v1/platform/hotels/${hotelId}`);
     expect(await unscopedDb.hotel.findUnique({ where: { id: hotelId } })).toBeNull();
     expect((await admin.req("DELETE", `/v1/platform/hotels/${hotelId}`)).statusCode).toBe(404);
+  });
+
+  it("rate limits count per signed-in person, and per IP only when anonymous", async () => {
+    const req = (cookies: Record<string, string>) => ({ headers: {}, cookies, ip: "203.0.113.7" }) as unknown as Parameters<typeof rateLimitKey>[0];
+    const a = await signAccess({ typ: "staff", sub: "staff-a", hid: "h", role: "WAITER", did: null, sid: null });
+    const b = await signAccess({ typ: "staff", sub: "staff-b", hid: "h", role: "COOK", did: null, sid: null });
+    expect(await rateLimitKey(req({ rms_at: a }))).toBe("user:staff-a");
+    expect(await rateLimitKey(req({ rms_at: b }))).toBe("user:staff-b");
+    // a forged token doesn't buy a separate budget
+    expect(await rateLimitKey(req({ rms_at: `${a.slice(0, -4)}AAAA` }))).toBe("ip:203.0.113.7");
+    expect(await rateLimitKey(req({}))).toBe("ip:203.0.113.7");
   });
 
   it("owners can't reach platform routes", async () => {

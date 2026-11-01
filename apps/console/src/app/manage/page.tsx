@@ -32,18 +32,16 @@ export default function ManagePage() {
   return (
     <div className="min-h-dvh">
       <TopBar title={me.hotel.name} subtitle="Manage">
-        {/* wide screens: every shortcut; phones: one menu so the header never overflows */}
-        <span className="hidden items-center sm:flex">
+        {/* tablets and up: every shortcut (text from lg, icons below); phones: one menu */}
+        <span className="hidden items-center md:flex">
           {LINKS.filter((l) => l.group === "manage").map((l) => (
-            <NavLink key={l.href} href={l.href} icon={l.icon}>
+            <NavLink key={l.href} href={l.href} icon={l.icon} labelClass="hidden lg:inline">
               {l.label}
             </NavLink>
           ))}
-        </span>
-        <span className="line mx-1 hidden h-6 border-l lg:block" aria-hidden />
-        <span className="hidden items-center lg:flex">
+          <span className="line mx-1.5 h-6 border-l" aria-hidden />
           {LINKS.filter((l) => l.group === "screens").map((l) => (
-            <NavLink key={l.href} href={l.href} icon={l.icon}>
+            <NavLink key={l.href} href={l.href} icon={l.icon} labelClass="hidden lg:inline">
               {l.label}
             </NavLink>
           ))}
@@ -51,7 +49,7 @@ export default function ManagePage() {
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="Go to"
-            className="muted grid h-10 w-10 shrink-0 place-items-center rounded-xl transition hover:bg-(--sunken) hover:text-(--ink) data-[state=open]:bg-(--sunken) lg:hidden"
+            className="muted grid h-10 w-10 shrink-0 place-items-center rounded-xl transition hover:bg-(--sunken) hover:text-(--ink) data-[state=open]:bg-(--sunken) md:hidden"
           >
             <Menu className="h-5 w-5" aria-hidden />
           </DropdownMenuTrigger>

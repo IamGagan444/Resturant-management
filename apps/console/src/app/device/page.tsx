@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +17,14 @@ interface DeviceInfo {
   staff: { id: string; name: string; role: StaffRole }[];
 }
 
+/** Who each kind of paired device offers (mirrors DEVICE_ROLES in the API's auth routes). */
+const DEVICE_WHO: Record<string, { name: string; who: string }> = {
+  KDS: { name: "kitchen screen", who: "cooks, managers and the owner" },
+  WAITER: { name: "waiter phone", who: "waiters, managers and the owner" },
+  POS: { name: "counter", who: "cashiers, managers and the owner" },
+  MANAGER: { name: "manager device", who: "everyone" },
+};
+
 const ROLE_ICON: Record<StaffRole, LucideIcon> = { OWNER: Crown, MANAGER: UserRoundCog, CASHIER: CreditCard, COOK: ChefHat, WAITER: ConciergeBell };
 
 /** Shared tablet/phone: tap your face, type your PIN. Two steps, no typing of phone numbers. */
@@ -27,9 +35,11 @@ export default function DevicePage() {
   const [picked, setPicked] = useState<DeviceInfo["staff"][number] | null>(null);
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const busy = useRef(false);
 
   async function submit(p: string) {
-    if (!picked) return;
+    if (!picked || busy.current) return;
+    busy.current = true;
     setError(null);
     try {
       await api("POST", "/v1/auth/pin", { staffId: picked.id, pin: p });
@@ -39,6 +49,8 @@ export default function DevicePage() {
     } catch (e) {
       setPin("");
       setError(e instanceof Error ? e.message : "Wrong PIN");
+    } finally {
+      busy.current = false;
     }
   }
 
@@ -48,6 +60,28 @@ export default function DevicePage() {
     // Auto-submit only at the max length; guessing at 4 would burn lockout attempts for 6-digit PINs.
     if (next.length === 6) void submit(next);
   }
+
+  // Laptops and tablets with keyboards: digits, Backspace, Enter, Esc work like the keypad.
+  const keys = useRef({ press, submit, pin });
+  keys.current = { press, submit, pin };
+  useEffect(() => {
+    if (!picked) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (/^\d$/.test(e.key)) keys.current.press(e.key);
+      else if (e.key === "Backspace") setPin((p) => p.slice(0, -1));
+      else if (e.key === "Enter" && keys.current.pin.length >= 4) void keys.current.submit(keys.current.pin);
+      else if (e.key === "Escape") {
+        setPicked(null);
+        setPin("");
+        setError(null);
+      }
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [picked]);
 
   if (info.isLoading) return <Spinner />;
   if (info.error instanceof ApiError && info.error.code === "DEVICE_NOT_PAIRED") {
@@ -84,7 +118,15 @@ export default function DevicePage() {
       </div>
       {!picked ? (
         <>
-          <h1 className="mt-8 mb-6 text-3xl font-bold tracking-tight">Who&apos;s working?</h1>
+          <h1 className="mt-8 text-3xl font-bold tracking-tight">Who&apos;s working?</h1>
+          <p className="muted mt-1 mb-6 text-sm">
+            This is a {DEVICE_WHO[info.data.device.kind]?.name ?? "shared device"}: {DEVICE_WHO[info.data.device.kind]?.who ?? "staff"} can sign in here.
+          </p>
+          {info.data.staff.length === 0 && (
+            <p className="rounded-2xl bg-warn/12 p-4 text-sm font-medium">
+              Nobody can sign in here yet. The owner adds team members in Manage → Staff, each with their own PIN.
+            </p>
+          )}
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             {info.data.staff.map((s) => {
               const Icon = ROLE_ICON[s.role];
@@ -112,7 +154,7 @@ export default function DevicePage() {
         <div className="mx-auto mt-8 w-full max-w-xs text-center">
           <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-brand text-2xl font-bold text-white shadow-lift">{picked.name.slice(0, 1).toUpperCase()}</span>
           <h1 className="mt-4 text-2xl font-bold tracking-tight">Hi {picked.name}</h1>
-          <p className="muted">Enter your PIN</p>
+          <p className="muted">Enter your PIN, then tap Enter</p>
           <div className="my-7 flex justify-center gap-3" aria-label={`${pin.length} digits entered`}>
             {Array.from({ length: Math.max(4, pin.length) }, (_, i) => (
               <span key={i} className={`h-3.5 w-3.5 rounded-full transition ${i < pin.length ? "scale-110 bg-brand" : "bg-(--line)"}`} />

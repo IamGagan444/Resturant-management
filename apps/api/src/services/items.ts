@@ -76,7 +76,8 @@ export async function transitionItem(
     const waiters = await waiterRooms(hotel.id, order.session.tableId);
     emit(
       "item:status_changed",
-      [rooms.kitchen(hotel.id), rooms.managers(hotel.id), rooms.session(sessionId), ...(to === "READY" || to === "OUT_OF_STOCK" ? waiters : [])],
+      // waiters get every change, not just "ready": a dish picked up or served on one phone must leave the others' lists too
+      [rooms.kitchen(hotel.id), rooms.managers(hotel.id), rooms.session(sessionId), ...waiters],
       {
         hotelId: hotel.id,
         orderItemId: item.id,

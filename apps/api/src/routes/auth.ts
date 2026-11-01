@@ -93,7 +93,8 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   /** Fast switch on a paired device: pick avatar, enter PIN. Locks for 5 min after 5 bad PINs. */
-  app.post("/v1/auth/pin", strict, async (req, reply) => {
+  // per IP, and a restaurant's devices share one: allow a shift change; the per-person PIN lockout stops guessing
+  app.post("/v1/auth/pin", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
     const device = await deviceFromCookie(req.cookies[COOKIE.device]);
     if (!device) throw new AppError(401, "DEVICE_NOT_PAIRED", "This device isn't paired yet");
     const { staffId, pin } = parse(PinLoginInput, req.body);

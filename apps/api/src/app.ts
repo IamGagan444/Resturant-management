@@ -8,6 +8,7 @@ import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import { env } from "./env";
 import { errorHandler } from "./lib/errors";
+import { rateLimitKey } from "./lib/auth";
 import { redis } from "./jobs/queue";
 import { authRoutes } from "./routes/auth";
 import { platformRoutes } from "./routes/platform";
@@ -29,10 +30,12 @@ export async function buildApp() {
   await app.register(cookie);
   await app.register(cors, { origin: [env.CUSTOMER_URL, env.CONSOLE_URL], credentials: true });
   await app.register(multipart);
-  // Shared Redis store so limits hold across API instances. Public QR routes are the main target.
+  // Shared Redis store so limits hold across API instances. Counted per signed-in person / guest, or per IP
+  // when anonymous (see rateLimitKey): a whole restaurant behind one Wi-Fi must not share one budget.
   await app.register(rateLimit, {
     global: true,
-    max: env.NODE_ENV === "test" ? 10_000 : 300,
+    keyGenerator: rateLimitKey,
+    max: env.NODE_ENV === "test" ? 10_000 : (_req, key) => (key.startsWith("ip:") ? 300 : 600),
     timeWindow: "1 minute",
     redis: env.NODE_ENV === "test" ? undefined : redis,
     skipOnError: true,

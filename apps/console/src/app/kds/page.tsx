@@ -5,7 +5,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ItemStatus, KdsTicket, OrderItemView } from "@rms/contracts";
 import { ageLevel, aggregatePending, type AgeLevel } from "@rms/domain";
 import { api, remembered } from "@/lib/api";
-import { send } from "@/lib/outbox";
+import { afterSending, send } from "@/lib/outbox";
+import { unlockOnFirstTap, useRinger } from "@/lib/ringer";
+import { RingBanner } from "@/components/RingBanner";
 import { useGuard } from "@/lib/auth";
 import { chime, unlockSound, useStaffSocket } from "@/lib/realtime";
 import { Bell, CheckCheck, CheckCircle2, Circle, ClipboardList, Flame, PackageX, StickyNote } from "lucide-react";
@@ -47,7 +49,8 @@ export default function KdsPage() {
     refetchInterval: 30_000, // safety net if a socket event is missed
   });
 
-  const refetch = useCallback(() => void qc.invalidateQueries({ queryKey: ["kds"] }), [qc]);
+  // after this screen's own taps have reached the server, so a live update can't flash them back
+  const refetch = useCallback(() => afterSending(() => void qc.invalidateQueries({ queryKey: ["kds"] })), [qc]);
   const { online } = useStaffSocket(Boolean(me), refetch, (s) => {
     s.on("order:placed", (e) => {
       if (station === "all" || e.stationIds.length === 0 || e.stationIds.includes(station)) chime("order");
@@ -95,6 +98,12 @@ export default function KdsPage() {
   }
 
   const pending = useMemo(() => aggregatePending((tickets.data ?? []).flatMap((t) => t.items.map((i) => ({ ...i, name: i.name })))), [tickets.data]);
+  // Rings until a cook starts each new ticket (taps any dish on it)
+  const untouched = (tickets.data ?? []).filter((t) => t.items.length > 0 && t.items.every((i) => i.status === "QUEUED"));
+  const ringKey = untouched.map((t) => t.id).sort().join();
+  const ringer = useRinger(ringKey !== "", ringKey);
+  useEffect(() => unlockOnFirstTap(), []);
+
   if (!me) return null;
   const list = (tickets.data ?? []).filter((t) => t.items.some((i) => i.status !== "READY"));
 
@@ -121,6 +130,11 @@ export default function KdsPage() {
         </Button>
       </TopBar>
       <OfflineBanner online={online} />
+      <RingBanner
+        ringing={ringer.ringing}
+        label={`${untouched.length} new ticket${untouched.length > 1 ? "s" : ""}: ${untouched.map((t) => t.tableLabel).join(", ")}. Tap a dish to start.`}
+        onSnooze={() => ringer.snooze()}
+      />
       <RejectionToast />
 
       {pending.length > 0 && (

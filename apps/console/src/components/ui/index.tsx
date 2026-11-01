@@ -42,15 +42,29 @@ export function BrandMark({ className = "h-9 w-9 text-base" }: { className?: str
 }
 
 /** Header link with an icon; the text hides on narrow phones so the bar never overflows. */
-export function NavLink({ href, icon: Icon, children, active = false }: { href: string; icon: LucideIcon; children: ReactNode; active?: boolean }) {
+export function NavLink({
+  href,
+  icon: Icon,
+  children,
+  active = false,
+  labelClass = "hidden sm:inline",
+}: {
+  href: string;
+  icon: LucideIcon;
+  children: ReactNode;
+  active?: boolean;
+  /** when the text shows; the icon always does (with a tooltip) */
+  labelClass?: string;
+}) {
   return (
     <a
       href={href}
+      title={typeof children === "string" ? children : undefined}
       aria-label={typeof children === "string" ? children : undefined}
       className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold transition hover:bg-(--sunken) sm:px-3 ${active ? "text-brand" : "muted hover:text-(--ink)"}`}
     >
       <Icon className="h-4.5 w-4.5" aria-hidden />
-      <span className="hidden sm:inline">{children}</span>
+      <span className={labelClass}>{children}</span>
     </a>
   );
 }

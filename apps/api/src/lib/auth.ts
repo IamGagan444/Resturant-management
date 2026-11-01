@@ -96,6 +96,26 @@ export async function verifyGuestToken(token: string): Promise<GuestClaims | nul
   }
 }
 
+/**
+ * Who a request counts against for rate limiting. A restaurant's kitchen screen, waiter phones and guests
+ * all share one Wi-Fi (one public IP), so limiting by IP alone would throttle a busy restaurant.
+ * Signed-in staff and seated guests get their own budget; only anonymous requests are counted per IP.
+ * Tokens must verify, so a made-up token can't buy a fresh budget.
+ */
+export async function rateLimitKey(req: FastifyRequest): Promise<string> {
+  const access = bearer(req) ?? req.cookies?.[COOKIE.access];
+  if (access) {
+    const p = await jwtVerify(access, accessKey, { algorithms: ["HS256"] }).catch(() => null);
+    if (p?.payload.sub) return `user:${p.payload.sub}`;
+  }
+  const guest = req.headers["x-guest-token"] ?? req.cookies?.[COOKIE.guest];
+  if (typeof guest === "string") {
+    const p = await jwtVerify(guest, guestKey, { algorithms: ["HS256"] }).catch(() => null);
+    if (p?.payload.sub) return `guest:${p.payload.sub}`;
+  }
+  return `ip:${req.ip}`;
+}
+
 export function bearer(req: FastifyRequest): string | undefined {
   const h = req.headers.authorization;
   return h?.startsWith("Bearer ") ? h.slice(7) : undefined;

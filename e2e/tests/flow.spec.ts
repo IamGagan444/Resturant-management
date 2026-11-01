@@ -91,6 +91,48 @@ test("scan → order → cook → serve → pay", async ({ browser }) => {
   await expect(ready).toHaveCount(0);
 });
 
+test("two dishes: one served while the other is still waiting stays in sync on every screen", async ({ browser }) => {
+  const qr = await qrToken("T4");
+  const kitchen = await staffDevice(browser, "Kitchen screen", "Raju", "3001"); // tandoor: the naan
+  const mains = await staffDevice(browser, "Kitchen screen", "Suresh", "3002"); // kitchen station: the dal
+  const waiter = await staffDevice(browser, "Waiter phone", "Ravi", "4001", { width: 400, height: 860 });
+  // the same waiter's second phone (or a colleague covering the table): it must follow without being touched
+  const waiter2 = await staffDevice(browser, "Waiter phone", "Ravi", "4001", { width: 400, height: 860 });
+
+  const phone = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage();
+  await phone.goto(`${CUSTOMER}/h/spice-garden/t/${qr}`);
+  await phone.getByLabel("Your name").fill("Meera");
+  await phone.getByRole("button", { name: "Start ordering" }).click();
+  for (const dish of ["Butter Naan", "Dal Makhani"]) {
+    await phone.getByLabel("Search dishes").fill(dish);
+    await phone.getByRole("listitem").filter({ has: phone.getByRole("heading", { name: dish }) }).getByRole("button", { name: "ADD" }).click();
+    await phone.getByRole("button", { name: /Add · ₹/ }).click();
+    await expect(phone.getByRole("button", { name: /Add · ₹/ })).toBeHidden();
+  }
+  await phone.getByRole("button", { name: /View cart/ }).click();
+  await phone.getByRole("button", { name: "Order now, pay later" }).click();
+
+  // the tandoor finishes the naan; the dal hasn't been started
+  await kitchen.getByRole("button", { name: /Butter Naan: tap to start/ }).click();
+  await kitchen.getByRole("button", { name: /Butter Naan: tap when ready/ }).click();
+  await expect(mains.getByRole("button", { name: /Dal Makhani: tap to start/ })).toBeVisible();
+
+  // one waiter takes the naan to the table
+  const naanOn = (p: typeof waiter) => p.locator("div").filter({ hasText: /^T4.*Butter Naan/ });
+  await expect(waiter2.getByRole("button", { name: "Picked up" })).toBeVisible();
+  await waiter.getByRole("button", { name: "Picked up" }).click();
+  await waiter.getByRole("button", { name: "Served" }).click();
+
+  // guest: naan served, dal still just received
+  await expect(phone.getByRole("list", { name: "Served", exact: true })).toBeVisible();
+  await expect(phone.getByRole("list", { name: "Received", exact: true })).toBeVisible();
+  // the other waiter's phone dropped the naan by itself; the kitchen still has the dal to cook
+  await expect(waiter2.getByRole("button", { name: "Picked up" })).toBeHidden();
+  await expect(naanOn(waiter2)).toHaveCount(0);
+  await expect(mains.getByRole("button", { name: /Dal Makhani: tap to start/ })).toBeVisible();
+  await expect(kitchen.getByText("No open tickets")).toBeVisible();
+});
+
 test("pay now → order goes to the kitchen → leave → digital bill (in Hindi)", async ({ browser }) => {
   const qr = await qrToken("T2");
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
