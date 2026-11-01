@@ -20,7 +20,7 @@ const AGE_STYLE: Record<AgeLevel, string> = {
   warning: "border-warn",
   late: "border-late animate-[pulse_2s_ease-in-out_infinite]",
 };
-const AGE_HEADER: Record<AgeLevel, string> = { fresh: "bg-fresh", warning: "bg-warn text-black", late: "bg-late" };
+const AGE_HEADER: Record<AgeLevel, string> = { fresh: "bg-fresh", warning: "bg-warn text-warn-ink", late: "bg-late" };
 
 const NEXT: Partial<Record<ItemStatus, ItemStatus>> = { QUEUED: "COOKING", COOKING: "READY" };
 
@@ -167,7 +167,7 @@ export default function KdsPage() {
             const level = ageLevel(new Date(t.placedAt), Math.max(...t.items.map((i) => i.prepTimeMin)), new Date(now));
             const mins = Math.floor((now - new Date(t.placedAt).getTime()) / 60_000);
             return (
-              <article key={t.id} className={`surface flex flex-col overflow-hidden rounded-2xl border-2 shadow-lift ${AGE_STYLE[level]}`}>
+              <article key={t.id} className={`surface flex animate-pop flex-col overflow-hidden rounded-2xl border-2 shadow-lift ${AGE_STYLE[level]}`}>
                 <header className={`flex items-baseline justify-between px-4 py-2.5 text-white ${AGE_HEADER[level]}`}>
                   <span className="text-2xl font-extrabold">{t.tableLabel}</span>
                   <span className="text-lg font-semibold opacity-90">#{t.orderNumber}</span>

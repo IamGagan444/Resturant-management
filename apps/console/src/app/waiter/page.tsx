@@ -227,7 +227,7 @@ export default function WaiterPage() {
           {b.pendingOrders.length > 0 && (
             <Section title="Confirm new orders" count={b.pendingOrders.length}>
               {b.pendingOrders.map((o) => (
-                <div key={o.id} className="surface rounded-2xl border border-warn/60 p-3.5 shadow-soft">
+                <div key={o.id} className="surface animate-pop rounded-2xl border border-warn/60 p-3.5 shadow-soft">
                   <p className="text-lg font-bold">
                     {o.tableLabel} · #{o.orderNumber}
                   </p>

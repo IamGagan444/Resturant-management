@@ -64,7 +64,9 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
             ))}
           </nav>
         </aside>
-        <main className="min-w-0 flex-1">{children}</main>
+        <main key={path} className="min-w-0 flex-1 animate-rise">
+          {children}
+        </main>
       </div>
     </div>
   );

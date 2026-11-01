@@ -107,7 +107,7 @@ export default function DevicePage() {
               Nobody can sign in here yet. The owner adds team members in Manage → Staff, each with their own PIN.
             </p>
           )}
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+          <ul className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             {info.data.staff.map((s) => {
               const Icon = ROLE_ICON[s.role];
               return (
@@ -131,8 +131,8 @@ export default function DevicePage() {
           </Link>
         </>
       ) : (
-        <div className="mx-auto mt-8 w-full max-w-xs text-center">
-          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-brand text-2xl font-bold text-brand-ink shadow-lift">{picked.name.slice(0, 1).toUpperCase()}</span>
+        <div className="mx-auto mt-8 w-full max-w-xs animate-rise text-center">
+          <span className="mx-auto grid h-16 w-16 animate-pop place-items-center rounded-full bg-brand text-2xl font-bold text-brand-ink shadow-lift">{picked.name.slice(0, 1).toUpperCase()}</span>
           <h1 className="mt-4 text-2xl font-bold tracking-tight">Hi {picked.name}</h1>
           <p className="muted">Enter your PIN, then tap Enter</p>
           <div className="my-7 flex justify-center gap-3" aria-label={`${pin.length} digits entered`}>
@@ -196,8 +196,8 @@ function NotPaired({ onPaired }: { onPaired: () => void }) {
     <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       <AuthAside />
       <main className="flex flex-col justify-center px-6 py-12 sm:px-12">
-        <div className="mx-auto w-full max-w-sm">
-          <span className="grid h-14 w-14 place-items-center rounded-full bg-(--ink) text-(--bg)">
+        <div className="stagger mx-auto w-full max-w-sm">
+          <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand/12 text-brand">
             <MonitorSmartphone className="h-7 w-7" aria-hidden />
           </span>
           <h1 className="mt-6 text-3xl font-bold tracking-tight">Set up this device</h1>

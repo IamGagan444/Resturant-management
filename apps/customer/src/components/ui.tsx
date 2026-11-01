@@ -14,13 +14,13 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" | "outline" }) {
   const styles = {
-    primary: "bg-brand text-brand-ink active:opacity-85",
+    primary: "bg-brand text-brand-ink shadow-[0_6px_16px_-8px_var(--color-brand)] active:brightness-95",
     outline: "bg-(--sunken) text-(--ink) active:bg-(--line)",
     ghost: "active:bg-(--sunken)",
   }[variant];
   return (
     <button
-      className={`tap inline-flex items-center justify-center gap-2 rounded-full px-5 font-medium transition duration-150 select-none active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ink) focus-visible:ring-offset-2 ${styles} ${className}`}
+      className={`tap inline-flex items-center justify-center gap-2 rounded-full px-5 font-medium transition duration-150 select-none active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${styles} ${className}`}
       {...props}
     />
   );

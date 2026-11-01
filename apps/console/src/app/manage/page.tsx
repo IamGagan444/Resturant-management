@@ -105,7 +105,7 @@ export default function ManagePage() {
           </div>
         </aside>
         <main className="mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
-          <header className="mb-6 px-1 sm:mb-8">
+          <header key={tab} className="mb-6 animate-rise px-1 sm:mb-8">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{TABS[tab]}</h2>
             <p className="muted mt-1.5 text-[15px]">{TAB_HINT[tab]}</p>
           </header>
@@ -135,8 +135,8 @@ export default function ManagePage() {
 
 function SideLink({ href, label, icon: Icon }: { href: string; label: string; icon: LucideIcon }) {
   return (
-    <a href={href} className="flex h-11 items-center gap-3 rounded-full px-3.5 text-[15px] font-medium transition hover:bg-(--sunken)">
-      <Icon className="h-4 w-4" aria-hidden />
+    <a href={href} className="group flex h-11 items-center gap-3 rounded-full px-3.5 text-[15px] font-medium transition hover:bg-(--sunken)">
+      <Icon className="h-4 w-4 transition group-hover:text-brand" aria-hidden />
       {label}
     </a>
   );
