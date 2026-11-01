@@ -27,6 +27,6 @@ export default tseslint.config(
   {
     // plain-JS service worker
     files: ["**/public/sw.js"],
-    languageOptions: { sourceType: "script", globals: { self: "readonly", caches: "readonly", fetch: "readonly", URL: "readonly" } },
+    languageOptions: { sourceType: "script", globals: { self: "readonly", caches: "readonly", fetch: "readonly", URL: "readonly", Response: "readonly" } },
   },
 );

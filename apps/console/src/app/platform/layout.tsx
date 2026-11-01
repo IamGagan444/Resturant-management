@@ -53,7 +53,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
                   active(n.href) ? "bg-(--surface) shadow-soft ring-1 ring-(--line)" : "hover:bg-(--sunken)",
                 )}
               >
-                <span className={cn("grid h-9 w-9 place-items-center rounded-lg", active(n.href) ? "bg-brand text-white" : "bg-(--sunken) text-(--muted)")}>
+                <span className={cn("grid h-9 w-9 place-items-center rounded-lg", active(n.href) ? "bg-brand text-brand-ink" : "bg-(--sunken) text-(--muted)")}>
                   <n.icon className="h-4.5 w-4.5" aria-hidden />
                 </span>
                 <span className="min-w-0">

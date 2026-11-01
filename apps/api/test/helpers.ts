@@ -72,7 +72,7 @@ export async function createHotel(app: FastifyInstance, admin: Client, slug: str
     name: `Hotel ${slug}`,
     slug,
     status: "ACTIVE",
-    owner: { name: "Owner", email: `owner@${slug}.test`, password: "ownerpass123", pin: "9999" },
+    owner: { name: "Owner", email: `owner@${slug}.test`, password: "ownerpass123", pin: "999999" },
   });
   const owner = new Client(app);
   await owner.ok("POST", "/v1/auth/login", { email: `owner@${slug}.test`, password: "ownerpass123" });

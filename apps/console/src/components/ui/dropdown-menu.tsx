@@ -15,7 +15,7 @@ export function DropdownMenuContent({ className, align = "end", ...props }: Comp
       <MenuPrimitive.Content
         align={align}
         sideOffset={6}
-        className={cn("surface line z-[60] min-w-48 animate-fade-in rounded-xl border p-1 shadow-lift", className)}
+        className={cn("surface line z-[60] min-w-52 animate-fade-in rounded-xl border p-1.5 shadow-lift", className)}
         {...props}
       />
     </MenuPrimitive.Portal>
@@ -26,7 +26,7 @@ export function DropdownMenuItem({ className, destructive = false, ...props }: C
   return (
     <MenuPrimitive.Item
       className={cn(
-        "flex h-10 cursor-pointer items-center gap-2.5 rounded-lg px-3 text-sm font-medium outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-(--sunken) [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0",
+        "flex h-11 cursor-pointer items-center gap-3 rounded-lg px-3 text-[15px] font-medium outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-(--sunken) [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0",
         destructive ? "text-late data-[highlighted]:bg-late/10" : "[&_svg]:text-(--muted)",
         className,
       )}
@@ -49,7 +49,7 @@ export function RowActions({ label, children }: { label: string; children: React
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={label}
-        className="muted grid h-10 w-10 shrink-0 place-items-center rounded-xl transition hover:bg-(--sunken) hover:text-(--ink) data-[state=open]:bg-(--sunken)"
+        className="muted grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-(--sunken) hover:text-(--ink) data-[state=open]:bg-(--sunken)"
       >
         <MoreHorizontal className="h-5 w-5" aria-hidden />
       </DropdownMenuTrigger>

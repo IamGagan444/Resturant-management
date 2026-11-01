@@ -14,13 +14,13 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" | "outline" }) {
   const styles = {
-    primary: "bg-brand text-brand-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_8px_20px_-10px_var(--color-brand)] active:brightness-95",
-    outline: "border line surface shadow-xs active:bg-(--sunken)",
+    primary: "bg-brand text-brand-ink active:opacity-85",
+    outline: "bg-(--sunken) text-(--ink) active:bg-(--line)",
     ghost: "active:bg-(--sunken)",
   }[variant];
   return (
     <button
-      className={`tap inline-flex items-center justify-center gap-2 rounded-2xl px-4 font-semibold transition duration-150 select-none active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${styles} ${className}`}
+      className={`tap inline-flex items-center justify-center gap-2 rounded-full px-5 font-medium transition duration-150 select-none active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ink) focus-visible:ring-offset-2 ${styles} ${className}`}
       {...props}
     />
   );
@@ -53,12 +53,12 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center md:p-6" role="dialog" aria-modal="true" aria-label={title}>
-      <button className="absolute inset-0 animate-fade-in bg-black/50 backdrop-blur-[2px]" aria-label="Close" onClick={onClose} />
-      <div className="surface relative flex max-h-[90dvh] w-full max-w-md animate-sheet-up flex-col rounded-t-[28px] shadow-lift md:max-w-lg md:rounded-[28px]">
+      <button className="absolute inset-0 animate-fade-in bg-black/50" aria-label="Close" onClick={onClose} />
+      <div className="surface relative flex max-h-[90dvh] w-full max-w-md animate-sheet-up flex-col rounded-t-2xl shadow-lift md:max-w-lg md:rounded-2xl">
         <div className="mx-auto mt-2.5 h-1.5 w-10 rounded-full bg-(--line) md:hidden" aria-hidden />
         <div className="flex items-start justify-between gap-3 px-5 pt-3 pb-2">
-          <h2 className="font-display text-xl leading-snug font-semibold">{title}</h2>
-          <button className="muted -mr-2 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-(--sunken)" onClick={onClose} aria-label="Close">
+          <h2 className="font-display text-2xl leading-snug font-bold">{title}</h2>
+          <button className="-mr-1 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-(--sunken)" onClick={onClose} aria-label="Close">
             <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
@@ -78,7 +78,7 @@ export function Toast({ message, onDone }: { message: string | null; onDone: () 
   return (
     <div
       role="status"
-      className="fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-50 mx-auto w-fit max-w-[90vw] animate-pop rounded-full bg-[#1c1814] px-5 py-2.5 text-sm font-medium text-white shadow-lift dark:bg-white dark:text-[#1c1814]"
+      className="fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-50 mx-auto w-fit max-w-[90vw] animate-pop rounded-full bg-brand px-5 py-3 text-sm font-medium text-brand-ink shadow-lift"
     >
       {message}
     </div>
@@ -88,13 +88,13 @@ export function Toast({ message, onDone }: { message: string | null; onDone: () 
 export function LangPicker() {
   const { lang, setLang } = useI18n();
   return (
-    <label className="line surface relative flex h-10 shrink-0 items-center rounded-full border shadow-xs">
+    <label className="relative flex h-10 shrink-0 items-center rounded-full bg-(--sunken)">
       <Languages className="muted pointer-events-none absolute left-3 h-4 w-4" aria-hidden />
       <select
         aria-label="Language"
         value={lang}
         onChange={(e) => setLang(e.target.value as Lang)}
-        className="h-full appearance-none rounded-full bg-transparent pr-3 pl-9 text-sm font-semibold focus:shadow-none"
+        className="h-full appearance-none rounded-full border-0 bg-transparent pr-3.5 pl-9 text-sm font-medium focus:shadow-none"
       >
         {LANGS.map((l) => (
           <option key={l.code} value={l.code}>
@@ -108,5 +108,5 @@ export function LangPicker() {
 
 /** Small rounded label (table number, join code…). */
 export function Pill({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <span className={`inline-flex items-center gap-1 rounded-full bg-(--sunken) px-2.5 py-1 text-xs font-semibold ${className}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded-full bg-(--sunken) px-3 py-1 text-xs font-medium ${className}`}>{children}</span>;
 }

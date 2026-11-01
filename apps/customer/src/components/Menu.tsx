@@ -60,7 +60,7 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
             aria-label={t("search")}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="tap surface line w-full rounded-2xl border pr-4 pl-11 shadow-xs"
+            className="tap w-full rounded-full border border-transparent bg-(--sunken) pr-4 pl-11"
           />
         </div>
         <div className="scroll-x -mx-4 flex gap-2 px-4 md:-mx-6 md:px-6">
@@ -93,7 +93,7 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
       {sections.map((s) => (
         <section key={s.category.id} id={`c-${s.category.id}`} className="scroll-mt-36">
           <h2 className="mt-7 mb-1 flex items-baseline gap-2 md:mb-4">
-            <span className="font-display text-[22px] font-semibold">{tName({ name: s.category.name, translations: s.category.translations }, lang)}</span>
+            <span className="font-display text-[22px] font-bold">{tName({ name: s.category.name, translations: s.category.translations }, lang)}</span>
             <span className="muted text-sm">{s.items.length}</span>
             {!s.isOpen && (
               <span className="ml-auto rounded-full bg-(--sunken) px-2.5 py-0.5 text-xs font-semibold">
@@ -115,7 +115,7 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
                     <div className="flex items-center gap-2">
                       <FoodMark type={item.foodType} />
                       {item.isBestseller && (
-                        <span className="inline-flex items-center rounded-full bg-gold/15 px-2 py-0.5 text-[11px] font-bold text-[#8a6a35] dark:text-gold">
+                        <span className="inline-flex items-center rounded-full bg-(--ink) px-2 py-0.5 text-[11px] font-semibold text-(--bg)">
                           {t("bestseller")}
                         </span>
                       )}
@@ -136,11 +136,12 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
                   <div className={`relative flex w-32 shrink-0 flex-col items-center ${item.imageUrl ? "pb-4" : "justify-center"}`}>
                     {item.imageUrl && (
                       // plain lazy <img>: no next/image runtime, keeps JS small on 4G
-                      <img src={item.imageUrl} alt="" loading="lazy" className="h-28 w-32 rounded-2xl object-cover shadow-soft" />
+                      <img src={item.imageUrl} alt="" loading="lazy" className="h-28 w-32 rounded-xl object-cover" />
                     )}
                     <Button
                       variant="outline"
-                      className={`h-10 min-h-10 w-26 rounded-xl px-1 font-extrabold whitespace-nowrap text-brand shadow-soft ${available ? "text-sm tracking-wide uppercase" : "text-xs"} ${item.imageUrl ? "absolute bottom-0" : ""}`}
+                      // Uber's floating white pill: reads on a photo and on the plain list alike
+                      className={`h-10 min-h-10 w-26 bg-(--surface)! px-1 font-semibold whitespace-nowrap text-(--ink) shadow-[0_2px_8px_rgb(0_0_0/0.16)] ring-1 ring-(--line) ${available ? "text-sm tracking-wide uppercase" : "text-xs"} ${item.imageUrl ? "absolute bottom-0" : ""}`}
                       disabled={!available}
                       onClick={() => setOpen(item)}
                     >
@@ -192,7 +193,7 @@ export function SwapSheet({
           aria-label={t("search")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="tap surface line w-full rounded-2xl border pr-4 pl-10"
+          className="tap w-full rounded-full border border-transparent bg-(--sunken) pr-4 pl-10"
         />
       </div>
       {sections.length === 0 && <p className="muted py-8 text-center">{t("noMatch")}</p>}
@@ -279,7 +280,7 @@ function ItemSheet({
       {item.imageUrl && <img src={item.imageUrl} alt="" className="mb-4 aspect-[16/10] w-full rounded-2xl object-cover" />}
       <div className="mb-4 flex items-center gap-2">
         <FoodMark type={item.foodType} />
-        {item.isBestseller && <span className="text-xs font-bold text-[#8a6a35] dark:text-gold">{t("bestseller")}</span>}
+        {item.isBestseller && <span className="text-xs font-semibold">{t("bestseller")}</span>}
       </div>
       {desc && <p className="muted -mt-2 mb-5 text-sm leading-relaxed">{desc}</p>}
 
@@ -337,7 +338,7 @@ function ItemSheet({
             placeholder={t("notePlaceholder")}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="tap surface line rounded-2xl border px-4"
+            className="tap rounded-lg border border-transparent bg-(--sunken) px-4"
           />
         </label>
       )}

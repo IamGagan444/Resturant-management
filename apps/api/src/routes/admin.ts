@@ -9,7 +9,9 @@ import {
   FloorInput,
   HotelSettingsInput,
   Id,
+  LeadPin,
   ResetPinInput,
+  isLeadRole,
   StaffCreateInput,
   StaffUpdateInput,
   StationInput,
@@ -272,9 +274,9 @@ export async function adminRoutes(app: FastifyInstance) {
     "/v1/admin/staff/:id/reset-pin",
     staff(MANAGERS, async (req, _reply, ctx) => {
       const { id } = parse(IdParam, req.params);
-      const { pin } = parse(ResetPinInput, req.body);
       const target = await db.staff.findUnique({ where: { id } });
       if (!target) throw notFound("Staff");
+      const { pin } = parse(isLeadRole(target.role) ? z.object({ pin: LeadPin }) : ResetPinInput, req.body);
       if (target.role === "OWNER" && ctx.role !== "OWNER") throw forbidden();
       await db.staff.update({ where: { id }, data: { pinHash: await hashSecret(pin), pinFailedCount: 0, lockedUntil: null } });
       await audit(ctx.sub, "STAFF_PIN_RESET", "Staff", id);

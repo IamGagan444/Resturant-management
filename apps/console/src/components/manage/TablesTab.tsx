@@ -84,7 +84,7 @@ export function TablesTab() {
               href={`${API_URL}/v1/admin/tables/qr-sheet.pdf`}
               target="_blank"
               rel="noreferrer"
-              className="tap inline-flex items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_16px_-8px_var(--color-brand)] hover:brightness-110"
+              className="tap inline-flex items-center gap-2 rounded-full bg-brand px-5 text-[15px] font-medium text-brand-ink hover:opacity-85"
             >
               <Download className="h-4 w-4" aria-hidden />
               Printable QR sheet (PDF)

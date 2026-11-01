@@ -16,7 +16,7 @@ export function DrawerContent({ className, children, ...props }: ComponentProps<
     <DrawerPrimitive.Portal>
       <DrawerPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45" />
       <DrawerPrimitive.Content
-        className={cn("surface fixed inset-x-0 bottom-0 z-50 flex max-h-[94dvh] flex-col rounded-t-3xl shadow-lift outline-none", className)}
+        className={cn("surface fixed inset-x-0 bottom-0 z-50 flex max-h-[94dvh] flex-col rounded-t-2xl shadow-lift outline-none", className)}
         {...props}
       >
         <div className="mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0 rounded-full bg-(--line)" aria-hidden />
@@ -27,11 +27,11 @@ export function DrawerContent({ className, children, ...props }: ComponentProps<
 }
 
 export function DrawerHeader({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("line border-b px-5 pt-2 pb-3", className)} {...props} />;
+  return <div className={cn("px-5 pt-3 pb-2", className)} {...props} />;
 }
 
 export function DrawerTitle({ className, ...props }: ComponentProps<typeof DrawerPrimitive.Title>) {
-  return <DrawerPrimitive.Title className={cn("text-lg font-bold tracking-tight", className)} {...props} />;
+  return <DrawerPrimitive.Title className={cn("text-2xl font-bold tracking-tight", className)} {...props} />;
 }
 
 export function DrawerDescription({ className, ...props }: ComponentProps<typeof DrawerPrimitive.Description>) {

@@ -295,7 +295,7 @@ function SplitControls({ bill, busy, onSplit }: { bill: BillView; busy: boolean;
                   role="radio"
                   aria-checked={groupOf(l.orderItemId) === g}
                   onClick={() => setAssign((a) => ({ ...a, [l.orderItemId]: g }))}
-                  className={`h-9 w-9 rounded-lg border font-semibold ${groupOf(l.orderItemId) === g ? "border-brand bg-brand text-white" : "line"}`}
+                  className={`h-9 w-9 rounded-lg border font-semibold ${groupOf(l.orderItemId) === g ? "border-brand bg-brand text-brand-ink" : "line"}`}
                 >
                   {String.fromCharCode(65 + g)}
                 </button>
@@ -377,11 +377,11 @@ function SettledPanel({ bill, onDone }: { bill: BillView; onDone: () => void }) 
         </Field>
         {links ? (
           <div className="grid grid-cols-2 gap-2">
-            <a className="tap flex items-center justify-center gap-2 rounded-xl bg-fresh px-4 font-semibold text-white hover:brightness-110" href={links.whatsappUrl} target="_blank" rel="noreferrer">
+            <a className="tap flex items-center justify-center gap-2 rounded-full bg-fresh px-5 font-medium text-white hover:opacity-90" href={links.whatsappUrl} target="_blank" rel="noreferrer">
               <MessageCircle className="h-4 w-4" aria-hidden />
               WhatsApp
             </a>
-            <a className="tap line flex items-center justify-center rounded-xl border px-4 font-semibold hover:bg-(--sunken)" href={links.smsUrl}>
+            <a className="tap flex items-center justify-center rounded-full bg-(--sunken) px-5 font-medium hover:bg-(--line)" href={links.smsUrl}>
               SMS
             </a>
           </div>

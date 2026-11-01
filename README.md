@@ -31,7 +31,7 @@ Seeded logins:
 | --- | --- |
 | Super admin | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` from `.env` → `/login` |
 | Owner | `owner@spicegarden.test` / `owner12345` → `/login` |
-| Staff PINs (on a paired device) | Manager 1000 · Cashier Kavya 2000 · Cooks Raju 3001 (Tandoor), Suresh 3002 (Kitchen), Deepak 3003 (Bar) · Waiters Ravi 4001 (T1–T4, R1–R2), Priya 4002 (T5–T8, R3–R4) |
+| Staff PINs (on a paired device) | Owner 999999 · Manager 100000 (owners and managers need 6 digits) · Cashier Kavya 2000 · Cooks Raju 3001 (Tandoor), Suresh 3002 (Kitchen), Deepak 3003 (Bar) · Waiters Ravi 4001 (T1–T4, R1–R2), Priya 4002 (T5–T8, R3–R4) |
 
 1. **Pair devices.** Open the console in a browser window, sign in as the owner, go to **Devices**, and pair it as a *Kitchen screen*. You're signed out and land on the PIN picker: tap **Raju** and enter 3001. Repeat in another browser profile as a *Waiter phone* (Ravi, 4001) and a *Counter* (Kavya, 2000).
 2. **Order as a guest.** Open the T1 link printed by the seed, preferably in a phone-sized window. Enter a name, add dishes, and place the order. A second phone needs the 4-digit table code shown on the first.

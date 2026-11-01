@@ -15,3 +15,7 @@ test-results/
 hub-data/
 apps/hub/.env
 uploads/
+
+# design review screenshots, and the design reference library (its own git repo)
+e2e/shots-out/
+awesome-design-md/

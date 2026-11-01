@@ -21,6 +21,11 @@ export const Phone = z.preprocess(
 
 export const Pin = z.string().regex(/^\d{4,6}$/, "PIN must be 4–6 digits");
 
+/** Owners and managers can do everything, so their PIN is longer: 6 digits. */
+export const LEAD_PIN_LENGTH = 6;
+export const LeadPin = z.string().regex(/^\d{6}$/, "Owners and managers need a 6-digit PIN");
+export const isLeadRole = (role: string) => role === "OWNER" || role === "MANAGER";
+
 export const Slug = z
   .string()
   .min(3, "At least 3 characters")

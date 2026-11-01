@@ -22,7 +22,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ token:
   if (!r) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center p-8 text-center">
-        <h1 className="font-display text-2xl font-semibold">Bill not found</h1>
+        <h1 className="font-display text-2xl font-bold">Bill not found</h1>
         <p className="muted mt-2">The link may be incomplete. Ask the restaurant to send it again.</p>
       </main>
     );
@@ -32,10 +32,10 @@ export default async function ReceiptPage({ params }: { params: Promise<{ token:
   return (
     <main className="mx-auto max-w-md px-4 py-8 print:p-0">
       <article className="surface line overflow-hidden rounded-3xl border shadow-lift print:rounded-none print:border-0 print:shadow-none">
-        <div className="h-1.5 bg-linear-to-r from-brand-2 to-brand print:hidden" aria-hidden />
+        <div className="h-1.5 bg-brand print:hidden" aria-hidden />
         <div className="p-6">
         <header className="text-center">
-          <h1 className="font-display text-2xl font-semibold">{hotel.name}</h1>
+          <h1 className="font-display text-2xl font-bold">{hotel.name}</h1>
           {hotel.address && <p className="muted text-sm">{hotel.address}</p>}
           {hotel.phone && <p className="muted text-sm">{hotel.phone}</p>}
           {hotel.gstin && <p className="text-sm">GSTIN {hotel.gstin}</p>}
@@ -86,7 +86,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ token:
           {bill.pricesIncludeTax && <p className="muted text-xs">Prices include GST.</p>}
         </dl>
         <p className="muted mt-4 rounded-xl bg-(--sunken) px-3 py-2 text-sm">Paid by {r.payments.map((p) => `${METHOD[p.method]} ${rupees(p.amount)}`).join(" + ")}</p>
-        <p className="font-display mt-6 text-center text-lg font-semibold">Thank you for dining with us!</p>
+        <p className="font-display mt-6 text-center text-lg font-bold">Thank you for dining with us!</p>
         </div>
       </article>
       <PrintButton />
