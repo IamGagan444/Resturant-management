@@ -1,7 +1,6 @@
 import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
-import { Redis } from "ioredis";
 import fastifyCookie from "@fastify/cookie";
 import {
   rooms,
@@ -12,6 +11,7 @@ import {
 } from "@rms/contracts";
 import { env } from "../env";
 import { COOKIE, verifyAccessToken, verifyGuestToken } from "../lib/auth";
+import { createRedis, watchRedis } from "../lib/redis";
 
 type IO = Server<ClientToServerEvents, ServerToClientEvents>;
 let io: IO | null = null;
@@ -25,8 +25,8 @@ export function initRealtime(httpServer: HttpServer): IO {
     path: "/socket.io",
     cors: { origin: [env.CUSTOMER_URL, env.CONSOLE_URL], credentials: true },
   });
-  const pub = new Redis(env.REDIS_URL);
-  const sub = pub.duplicate();
+  const pub = createRedis("pub");
+  const sub = watchRedis(pub.duplicate(), "sub");
   server.adapter(createAdapter(pub, sub));
 
   server.use(async (socket, next) => {

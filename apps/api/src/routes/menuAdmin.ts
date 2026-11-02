@@ -34,7 +34,7 @@ export async function menuAdminRoutes(app: FastifyInstance) {
   // ── Categories ────────────────────────────────
   app.get(
     "/v1/admin/categories",
-    staff(MANAGERS, async () => db.menuCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] })),
+    staff(MANAGERS, async () => db.menuCategory.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] })),
   );
   app.post(
     "/v1/admin/categories",
@@ -59,11 +59,24 @@ export async function menuAdminRoutes(app: FastifyInstance) {
       return { ok: true };
     }),
   );
+  /**
+   * Deleted dishes are only soft-deleted (order history points at them), so they still reference
+   * the category. In that case hide the category and its dishes instead of deleting the row.
+   */
   app.delete(
     "/v1/admin/categories/:id",
     staff(MANAGERS, async (req) => {
-      await db.menuCategory.delete({ where: { id: parse(IdParam, req.params).id } });
-      return { ok: true };
+      const { id } = parse(IdParam, req.params);
+      const used = await db.menuItem.count({ where: { categoryId: id } });
+      if (!used) {
+        await db.menuCategory.delete({ where: { id } });
+        return { ok: true, deactivated: false };
+      }
+      await db.$transaction([
+        db.menuItem.updateMany({ where: { categoryId: id, isActive: true }, data: { isActive: false } }),
+        db.menuCategory.update({ where: { id }, data: { isActive: false } }),
+      ]);
+      return { ok: true, deactivated: true };
     }),
   );
 

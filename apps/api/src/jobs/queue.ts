@@ -1,11 +1,11 @@
 import { Queue } from "bullmq";
-import { Redis } from "ioredis";
-import { env } from "../env";
+import { createRedis } from "../lib/redis";
 
-export const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+export const redis = createRedis("main", { maxRetriesPerRequest: null });
 
 export const QUEUE = "rms";
 export const queue = new Queue(QUEUE, { connection: redis });
+queue.on("error", () => {}); // connection errors are logged by createRedis
 
 export type JobData =
   | { kind: "pickup-escalation"; hotelId: string; orderItemId: string }

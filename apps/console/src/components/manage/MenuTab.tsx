@@ -69,7 +69,8 @@ export function MenuTab() {
     build: (v) => ({ name: v.name.trim(), sortOrder: (categories.data?.length ?? 0) + 1 }),
   });
   const addCategory = cat.submit(async (body) => {
-    await api("POST", "/v1/admin/categories", body);
+    const created = await api<Category>("POST", "/v1/admin/categories", body);
+    qc.setQueryData<Category[]>(["admin", "categories"], (old) => [...(old ?? []), created]);
     cat.reset();
     notify.ok(`Category “${body.name}” added`);
     refresh();
@@ -86,6 +87,8 @@ export function MenuTab() {
     if (!ok) return;
     try {
       await api("DELETE", `/v1/admin/categories/${c.id}`);
+      qc.setQueryData<Category[]>(["admin", "categories"], (old) => old?.filter((x) => x.id !== c.id));
+      qc.setQueryData<Item[]>(["admin", "items"], (old) => old?.filter((i) => i.categoryId !== c.id));
       notify.ok(`“${c.name}” deleted`);
       refresh();
     } catch (e) {
@@ -208,7 +211,12 @@ export function MenuTab() {
           item={editing === "new" ? null : editing}
           categories={categories.data ?? []}
           onClose={() => setEditing(null)}
-          onSaved={() => {
+          onSaved={(saved, removedId) => {
+            // Update the list right away instead of waiting for the refetch round trip.
+            qc.setQueryData<Item[]>(["admin", "items"], (old = []) => {
+              if (!saved) return old.filter((i) => i.id !== removedId);
+              return old.some((i) => i.id === saved.id) ? old.map((i) => (i.id === saved.id ? saved : i)) : [...old, saved];
+            });
             setEditing(null);
             refresh();
           }}
@@ -218,7 +226,17 @@ export function MenuTab() {
   );
 }
 
-function ItemForm({ item, categories, onClose, onSaved }: { item: Item | null; categories: Category[]; onClose: () => void; onSaved: () => void }) {
+function ItemForm({
+  item,
+  categories,
+  onClose,
+  onSaved,
+}: {
+  item: Item | null;
+  categories: Category[];
+  onClose: () => void;
+  onSaved: (saved: Item | null, removedId?: string) => void;
+}) {
   const stations = useAdmin<Station[]>("stations");
   const taxes = useAdmin<Tax[]>("taxes");
   const groups = useAdmin<AddonGroup[]>("addon-groups");
@@ -297,9 +315,9 @@ function ItemForm({ item, categories, onClose, onSaved }: { item: Item | null; c
   }
 
   const save = form.submit(async (body) => {
-    await (item ? api("PATCH", `/v1/admin/items/${item.id}`, body) : api("POST", "/v1/admin/items", body));
+    const saved = await (item ? api<Item>("PATCH", `/v1/admin/items/${item.id}`, body) : api<Item>("POST", "/v1/admin/items", body));
     notify.ok(item ? `“${body.name}” saved` : `“${body.name}” added to the menu`);
-    onSaved();
+    onSaved(saved);
   });
 
   async function remove() {
@@ -308,7 +326,7 @@ function ItemForm({ item, categories, onClose, onSaved }: { item: Item | null; c
     try {
       await api("DELETE", `/v1/admin/items/${item.id}`);
       notify.ok(`“${item.name}” deleted`);
-      onSaved();
+      onSaved(null, item.id);
     } catch (e) {
       notify.error(e);
     }

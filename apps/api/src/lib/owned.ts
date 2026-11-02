@@ -9,7 +9,7 @@ import { badRequest } from "./errors";
 type Kind = "category" | "station" | "tax" | "addonGroup" | "floor" | "table" | "staff";
 
 const counters: Record<Kind, (ids: string[]) => Promise<number>> = {
-  category: (ids) => db.menuCategory.count({ where: { id: { in: ids } } }),
+  category: (ids) => db.menuCategory.count({ where: { id: { in: ids }, isActive: true } }),
   station: (ids) => db.station.count({ where: { id: { in: ids } } }),
   tax: (ids) => db.tax.count({ where: { id: { in: ids } } }),
   addonGroup: (ids) => db.addonGroup.count({ where: { id: { in: ids } } }),

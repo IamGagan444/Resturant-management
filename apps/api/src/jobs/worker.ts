@@ -1,9 +1,8 @@
 import { Worker } from "bullmq";
-import { Redis } from "ioredis";
 import { db, unscopedDb, withTenant } from "@rms/db";
 import { rooms } from "@rms/contracts";
-import { env } from "../env";
 import { getHotel } from "../lib/hotel";
+import { createRedis } from "../lib/redis";
 import { emit } from "../realtime/io";
 import { billView, PAYMENT_LOCK_MS, settleIfPaid } from "../services/billing";
 import { waiterRooms } from "../services/notify";
@@ -93,7 +92,7 @@ async function closePaidIdleSessions() {
 }
 
 export async function startWorker() {
-  const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+  const connection = createRedis("worker", { maxRetriesPerRequest: null });
   const worker = new Worker<JobData>(
     QUEUE,
     async (job) => {
@@ -102,6 +101,7 @@ export async function startWorker() {
     },
     { connection, concurrency: 10 },
   );
+  worker.on("error", () => {}); // connection errors are logged by createRedis
   worker.on("failed", (job, err) => console.error(`job ${job?.id} failed:`, err.message));
   await queue.upsertJobScheduler("maintenance", { every: 10 * 60_000 }, { name: "maintenance", data: { kind: "maintenance" } });
   return async () => {

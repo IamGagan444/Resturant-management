@@ -148,16 +148,34 @@ export async function adminRoutes(app: FastifyInstance) {
     staff(MANAGERS, async (req, reply, ctx) => {
       const input = parse(TableInput, req.body);
       await assertOwned("floor", [input.floorId]);
+      const data = { ...input, floorId: input.floorId ?? null, isActive: true };
+      // Removed tables with history are only deactivated and keep their label. Adding the
+      // same label again brings that row back (old bills stay linked) with a fresh QR.
+      const existing = await db.table.findFirst({ where: { label: input.label } });
+      if (existing?.isActive) throw conflict("TABLE_EXISTS", `There's already a table called ${input.label}`);
+      const t = existing
+        ? await db.table.update({ where: { id: existing.id }, data: { ...data, qrToken: randomBytes(12).toString("base64url") } })
+        : await db.table.create({ data: { hotelId: ctx.hid, ...data } });
       reply.status(201);
-      return db.table.create({ data: { hotelId: ctx.hid, ...input, floorId: input.floorId ?? null } });
+      return { ...t, qrUrl: qrUrl((await getHotel(ctx.hid)).slug, t.qrToken) };
     }),
   );
   app.patch(
     "/v1/admin/tables/:id",
     staff(MANAGERS, async (req) => {
+      const { id } = parse(IdParam, req.params);
       const input = parse(TableInput.partial(), req.body);
       await assertOwned("floor", [input.floorId]);
-      return db.table.update({ where: { id: parse(IdParam, req.params).id }, data: input });
+      if (input.label) {
+        const clash = await db.table.findFirst({ where: { label: input.label, id: { not: id } }, select: { isActive: true } });
+        if (clash) {
+          throw conflict(
+            "TABLE_EXISTS",
+            clash.isActive ? `There's already a table called ${input.label}` : `${input.label} was removed earlier. Add it again as a new table instead.`,
+          );
+        }
+      }
+      return db.table.update({ where: { id }, data: input });
     }),
   );
   /** Floor-map editor saves every moved table at once (positions are % of the floor canvas). */

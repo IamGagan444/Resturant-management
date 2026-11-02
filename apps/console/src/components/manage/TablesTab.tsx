@@ -28,7 +28,9 @@ export function TablesTab() {
     if (tables.data?.some((t) => t.isActive && t.label.toLowerCase() === body.label.toLowerCase())) {
       return table.setFormError(`There's already a table called ${body.label}.`);
     }
-    await api("POST", "/v1/admin/tables", body);
+    const created = await api<Table>("POST", "/v1/admin/tables", body);
+    // Show it now; the background refetch below just confirms.
+    qc.setQueryData<Table[]>(["admin", "tables"], (old) => [...(old ?? []).filter((t) => t.id !== created.id), created]);
     table.reset({ ...table.values, label: "" });
     notify.ok(`Table ${body.label} added. Print its QR from the sheet.`);
     refresh();
@@ -66,6 +68,7 @@ export function TablesTab() {
     if (!(await confirm({ title: `Remove table ${t.label}?`, description: "Its QR code stops working. Past bills are kept.", confirmLabel: "Remove table", destructive: true }))) return;
     try {
       await api("DELETE", `/v1/admin/tables/${t.id}`);
+      qc.setQueryData<Table[]>(["admin", "tables"], (old) => old?.filter((x) => x.id !== t.id));
       notify.ok(`Table ${t.label} removed`);
       refresh();
     } catch (e) {
