@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { db, TenantContextMissingError, withTenant } from "@rms/db";
 import { closeQueue } from "../src/jobs/queue";
-import { Client, createHotel, createPlatformAdmin, getApp, resetDb } from "./helpers";
+import { Client, createHotel, createPlatformAdmin, getApp, resetDb, signIn } from "./helpers";
 
 /** Proves hotel A can never read or write hotel B's data — via the API and directly through the data layer. */
 describe("tenant isolation", () => {
@@ -98,7 +98,7 @@ describe("tenant isolation", () => {
   it("staff tokens are bound to their hotel", async () => {
     // Suspending B cuts B's staff off without touching A.
     const admin = new Client(app);
-    await admin.ok("POST", "/v1/auth/login", { email: "root@test.dev", password: "rootpass123" });
+    await signIn(admin, "root@test.dev", "rootpass123");
     await admin.ok("PATCH", `/v1/platform/hotels/${b.hotelId}`, { status: "SUSPENDED" });
     expect((await b.owner.req("GET", "/v1/admin/items")).json().error.code).toBe("HOTEL_SUSPENDED");
     expect((await a.owner.req("GET", "/v1/admin/items")).statusCode).toBe(200);

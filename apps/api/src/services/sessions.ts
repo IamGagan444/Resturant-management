@@ -2,7 +2,8 @@ import { db, unscopedDb, withTenant, type Hotel } from "@rms/db";
 import { rooms, type Cart, type JoinSessionInput, type SessionView, type TableLookup } from "@rms/contracts";
 import { sum } from "@rms/domain";
 import { AppError, isUniqueViolation, notFound } from "../lib/errors";
-import { joinCode } from "../lib/crypto";
+import { joinCode, safeEqual } from "../lib/crypto";
+import { JOIN_MAX_FAILS, assertNotLocked, failures, recordFailure } from "../lib/mfa";
 import { assertHotelOperational, getHotel } from "../lib/hotel";
 import { emit } from "../realtime/io";
 import { waiterRooms } from "./notify";
@@ -54,7 +55,12 @@ export async function joinSession(input: JoinSessionInput) {
         });
         if (existing) return { hotel, sessionId: live.id, guestId: existing.id };
         if (!input.joinCode) throw new AppError(403, "JOIN_CODE_REQUIRED", "Ask your table for the 4-digit join code");
-        if (input.joinCode !== live.joinCode) throw new AppError(403, "JOIN_CODE_INVALID", "That code doesn't match this table");
+        // 10,000 codes: cap wrong guesses per session across all phones/IPs, or a script could walk them all.
+        assertNotLocked(await failures("join", live.id), JOIN_MAX_FAILS);
+        if (!safeEqual(input.joinCode, live.joinCode)) {
+          await recordFailure("join", live.id);
+          throw new AppError(403, "JOIN_CODE_INVALID", "That code doesn't match this table");
+        }
         const customerId = await upsertCustomer(hotel.id, input);
         const g = await db.sessionGuest.create({
           data: { hotelId: hotel.id, sessionId: live.id, deviceId: input.deviceId, displayName: input.name, customerId },

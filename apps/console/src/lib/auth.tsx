@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { HubPass, Me, StaffRole } from "@rms/contracts";
 import { ApiError, api } from "./api";
 import { getMode, saveHub } from "./net";
+import { deviceKey } from "./devicekey";
 import { flush, setOutboxUser } from "./outbox";
 
 export function useMe() {
@@ -29,7 +30,9 @@ const PASS_REFRESH_MS = 6 * 3600_000;
 async function refreshHubPass() {
   if (getMode() !== "cloud") return;
   try {
-    saveHub(await api<HubPass>("GET", "/v1/s/hub/pass"));
+    // the pass is bound to this browser's own key (see devicekey.ts)
+    const { jwk } = await deviceKey();
+    saveHub(await api<HubPass>("POST", "/v1/s/hub/pass", { jwk }));
   } catch {
     // offline right now: keep the pass we have
   }

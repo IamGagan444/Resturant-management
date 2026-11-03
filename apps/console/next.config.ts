@@ -16,6 +16,8 @@ const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_API_URL: process.env.API_URL ?? "http://localhost:4000" },
   eslint: { ignoreDuringBuilds: true }, // lint runs once at the repo root (pnpm lint)
   images: { unoptimized: true },
+  poweredByHeader: false,
+  productionBrowserSourceMaps: false, // static export is public: never ship source maps
 };
 
 export default nextConfig;

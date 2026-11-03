@@ -4,7 +4,7 @@ import { unscopedDb } from "@rms/db";
 import type { PlatformHotel, PlatformOverview, PlatformSession } from "@rms/contracts";
 import { closeQueue } from "../src/jobs/queue";
 import { rateLimitKey, signAccess } from "../src/lib/auth";
-import { Client, createHotel, createPlatformAdmin, getApp, resetDb } from "./helpers";
+import { Client, createHotel, createPlatformAdmin, getApp, resetDb, signIn } from "./helpers";
 
 /** Super admin: dashboard, restaurant CRUD, owners' sign-ins. */
 describe("platform admin", () => {
@@ -63,7 +63,7 @@ describe("platform admin", () => {
     await admin.ok("POST", `/v1/platform/staff/${ownerId}/password`, { password: "brand-new-pass" });
     const fresh = new Client(app);
     expect((await fresh.req("POST", "/v1/auth/login", { email: "owner@plat-one.test", password: "ownerpass123" })).statusCode).toBe(401);
-    await fresh.ok("POST", "/v1/auth/login", { email: "owner@plat-one.test", password: "brand-new-pass" });
+    await signIn(fresh, "owner@plat-one.test", "brand-new-pass");
 
     await admin.ok("PATCH", `/v1/platform/hotels/${hotelId}`, { phone: "98765 43210", gstin: "21ABCDE1234F1Z5" });
     expect((await admin.req("PATCH", `/v1/platform/hotels/${hotelId}`, { gstin: "nope" })).statusCode).toBe(400);

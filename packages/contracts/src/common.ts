@@ -11,6 +11,24 @@ export const Paise = z.number().int().nonnegative();
 /** Rate in basis points (250 = 2.5%). */
 export const Bps = z.number().int().min(0).max(10_000);
 
+/** Absolute http(s) URL. A bare URL check would also accept javascript:, data: and file: URLs. */
+export const HttpUrl = (max = 500) => z.url({ protocol: /^https?$/, message: "Enter a full address starting with https://" }).max(max);
+
+type NoDefault<T> = T extends z.ZodDefault<infer I extends z.ZodType> ? I : T;
+type PatchShape<S extends z.ZodRawShape> = { [K in keyof S]: z.ZodOptional<NoDefault<S[K]>> };
+
+/**
+ * PATCH body for a create schema: every field optional and *no defaults*. (Zod 4 applies defaults inside
+ * `.partial()`, so a plain `.partial()` would silently reset fields the client didn't send.)
+ */
+export function patchOf<S extends z.ZodRawShape>(schema: z.ZodObject<S>): z.ZodObject<PatchShape<S>> {
+  const shape: Record<string, z.ZodType> = {};
+  for (const [key, field] of Object.entries(schema.shape) as [string, z.ZodType][]) {
+    shape[key] = (field instanceof z.ZodDefault ? (field.unwrap() as z.ZodType) : field).optional();
+  }
+  return z.object(shape) as unknown as z.ZodObject<PatchShape<S>>;
+}
+
 export const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM");
 
 /** Mobile number. Spaces, dashes and brackets people type ("98765 43210") are dropped before checking. */
@@ -33,10 +51,9 @@ export const Slug = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Lowercase letters, numbers and single dashes only");
 
 /** Translations keyed by language code: { hi: { name, description } } */
-export const Translations = z.record(
-  z.string(),
-  z.object({ name: z.string().optional(), description: z.string().optional() }),
-);
+export const Translations = z
+  .record(z.string().max(10), z.object({ name: z.string().max(120).optional(), description: z.string().max(500).optional() }))
+  .refine((t) => Object.keys(t).length <= 20, "At most 20 languages");
 
 export const ApiError = z.object({
   error: z.object({

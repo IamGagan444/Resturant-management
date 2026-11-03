@@ -82,6 +82,9 @@ export const AuditAction = z.enum([
   "ITEM_REPLACED",
   "HUB_PAIRED",
   "HUB_REMOVED",
+  "PAYMENT_KEYS_CHANGED",
+  "STAFF_CREDENTIALS_CHANGED",
+  "DEVICE_REMOVED",
 ]);
 export type AuditAction = z.infer<typeof AuditAction>;
 

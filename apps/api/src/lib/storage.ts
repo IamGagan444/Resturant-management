@@ -8,12 +8,22 @@ import { env } from "../env";
 /** Menu photos are shown at most ~600 CSS px wide on phones; 1200 px covers 2× screens. */
 const MAX_PX = 1200;
 
+/** File signature check: the browser-sent MIME type and file name are not trusted. */
+export function sniffImage(b: Buffer): "jpeg" | "png" | "webp" | null {
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "jpeg";
+  if (b.length >= 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "png";
+  if (b.length >= 12 && b.toString("ascii", 0, 4) === "RIFF" && b.toString("ascii", 8, 12) === "WEBP") return "webp";
+  return null;
+}
+
 /**
  * Normalise an uploaded photo: auto-rotate (EXIF), cap at MAX_PX, strip metadata (GPS etc.), WebP.
  * A 4 MB phone photo becomes ~100–200 KB, which matters on slow 4G menus.
  */
 export async function toWebp(input: Buffer): Promise<Buffer> {
-  return sharp(input, { failOn: "error" })
+  if (!sniffImage(input)) throw new Error("Not a JPEG, PNG or WebP file");
+  // 50 MP is beyond any phone camera; larger "images" are decompression bombs.
+  return sharp(input, { failOn: "error", limitInputPixels: 50_000_000 })
     .rotate()
     .resize({ width: MAX_PX, height: MAX_PX, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 78 })

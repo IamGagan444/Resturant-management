@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ClientId, Id } from "./common";
+import { ClientId, HttpUrl, Id } from "./common";
 import { ItemStatus, StaffRole } from "./enums";
 import type { BoardTable, Me } from "./admin";
 import type { KdsTicket, OrderItemView, OrderView, ServiceRequestView } from "./order";
@@ -20,7 +20,7 @@ export const StaffOrderLineCmd = z.object({
   id: z.string().uuid(),
   itemId: Id,
   variantId: Id.nullish(),
-  addonIds: z.array(Id).default([]),
+  addonIds: z.array(Id).max(50).default([]),
   quantity: z.number().int().min(1).max(50),
   note: z.string().trim().max(140).nullish(),
 });
@@ -43,7 +43,7 @@ export type Command = z.infer<typeof Command>;
 
 export const QueuedCommand = z.object({
   clientId: ClientId, // idempotency key of the action (also the order's clientId for order.create)
-  clientTs: z.string().datetime(), // device clock; used only for last-writer-wins on availability toggles
+  clientTs: z.iso.datetime(), // device clock; used only for last-writer-wins on availability toggles
   command: Command,
 });
 export type QueuedCommand = z.infer<typeof QueuedCommand>;
@@ -68,11 +68,29 @@ export type HubSyncInput = z.infer<typeof HubSyncInput>;
 /** POST /v1/admin/hub — pair the hub box. The token is shown once and goes into the hub's .env. */
 export const HubPairInput = z.object({
   name: z.string().trim().min(1).max(40).default("Local hub"),
-  url: z.string().url().max(200), // LAN URL devices reach it on, e.g. https://hub.spicegarden.example:4100
+  url: HttpUrl(200), // LAN URL devices reach it on, e.g. https://hub.spicegarden.example:4100
 });
 export type HubPairInput = z.infer<typeof HubPairInput>;
 
-/** GET /v1/s/hub/pass — lets a signed-in device use the hub during an outage without logging in again. */
+/**
+ * Public half of the device's own signing key (ECDSA P-256). The private half is a non-extractable WebCrypto key
+ * that never leaves the browser, so a copied hub pass is useless without the device that holds it.
+ */
+export const DeviceJwk = z
+  .object({
+    kty: z.literal("EC"),
+    crv: z.literal("P-256"),
+    x: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    y: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  });
+export type DeviceJwk = z.infer<typeof DeviceJwk>;
+export const HubPassInput = z.object({ jwk: DeviceJwk });
+
+/**
+ * POST /v1/s/hub/pass — lets a signed-in device use the hub during an outage without logging in again.
+ * The pass is bound to the device key (`cnf.jkt`); every hub request carries a fresh proof signed by that key
+ * (a `DPoP` header, RFC 9449 style), so a pass read out of storage can't be replayed from anywhere else.
+ */
 export interface HubPass {
   hubUrl: string | null;
   hotelId: string;
@@ -86,6 +104,7 @@ export const HubPassClaims = z.object({
   hid: Id,
   role: StaffRole,
   sid: Id.nullable(),
+  cnf: z.object({ jkt: z.string().min(43).max(43) }), // SHA-256 JWK thumbprint of the device key
 });
 export type HubPassClaims = z.infer<typeof HubPassClaims>;
 

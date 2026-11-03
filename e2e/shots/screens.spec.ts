@@ -2,6 +2,7 @@ import path from "node:path";
 import { config } from "dotenv";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { E2E } from "../ports";
+import { consoleSignIn, freshCode } from "../totp";
 
 config({ path: path.resolve(import.meta.dirname, "../../.env") });
 
@@ -23,6 +24,9 @@ async function ownerPage(browser: Browser, size: Size) {
   await page.getByLabel("Email").fill(OWNER.email);
   await page.getByLabel("Password").fill(OWNER.password);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await shot(page, `${size}-console-two-step`);
+  await page.getByLabel("Code from your authenticator app").fill(await freshCode());
+  await page.getByRole("button", { name: "Verify" }).click();
   await expect(page.getByRole("tab", { name: "Devices" })).toBeVisible();
   return page;
 }
@@ -75,12 +79,10 @@ for (const size of Object.keys(SIZES) as Size[]) {
     await device(browser, owner, size, "Waiter phone", "Ravi", "4001", "waiter");
     await device(browser, owner, size, "Kitchen screen", "Raju", "3001", "kds");
 
-    if (process.env.SEED_ADMIN_PASSWORD) {
+    // the super admin's authenticator is your own: put its key in SEED_ADMIN_TOTP_SECRET to include these screens
+    if (process.env.SEED_ADMIN_PASSWORD && process.env.SEED_ADMIN_TOTP_SECRET) {
       const admin = await (await browser.newContext({ viewport: SIZES[size] })).newPage();
-      await admin.goto(`${E2E.console}/login/`);
-      await admin.getByLabel("Email").fill(process.env.SEED_ADMIN_EMAIL ?? "admin@example.com");
-      await admin.getByLabel("Password").fill(process.env.SEED_ADMIN_PASSWORD);
-      await admin.getByRole("button", { name: "Sign in" }).click();
+      await consoleSignIn(admin, E2E.console, process.env.SEED_ADMIN_EMAIL ?? "admin@example.com", process.env.SEED_ADMIN_PASSWORD, process.env.SEED_ADMIN_TOTP_SECRET);
       await admin.waitForURL(/platform/);
       for (const p of ["", "restaurants/", "onboard/", "sessions/"]) {
         await admin.goto(`${E2E.console}/platform/${p}`);

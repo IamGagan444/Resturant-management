@@ -15,7 +15,7 @@ type Values = Record<string, unknown>;
  * - A field shows its error after it was left once, or after a submit attempt.
  * - Server-side VALIDATION errors land on the same fields; anything else becomes `formError`.
  */
-export function useForm<V extends Values, S extends z.ZodTypeAny>(opts: { initial: V; schema: S; build: (v: V) => unknown }) {
+export function useForm<V extends Values, S extends z.ZodType>(opts: { initial: V; schema: S; build: (v: V) => unknown }) {
   const [values, setValues] = useState<V>(opts.initial);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = useState(false);

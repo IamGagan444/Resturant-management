@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { Badge, Card, CardHeader, LinkButton, Stat } from "@/components/ui";
 import { Loadable } from "@/components/ui/feedback";
 import { CardSkeleton, StatsSkeleton } from "@/components/ui/skeleton";
+import { TwoStepCard } from "@/components/TwoStepCard";
 import { PageTitle, STATUS_LABEL, STATUS_TONE, shortDate, timeAgo } from "@/components/platform/common";
 
 const STATUS_BAR: Record<HotelStatus, string> = { TRIAL: "bg-brand", ACTIVE: "bg-fresh", SUSPENDED: "bg-warn", CANCELLED: "bg-late" };
@@ -158,6 +159,9 @@ export default function PlatformDashboard() {
           );
         }}
       </Loadable>
+      <div className="mt-6">
+        <TwoStepCard />
+      </div>
     </>
   );
 }

@@ -2,7 +2,7 @@
  * Demo data. Idempotent: deletes the demo hotel (cascade) and recreates it.
  *
  *   Super admin   SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD (from .env)
- *   Owner         owner@spicegarden.test / owner12345
+ *   Owner         owner@spicegarden.test / owner12345, authenticator key DEMO_TOTP_SECRET (src/dev-totp.ts)
  *   Staff PINs    Manager 1000 · Cashier 2000 · Cook Tandoor 3001 · Cook Kitchen 3002 · Cook Bar 3003
  *                 Waiter Ravi 4001 (T1–T4, R1–R2) · Waiter Priya 4002 (T5–T8, R3–R4)
  *   Customer URL  {CUSTOMER_URL}/h/spice-garden/t/{qrToken}  (printed at the end)
@@ -10,15 +10,20 @@
 import { config } from "dotenv";
 import { hash } from "@node-rs/argon2";
 import { ensurePlatform } from "./bootstrap";
+import { DEMO_TOTP_SECRET, encryptAtRest } from "./dev-totp";
 import { PrismaClient, type FoodType, type Table } from "@prisma/client";
 import { businessDate } from "@rms/domain";
 
 config({ path: "../../.env" });
 
-const prisma = new PrismaClient();
+// demo data spans every table (and deletes the demo hotel): runs as the owner, like migrations
+const adminUrl = process.env.DATABASE_ADMIN_URL || process.env.DATABASE_URL;
+const prisma = new PrismaClient({ datasourceUrl: adminUrl });
 const SLUG = "spice-garden";
 
 async function main() {
+  // Demo restaurant with well-known PINs and passwords: never on a production database.
+  if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed demo data with NODE_ENV=production");
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@example.com";
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;
   if (!adminPassword || adminPassword === "change-me") throw new Error("Set SEED_ADMIN_PASSWORD in .env");
@@ -53,8 +58,21 @@ async function main() {
 
   const pin = (p: string) => hash(p);
   const ownerHash = await hash("owner12345");
+  const encryptionKey = process.env.ENCRYPTION_KEY;
+  if (!encryptionKey) throw new Error("Set ENCRYPTION_KEY in .env");
   await prisma.staff.create({
-    data: { hotelId, name: "Anita (Owner)", email: "owner@spicegarden.test", passwordHash: ownerHash, role: "OWNER", phone: "9000000001", pinHash: await pin("999999") },
+    data: {
+      hotelId,
+      name: "Anita (Owner)",
+      email: "owner@spicegarden.test",
+      passwordHash: ownerHash,
+      role: "OWNER",
+      phone: "9000000001",
+      pinHash: await pin("999999"),
+      // two-step sign-in is required: the demo owner comes enrolled with a known (demo-only) authenticator
+      mfaSecretEnc: encryptAtRest(DEMO_TOTP_SECRET, encryptionKey),
+      mfaEnabledAt: new Date(),
+    },
   });
   await prisma.staff.create({ data: { hotelId, name: "Manoj", role: "MANAGER", phone: "9000000002", pinHash: await pin("100000") } });
   await prisma.staff.create({ data: { hotelId, name: "Kavya", role: "CASHIER", phone: "9000000003", pinHash: await pin("2000") } });
@@ -191,7 +209,7 @@ async function main() {
   const base = process.env.CUSTOMER_URL ?? "http://localhost:3000";
   console.log(`\nSeeded "${hotel.name}" (${hotelId})`);
   console.log(`  Super admin: ${adminEmail}`);
-  console.log(`  Owner:       owner@spicegarden.test / owner12345`);
+  console.log(`  Owner:       owner@spicegarden.test / owner12345 (authenticator key ${DEMO_TOTP_SECRET})`);
   console.log(`  Customer QR: ${base}/h/${SLUG}/t/${tables[0]?.qrToken}  (T1)`);
 }
 

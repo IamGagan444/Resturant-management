@@ -9,7 +9,7 @@ config({ path: path.resolve(import.meta.dirname, "../.env") });
 config({ path: path.resolve(import.meta.dirname, "../../../.env") });
 
 const Env = z.object({
-  CLOUD_URL: z.string().url(),
+  CLOUD_URL: z.url(),
   HUB_TOKEN: z.string().min(20, "HUB_TOKEN missing: pair the hub in Manage → Devices"),
   HUB_PORT: z.coerce.number().int().default(4100),
   HUB_DATA_FILE: z.string().default("./hub-data/state.json"),

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { SignJWT, jwtVerify } from "jose";
 import { unscopedDb, type StaffRole } from "@rms/db";
@@ -42,6 +43,8 @@ export interface GuestClaims {
   ses: string; // session id
 }
 export type AccessClaims = StaffClaims | PlatformClaims;
+/** What a verified access token carries besides the claims: `rid` = the sign-in (refresh token row) it belongs to. */
+export type VerifiedAccess = AccessClaims & { rid?: string };
 
 const accessKey = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const guestKey = new TextEncoder().encode(env.JWT_REFRESH_SECRET); // separate key: guest tokens can never pass as staff
@@ -54,37 +57,56 @@ async function sign(claims: object, key: Uint8Array, ttlSec: number): Promise<st
     .sign(key);
 }
 
-// `ims`: issue time in ms, so a forced sign-out can tell apart tokens made in the same second
-export const signAccess = (c: AccessClaims) => sign({ ...c, ims: Date.now() }, accessKey, ACCESS_TTL_SEC);
+/** Only the claims, never a previous token's iat/exp/rid (callers may pass a verified payload back in). */
+function claimsOnly(c: AccessClaims): AccessClaims {
+  return c.typ === "platform"
+    ? { typ: "platform", sub: c.sub, role: c.role }
+    : { typ: "staff", sub: c.sub, hid: c.hid, role: c.role, did: c.did, sid: c.sid };
+}
+
+// `ims`: issue time in ms, so a forced sign-out can tell apart tokens made in the same second.
+// `rid`: the sign-in this token belongs to, so signing out one browser ends its access token too.
+export const signAccess = (c: AccessClaims, rid?: string) =>
+  sign({ ...claimsOnly(c), ims: Date.now(), ...(rid && { rid }) }, accessKey, ACCESS_TTL_SEC);
 export const signGuest = (c: GuestClaims) => sign(c, guestKey, GUEST_TTL_SEC);
 
-export async function verifyAccessToken(token: string): Promise<AccessClaims | null> {
+export async function verifyAccessToken(token: string): Promise<VerifiedAccess | null> {
   try {
     const { payload } = await jwtVerify(token, accessKey, { algorithms: ["HS256"] });
     if (payload.typ !== "staff" && payload.typ !== "platform") return null;
-    const cut = await signedOutAt(String(payload.sub));
+    const rid = typeof payload.rid === "string" ? payload.rid : undefined;
+    const { cut, sessionEnded } = await revocationState(String(payload.sub), rid);
     const issuedMs = typeof payload.ims === "number" ? payload.ims : (payload.iat ?? 0) * 1000;
-    if (cut && issuedMs <= cut) return null;
-    return payload as unknown as AccessClaims;
+    if (sessionEnded || (cut && issuedMs <= cut)) return null;
+    return payload as unknown as VerifiedAccess;
   } catch {
     return null;
   }
 }
 
 /**
- * Forced sign-out. Access tokens are stateless for 15 min, so "sign out now" leaves a cut-off time per user:
- * tokens issued before it stop working at once. Refresh tokens that weren't revoked simply get a new one.
+ * Revocation. Access tokens are stateless for 15 min, so two short-lived Redis marks make "sign out now" immediate:
+ *  - per person (forceSignOut): every token issued before the cut-off stops working — all their devices;
+ *  - per sign-in (endSession): only tokens of that one browser/device (logout, "sign out this session").
+ * Both expire with the longest-lived access token, after which the revoked refresh token has done the job.
  */
 const cutKey = (sub: string) => `auth:signed-out:${sub}`;
+const endedKey = (rid: string) => `auth:session-ended:${rid}`;
+const MARK_TTL_SEC = ACCESS_TTL_SEC + 60;
 
 export async function forceSignOut(subjectId: string): Promise<void> {
-  await redis.set(cutKey(subjectId), String(Date.now()), "EX", ACCESS_TTL_SEC + 60);
+  await redis.set(cutKey(subjectId), String(Date.now()), "EX", MARK_TTL_SEC);
 }
 
-async function signedOutAt(sub: string): Promise<number | null> {
-  // Redis trouble must not lock everyone out: give up after a moment and trust the token.
-  const v = await Promise.race([redis.get(cutKey(sub)).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 250))]);
-  return v ? Number(v) : null;
+export async function endSession(refreshTokenId: string): Promise<void> {
+  await redis.set(endedKey(refreshTokenId), "1", "EX", MARK_TTL_SEC);
+}
+
+async function revocationState(sub: string, rid: string | undefined): Promise<{ cut: number | null; sessionEnded: boolean }> {
+  // Redis trouble must not lock everyone out: give up after a moment and trust the token (it expires in ≤15 min).
+  const keys = rid ? [cutKey(sub), endedKey(rid)] : [cutKey(sub)];
+  const v = await Promise.race([redis.mget(...keys).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 250))]);
+  return { cut: v?.[0] ? Number(v[0]) : null, sessionEnded: Boolean(v?.[1]) };
 }
 
 export async function verifyGuestToken(token: string): Promise<GuestClaims | null> {
@@ -121,7 +143,7 @@ export function bearer(req: FastifyRequest): string | undefined {
   return h?.startsWith("Bearer ") ? h.slice(7) : undefined;
 }
 
-export async function readAccess(req: FastifyRequest): Promise<AccessClaims> {
+export async function readAccess(req: FastifyRequest): Promise<VerifiedAccess> {
   const token = bearer(req) ?? req.cookies[COOKIE.access];
   const claims = token ? await verifyAccessToken(token) : null;
   if (!claims) throw unauthorized();
@@ -147,12 +169,15 @@ export function setDeviceCookie(reply: FastifyReply, token: string) {
   reply.setCookie(COOKIE.device, token, { ...cookieBase(), maxAge: DEVICE_TTL_SEC });
 }
 
-/** Issue access + refresh tokens (cookies) and persist the hashed refresh token. Returns the access token too. */
-export async function issueSession(reply: FastifyReply, claims: AccessClaims): Promise<{ accessToken: string }> {
-  const accessToken = await signAccess(claims);
+/**
+ * Issue access + refresh tokens (cookies) and persist the hashed refresh token. Returns the access token too.
+ * `familyId` names the sign-in across refresh rotations (pass the old token's on refresh); access tokens carry it as `rid`.
+ */
+export async function issueSession(reply: FastifyReply, claims: AccessClaims, familyId: string = randomUUID()): Promise<{ accessToken: string }> {
   const refresh = randomToken();
   await unscopedDb.refreshToken.create({
     data: {
+      familyId,
       subjectType: claims.typ === "platform" ? "PLATFORM" : "STAFF",
       subjectId: claims.sub,
       deviceId: claims.typ === "staff" ? claims.did : null,
@@ -162,6 +187,7 @@ export async function issueSession(reply: FastifyReply, claims: AccessClaims): P
       ip: reply.request.ip ?? null,
     },
   });
+  const accessToken = await signAccess(claims, familyId);
   reply.setCookie(COOKIE.access, accessToken, { ...cookieBase(), maxAge: ACCESS_TTL_SEC });
   reply.setCookie(COOKIE.refresh, refresh, { ...cookieBase(), path: "/v1/auth", maxAge: REFRESH_TTL_SEC });
   return { accessToken };

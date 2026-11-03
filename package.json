@@ -17,7 +17,8 @@
     "db:seed": "pnpm --filter @rms/db seed",
     "db:bootstrap": "pnpm --filter @rms/db bootstrap",
     "e2e": "pnpm --filter @rms/e2e e2e",
-    "hub": "pnpm --filter @rms/hub start"
+    "hub": "pnpm --filter @rms/hub start",
+    "db:provision": "pnpm --filter @rms/db provision"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
@@ -26,6 +27,7 @@
     "turbo": "^2.3.3",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",
-    "vitest": "^2.1.8"
+    "vite": "^7.3.7",
+    "vitest": "^4.1.12"
   }
 }

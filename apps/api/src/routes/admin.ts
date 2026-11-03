@@ -3,10 +3,11 @@ import type { FastifyInstance } from "fastify";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { z } from "zod";
-import { db, type Prisma } from "@rms/db";
+import { db, unscopedDb, type Prisma } from "@rms/db";
 import {
   AssignmentsInput,
   FloorInput,
+  FloorPatch,
   HotelSettingsInput,
   Id,
   LeadPin,
@@ -15,16 +16,19 @@ import {
   StaffCreateInput,
   StaffUpdateInput,
   StationInput,
+  StationPatch,
   TableInput,
+  TablePatch,
   TablePositionsInput,
   AuditAction,
   type AuditPage,
   type SyncRejectionView,
   TaxInput,
+  TaxPatch,
 } from "@rms/contracts";
 import { env } from "../env";
 import { audit } from "../lib/audit";
-import { revokeAllFor } from "../lib/auth";
+import { forceSignOut, revokeAllFor } from "../lib/auth";
 import { encrypt, hashSecret } from "../lib/crypto";
 import { badRequest, conflict, forbidden, notFound, parse } from "../lib/errors";
 import { businessDay, getHotel, invalidateHotel } from "../lib/hotel";
@@ -32,6 +36,7 @@ import { assertOwned } from "../lib/owned";
 import { MANAGERS, staff } from "../lib/route";
 import { saveImage, toWebp } from "../lib/storage";
 import { invalidateMenu } from "../services/menu";
+import { resetMfa } from "./login";
 
 const IdParam = z.object({ id: Id });
 
@@ -59,6 +64,8 @@ export async function adminRoutes(app: FastifyInstance) {
       const { razorpay, ...rest } = parse(HotelSettingsInput, req.body);
       const data: Prisma.HotelUpdateInput = { ...rest };
       if (razorpay) {
+        // The keys decide whose bank account guest UPI payments land in: owner only, and always audited.
+        if (ctx.role !== "OWNER") throw forbidden("Only the owner can change UPI payment keys");
         data.razorpayKeyId = razorpay.keyId;
         data.razorpayKeySecretEnc = encrypt(razorpay.keySecret);
         data.razorpayWebhookSecretEnc = encrypt(razorpay.webhookSecret);
@@ -66,6 +73,7 @@ export async function adminRoutes(app: FastifyInstance) {
       // Hotel is not a tenant model; scope by the caller's hotel explicitly.
       await db.hotel.update({ where: { id: ctx.hid }, data });
       invalidateHotel(ctx.hid);
+      if (razorpay) await audit(ctx.sub, "PAYMENT_KEYS_CHANGED", "Hotel", ctx.hid, { keyId: razorpay.keyId });
       return { ok: true };
     }),
   );
@@ -81,7 +89,7 @@ export async function adminRoutes(app: FastifyInstance) {
   );
   app.patch(
     "/v1/admin/taxes/:id",
-    staff(MANAGERS, async (req) => db.tax.update({ where: { id: parse(IdParam, req.params).id }, data: parse(TaxInput.partial(), req.body) })),
+    staff(MANAGERS, async (req) => db.tax.update({ where: { id: parse(IdParam, req.params).id }, data: parse(TaxPatch, req.body) })),
   );
   app.delete(
     "/v1/admin/taxes/:id",
@@ -103,7 +111,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.patch(
     "/v1/admin/stations/:id",
     staff(MANAGERS, async (req) =>
-      db.station.update({ where: { id: parse(IdParam, req.params).id }, data: parse(StationInput.partial(), req.body) }),
+      db.station.update({ where: { id: parse(IdParam, req.params).id }, data: parse(StationPatch, req.body) }),
     ),
   );
   app.delete(
@@ -124,7 +132,7 @@ export async function adminRoutes(app: FastifyInstance) {
   );
   app.patch(
     "/v1/admin/floors/:id",
-    staff(MANAGERS, async (req) => db.floor.update({ where: { id: parse(IdParam, req.params).id }, data: parse(FloorInput.partial(), req.body) })),
+    staff(MANAGERS, async (req) => db.floor.update({ where: { id: parse(IdParam, req.params).id }, data: parse(FloorPatch, req.body) })),
   );
   app.delete(
     "/v1/admin/floors/:id",
@@ -164,7 +172,7 @@ export async function adminRoutes(app: FastifyInstance) {
     "/v1/admin/tables/:id",
     staff(MANAGERS, async (req) => {
       const { id } = parse(IdParam, req.params);
-      const input = parse(TableInput.partial(), req.body);
+      const input = parse(TablePatch, req.body);
       await assertOwned("floor", [input.floorId]);
       if (input.label) {
         const clash = await db.table.findFirst({ where: { label: input.label, id: { not: id } }, select: { isActive: true } });
@@ -184,7 +192,9 @@ export async function adminRoutes(app: FastifyInstance) {
     staff(MANAGERS, async (req) => {
       const { tables } = parse(TablePositionsInput, req.body);
       await assertOwned("table", tables.map((t) => t.id));
-      await db.$transaction(tables.map((t) => db.table.update({ where: { id: t.id }, data: { posX: t.posX, posY: t.posY } })));
+      await db.$transaction(async (tx) => {
+        for (const t of tables) await tx.table.update({ where: { id: t.id }, data: { posX: t.posX, posY: t.posY } });
+      });
       return { ok: true };
     }),
   );
@@ -272,8 +282,13 @@ export async function adminRoutes(app: FastifyInstance) {
       const target = await db.staff.findUnique({ where: { id } });
       if (!target) throw notFound("Staff");
       if ((target.role === "OWNER" || input.role === "OWNER") && ctx.role !== "OWNER") throw forbidden("Only the owner can change an owner");
-      await assertOwned("station", [input.stationId]);
       const { password, email, ...rest } = input;
+      const credentialsChange = Boolean(password) || (email !== undefined && (email?.toLowerCase() ?? null) !== target.email);
+      // A manager setting another manager's password/email could sign in as them (and take over their MFA-free web login).
+      if (credentialsChange && isLeadRole(target.role) && target.id !== ctx.sub && ctx.role !== "OWNER") {
+        throw forbidden("Only the owner can change another manager's email or password");
+      }
+      await assertOwned("station", [input.stationId]);
       const updated = await db.staff.update({
         where: { id },
         data: {
@@ -283,7 +298,12 @@ export async function adminRoutes(app: FastifyInstance) {
         },
         select: staffSelect,
       });
-      if (input.isActive === false || input.role !== undefined) await revokeAllFor("STAFF", id);
+      // Deactivated, new role or new credentials: every sign-in ends now (refresh tokens revoked, live access tokens cut).
+      if (input.isActive === false || (input.role !== undefined && input.role !== target.role) || credentialsChange) {
+        await revokeAllFor("STAFF", id);
+        await forceSignOut(id);
+      }
+      if (credentialsChange) await audit(ctx.sub, "STAFF_CREDENTIALS_CHANGED", "Staff", id, { password: Boolean(password), email: email !== undefined });
       return updated;
     }),
   );
@@ -296,8 +316,24 @@ export async function adminRoutes(app: FastifyInstance) {
       if (!target) throw notFound("Staff");
       const { pin } = parse(isLeadRole(target.role) ? z.object({ pin: LeadPin }) : ResetPinInput, req.body);
       if (target.role === "OWNER" && ctx.role !== "OWNER") throw forbidden();
+      if (target.role === "MANAGER" && target.id !== ctx.sub && ctx.role !== "OWNER") throw forbidden("Only the owner can reset another manager's PIN");
       await db.staff.update({ where: { id }, data: { pinHash: await hashSecret(pin), pinFailedCount: 0, lockedUntil: null } });
       await audit(ctx.sub, "STAFF_PIN_RESET", "Staff", id);
+      return { ok: true };
+    }),
+  );
+
+  /** Owner only: a manager lost their authenticator phone. Their next sign-in sets up a new one. (Owners ask the platform.) */
+  app.post(
+    "/v1/admin/staff/:id/mfa-reset",
+    staff(MANAGERS, async (req, _reply, ctx) => {
+      const { id } = parse(IdParam, req.params);
+      if (ctx.role !== "OWNER") throw forbidden("Only the owner can reset two-step sign-in");
+      const target = await db.staff.findUnique({ where: { id } });
+      if (!target) throw notFound("Staff");
+      if (target.role === "OWNER") throw forbidden("An owner's two-step sign-in is reset by platform support");
+      await resetMfa("staff", id);
+      await audit(ctx.sub, "STAFF_CREDENTIALS_CHANGED", "Staff", id, { mfaReset: true });
       return { ok: true };
     }),
   );
@@ -387,9 +423,14 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.delete(
     "/v1/admin/devices/:id",
-    staff(MANAGERS, async (req) => {
+    staff(MANAGERS, async (req, _reply, ctx) => {
       const { id } = parse(IdParam, req.params);
       await db.device.update({ where: { id }, data: { revokedAt: new Date() } });
+      // Whoever is signed in on that device is signed out now, not when their access token runs out.
+      const live = await unscopedDb.refreshToken.findMany({ where: { deviceId: id, revokedAt: null }, select: { subjectId: true } });
+      await unscopedDb.refreshToken.updateMany({ where: { deviceId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await Promise.all([...new Set(live.map((t) => t.subjectId))].map(forceSignOut));
+      await audit(ctx.sub, "DEVICE_REMOVED", "Device", id);
       return { ok: true };
     }),
   );

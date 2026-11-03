@@ -85,10 +85,11 @@ nano deploy/.env
 Fill in `deploy/.env`:
 - **Hosts:** already set to `restro.gaganpallai.in` and its two subdomains.
 - **`ACME_EMAIL`:** your email, for certificate expiry notices.
-- **Secrets:** run `openssl rand -base64 48` once for each of `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` and `ENCRYPTION_KEY`. For `POSTGRES_PASSWORD` use `openssl rand -hex 32` instead: it goes inside `DATABASE_URL`, where `/`, `+` and `=` break the address.
+- **Secrets:** run `openssl rand -base64 48` once for each of `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` and `ENCRYPTION_KEY`. For the three database passwords — `POSTGRES_PASSWORD`, `RMS_APP_DB_PASSWORD`, `RMS_PLATFORM_DB_PASSWORD` — use `openssl rand -hex 32` (three different values): they go inside database URLs, where `/`, `+` and `=` break the address.
+  - `POSTGRES_PASSWORD` is the tables' owner. Only the one-shot `migrate` service gets it. The API connects as `rms_app` (row-level security limits it to one restaurant per request) and `rms_platform` (sign-in, platform admin, jobs), and refuses to start in production on any role that could bypass row-level security.
   - **Do not reuse** the values from your PC's `.env`.
   - **Keep `ENCRYPTION_KEY` safe:** it decrypts each hotel's Razorpay secrets.
-- **`ADMIN_EMAIL` / `ADMIN_PASSWORD`:** your super admin login. The password must be at least 12 characters.
+- **`ADMIN_EMAIL` / `ADMIN_PASSWORD`:** your super admin login. The password must be at least 12 characters. Two-step sign-in is required: at the first sign-in you scan a QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…) and save the recovery codes it shows. Lost the phone and the codes? Set `ADMIN_RESET_MFA=true` in `deploy/.env`, redeploy, sign in (you set up a new authenticator), then remove the line.
 - **Menu photos (`STORAGE_DRIVER=s3`):** copy the `S3_*` values from your PC's `.env`. Check that the region in `S3_PUBLIC_URL` matches the bucket's region (yours is `ap-south-2`, Hyderabad), or photo links will break.
 
 `deploy/.env` is ignored by git. Never commit it.
@@ -107,10 +108,10 @@ curl https://api.restro.gaganpallai.in/health                                 # 
 ```
 
 Then:
-1. Open `https://console.restro.gaganpallai.in/login/` and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+1. Open `https://console.restro.gaganpallai.in/login/`, sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD` and set up your authenticator.
 2. In **Platform**, create a hotel. The owner signs in, sets up the menu, tables and staff, and prints the QR sheet. The QR codes point to `https://restro.gaganpallai.in/...`.
 
-**On every start, migrations run automatically** and the super admin and plans are created if missing. The demo "Spice Garden" seed is never run in production.
+**On every start, migrations run automatically** (as the owner), the `rms_app` / `rms_platform` database roles get their passwords (`pnpm db:provision`), and the super admin and plans are created if missing. The demo "Spice Garden" seed is never run in production.
 
 ## 7. Updating
 

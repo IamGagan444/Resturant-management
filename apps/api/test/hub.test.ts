@@ -5,10 +5,15 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { unscopedDb } from "@rms/db";
-import type { HubHealth, HubPass, KdsTicket, OrderView, SyncResult, WaiterBoard } from "@rms/contracts";
+import type { HubHealth, KdsTicket, OrderView, SyncResult, WaiterBoard } from "@rms/contracts";
 import { createHub } from "@rms/hub";
 import { closeQueue } from "../src/jobs/queue";
-import { Client, cid, createHotel, createPlatformAdmin, getApp, resetDb, staffOnDevice } from "./helpers";
+import { Client, boundHubPass, cid, createHotel, createPlatformAdmin, getApp, hubProof, newDeviceKey, resetDb, staffOnDevice, type DeviceKey } from "./helpers";
+
+interface Pass {
+  pass: string;
+  key: DeviceKey;
+}
 
 type Hub = Awaited<ReturnType<typeof createHub>>;
 
@@ -24,8 +29,8 @@ describe("local hub during an internet outage", () => {
   let hubToken: string;
   let hub: Hub;
   let hubUrl: string;
-  let cookPass: string;
-  let waiterPass: string;
+  let cookPass: Pass;
+  let waiterPass: Pass;
   let tableId: string;
   let naanId: string;
   let guestOrder: OrderView;
@@ -35,16 +40,20 @@ describe("local hub during an internet outage", () => {
     const address = await h.start(0, "127.0.0.1");
     return { h, address };
   };
-  const call = async <T>(pass: string, method: "GET" | "POST", p: string, body?: unknown): Promise<T> => {
+  const call = async <T>(pass: Pass, method: "GET" | "POST", p: string, body?: unknown): Promise<T> => {
     const res = await fetch(`${hubUrl}${p}`, {
       method,
-      headers: { authorization: `Bearer ${pass}`, ...(body ? { "content-type": "application/json" } : {}) },
+      headers: {
+        authorization: `Bearer ${pass.pass}`,
+        dpop: await hubProof(pass.key, method, `${hubUrl}${p}`),
+        ...(body ? { "content-type": "application/json" } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) throw new Error(`${method} ${p} → ${res.status} ${await res.text()}`);
     return (await res.json()) as T;
   };
-  const sync = (pass: string, command: object) =>
+  const sync = (pass: Pass, command: object) =>
     call<SyncResult>(pass, "POST", "/v1/s/sync", { commands: [{ clientId: cid(), clientTs: new Date().toISOString(), command }] });
 
   beforeAll(async () => {
@@ -65,8 +74,12 @@ describe("local hub during an internet outage", () => {
     const waiter = await staffOnDevice(owner, "WAITER", waiterId, "4001");
 
     hubToken = (await owner.ok<{ token: string }>("POST", "/v1/admin/hub", { url: "http://127.0.0.1:4100" })).token;
-    cookPass = (await cook.ok<HubPass>("GET", "/v1/s/hub/pass")).pass!;
-    waiterPass = (await waiter.ok<HubPass>("GET", "/v1/s/hub/pass")).pass!;
+    const bind = async (c: Client): Promise<Pass> => {
+      const b = await boundHubPass(c);
+      return { pass: b.pass.pass!, key: b.key };
+    };
+    cookPass = await bind(cook);
+    waiterPass = await bind(waiter);
 
     // a guest orders while everything is online
     const guest = new Client(app);
@@ -90,7 +103,25 @@ describe("local hub during an internet outage", () => {
     const tickets = await call<KdsTicket[]>(cookPass, "GET", "/v1/s/kds");
     expect(tickets.map((t) => t.id)).toEqual([guestOrder.id]);
     expect((await fetch(`${hubUrl}/v1/s/kds`)).status).toBe(401); // pass required
-    expect((await fetch(`${hubUrl}/v1/s/bills/live`, { headers: { authorization: `Bearer ${cookPass}` } })).status).toBe(503); // needs internet
+    expect((await fetch(`${hubUrl}/v1/s/bills/live`, { headers: { authorization: `Bearer ${cookPass.pass}` } })).status).toBe(503); // needs internet
+  });
+
+  it("a hub pass is useless without the device key it was issued to", async () => {
+    const url = `${hubUrl}/v1/s/kds`;
+    const auth = { authorization: `Bearer ${cookPass.pass}` };
+    // stolen pass alone (e.g. read out of localStorage): refused
+    expect((await fetch(url, { headers: auth })).status).toBe(401);
+    // stolen pass + a proof from the thief's own key: refused
+    const thief = await newDeviceKey();
+    expect((await fetch(url, { headers: { ...auth, dpop: await hubProof(thief, "GET", url) } })).status).toBe(401);
+    // a real proof works once; replaying it, or using it for another path or method, is refused
+    const proof = await hubProof(cookPass.key, "GET", url);
+    expect((await fetch(url, { headers: { ...auth, dpop: proof } })).status).toBe(200);
+    expect((await fetch(url, { headers: { ...auth, dpop: proof } })).status).toBe(401);
+    const forMenu = await hubProof(cookPass.key, "GET", `${hubUrl}/v1/s/menu`);
+    expect((await fetch(url, { headers: { ...auth, dpop: forMenu } })).status).toBe(401);
+    const forPost = await hubProof(cookPass.key, "POST", url);
+    expect((await fetch(url, { headers: { ...auth, dpop: forPost } })).status).toBe(401);
   });
 
   it("keeps the kitchen and floor working through an outage and a hub restart, then replays exactly once", async () => {

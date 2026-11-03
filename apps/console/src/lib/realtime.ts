@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type { ClientToServerEvents, ServerToClientEvents } from "@rms/contracts";
 import { target, useNet } from "./net";
+import { proofFor } from "./devicekey";
 
 export type StaffSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -32,7 +33,15 @@ export function useStaffSocket(enabled: boolean, onSync: () => void, bind: (s: S
     const s: StaffSocket = io(t.base, {
       path: "/socket.io",
       withCredentials: mode === "cloud",
-      auth: token ? { token } : undefined,
+      // hub: the pass plus a fresh proof from this device's key, made for every (re)connect
+      auth: token
+        ? (cb) => {
+            void proofFor("GET", `${t.base}/socket.io/`).then(
+              (proof) => cb({ token, proof }),
+              () => cb({ token }),
+            );
+          }
+        : undefined,
       transports: ["websocket", "polling"],
     });
     s.on("connect", () => {

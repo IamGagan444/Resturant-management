@@ -4,9 +4,10 @@ import { unscopedDb, type HotelStatus, type Prisma } from "@rms/db";
 import { CreateHotelInput, Id, PlanInput, ResetPasswordInput, UpdateHotelInput, type PlatformHotel, type PlatformOverview, type PlatformSession } from "@rms/contracts";
 import { conflict, notFound, parse } from "../lib/errors";
 import { hashSecret } from "../lib/crypto";
-import { forceSignOut } from "../lib/auth";
+import { endSession, forceSignOut } from "../lib/auth";
 import { invalidateHotel } from "../lib/hotel";
 import { platform } from "../lib/route";
+import { resetMfa } from "./login";
 
 const IdParam = z.object({ id: Id });
 const SessionsQuery = z.object({ hotelId: Id.optional() });
@@ -284,7 +285,7 @@ export async function platformRoutes(app: FastifyInstance) {
       const t = await unscopedDb.refreshToken.findUnique({ where: { id } });
       if (!t || t.subjectType !== "STAFF") throw notFound("Session");
       await unscopedDb.refreshToken.update({ where: { id }, data: { revokedAt: new Date() } });
-      await forceSignOut(t.subjectId);
+      await endSession(t.familyId); // just that browser/device; the person's other sign-ins keep working
       return { ok: true };
     }),
   );
@@ -295,6 +296,19 @@ export async function platformRoutes(app: FastifyInstance) {
       const { id } = parse(IdParam, req.params);
       if (!(await unscopedDb.staff.findUnique({ where: { id }, select: { id: true } }))) throw notFound("Person");
       return { ok: true, sessions: await signOutStaff([id]) };
+    }),
+  );
+
+  /** Owner/manager lost their phone and recovery codes: wipe the authenticator; their next sign-in sets up a new one. */
+  app.post(
+    "/v1/platform/staff/:id/mfa-reset",
+    platform(async (req) => {
+      const { id } = parse(IdParam, req.params);
+      const s = await unscopedDb.staff.findUnique({ where: { id }, select: { id: true, email: true } });
+      if (!s) throw notFound("Person");
+      if (!s.email) throw conflict("NO_EMAIL_LOGIN", "This person signs in with a PIN only");
+      await resetMfa("staff", id);
+      return { ok: true };
     }),
   );
 

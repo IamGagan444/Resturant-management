@@ -5,7 +5,10 @@ name: rms
 x-app-env: &app-env
   NODE_ENV: production
   PORT: "4000"
-  DATABASE_URL: postgresql://rms:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/rms?schema=public
+  # Least-privilege roles (row-level security applies to both; neither owns the tables). The owner
+  # (POSTGRES_PASSWORD) is only given to the one-shot migrate service below.
+  DATABASE_URL: postgresql://rms_app:${RMS_APP_DB_PASSWORD:?set RMS_APP_DB_PASSWORD}@postgres:5432/rms?schema=public
+  DATABASE_PLATFORM_URL: postgresql://rms_platform:${RMS_PLATFORM_DB_PASSWORD:?set RMS_PLATFORM_DB_PASSWORD}@postgres:5432/rms?schema=public
   REDIS_URL: redis://redis:6379
   API_URL: https://${API_HOST:?set API_HOST}
   CUSTOMER_URL: https://${CUSTOMER_HOST:?set CUSTOMER_HOST}
@@ -56,16 +59,22 @@ services:
       interval: 5s
       retries: 20
 
-  # Runs on every deploy, then exits: applies migrations, makes sure the super admin and plans exist.
+  # Runs on every deploy, then exits: applies migrations as the owner, (re)sets the app roles' passwords,
+  # makes sure the super admin and plans exist.
   migrate:
     <<: *api-image
     restart: "no"
     working_dir: /app
-    command: ["sh", "-c", "pnpm db:deploy && pnpm db:bootstrap"]
+    command: ["sh", "-c", "pnpm db:deploy && pnpm db:provision && pnpm db:bootstrap"]
     environment:
       <<: *app-env
+      DATABASE_ADMIN_URL: postgresql://rms:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/rms?schema=public
+      RMS_APP_DB_PASSWORD: ${RMS_APP_DB_PASSWORD}
+      RMS_PLATFORM_DB_PASSWORD: ${RMS_PLATFORM_DB_PASSWORD}
       ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+      # lost the super admin's authenticator phone: set to "true" for one deploy, then remove
+      ADMIN_RESET_MFA: ${ADMIN_RESET_MFA:-false}
     depends_on:
       postgres:
         condition: service_healthy
