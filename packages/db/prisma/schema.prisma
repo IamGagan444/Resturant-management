@@ -13,9 +13,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// url:       the API's tenant pool (role rms_app, row-level security applies)
+// directUrl: the tables' owner, used only by `prisma migrate` (never given to the running API)
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_ADMIN_URL")
 }
 
 // ─────────────────────────────────────────────
@@ -154,6 +157,12 @@ model PlatformUser {
   name         String
   passwordHash String
   role         PlatformRole @default(SUPER_ADMIN)
+  // TOTP second factor (RFC 6238). Secret is AES-GCM encrypted; recovery codes are SHA-256 hashes, one use each.
+  mfaSecretEnc        String?
+  mfaPendingSecretEnc String? // being set up / replaced; becomes mfaSecretEnc once a code from it is entered
+  mfaEnabledAt      DateTime?
+  mfaLastStep       Int? // last accepted 30 s time step: a code can't be replayed
+  mfaRecoveryHashes String[]  @default([])
   createdAt    DateTime     @default(now())
 }
 
@@ -173,6 +182,7 @@ model RefreshToken {
   id          String      @id @default(cuid())
   subjectType AuthSubject
   subjectId   String
+  familyId    String // one sign-in across refresh rotations; access tokens carry it as `rid`
   deviceId    String?
   tokenHash   String      @unique
   expiresAt   DateTime
@@ -183,6 +193,7 @@ model RefreshToken {
   createdAt   DateTime    @default(now()) // a token is replaced on every refresh, so this is "last active"
 
   @@index([subjectType, subjectId])
+  @@index([familyId])
 }
 
 // Payment-gateway webhooks, deduplicated by provider event id.
@@ -287,6 +298,12 @@ model Staff {
   isActive       Boolean   @default(true)
   stationId      String? // cooks: default station
   station        Station?  @relation(fields: [stationId], references: [id])
+  // TOTP second factor (RFC 6238). Secret is AES-GCM encrypted; recovery codes are SHA-256 hashes, one use each.
+  mfaSecretEnc        String?
+  mfaPendingSecretEnc String? // being set up / replaced; becomes mfaSecretEnc once a code from it is entered
+  mfaEnabledAt      DateTime?
+  mfaLastStep       Int? // last accepted 30 s time step: a code can't be replayed
+  mfaRecoveryHashes String[]  @default([])
   createdAt      DateTime  @default(now())
 
   assignedTables  TableAssignment[]

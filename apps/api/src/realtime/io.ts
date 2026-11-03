@@ -12,6 +12,7 @@ import {
 import { env } from "../env";
 import { COOKIE, verifyAccessToken, verifyGuestToken } from "../lib/auth";
 import { createRedis, watchRedis } from "../lib/redis";
+import { allowedOrigins } from "../lib/security";
 
 type IO = Server<ClientToServerEvents, ServerToClientEvents>;
 let io: IO | null = null;
@@ -21,9 +22,16 @@ let io: IO | null = null;
  * Socket events are hints — clients refetch on (re)connect.
  */
 export function initRealtime(httpServer: HttpServer): IO {
+  const allowed = allowedOrigins();
   const server: IO = new Server(httpServer, {
     path: "/socket.io",
     cors: { origin: [env.CUSTOMER_URL, env.CONSOLE_URL], credentials: true },
+    // CORS doesn't apply to WebSockets: refuse browser handshakes from other origins (cross-site WebSocket hijacking).
+    // No Origin = not a browser (hub, tests); those must still present a valid token below.
+    allowRequest: (req, cb) => {
+      const origin = req.headers.origin;
+      cb(null, !origin || allowed.has(origin));
+    },
   });
   const pub = createRedis("pub");
   const sub = watchRedis(pub.duplicate(), "sub");

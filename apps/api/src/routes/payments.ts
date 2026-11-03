@@ -94,13 +94,21 @@ export async function paymentRoutes(app: FastifyInstance) {
       if (!hotel || !gateway || typeof signature !== "string" || !gateway.verifyWebhook(raw, signature)) {
         return reply.status(400).send({ error: { code: "BAD_SIGNATURE", message: "Invalid webhook" } });
       }
-      const event = JSON.parse(raw.toString("utf8")) as RazorpayEvent;
-      const id = typeof eventId === "string" ? eventId : `${event.event}:${event.payload?.payment?.entity?.id ?? ""}`;
+      let event: RazorpayEvent;
+      try {
+        event = JSON.parse(raw.toString("utf8")) as RazorpayEvent;
+      } catch {
+        return reply.status(400).send({ error: { code: "BAD_PAYLOAD", message: "Invalid JSON" } });
+      }
+      const id = typeof eventId === "string" ? eventId.slice(0, 120) : `${event.event}:${event.payload?.payment?.entity?.id ?? ""}`;
       try {
         await unscopedDb.webhookEvent.create({ data: { provider: "razorpay", eventId: id, hotelId, payload: event as unknown as Prisma.InputJsonValue } });
       } catch (e) {
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: true, duplicate: true };
-        throw e;
+        if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) throw e;
+        // Replay protection: a processed event is never applied twice. One that crashed half-way is retried
+        // (Razorpay redelivers), which is safe because settling a payment is idempotent.
+        const seen = await unscopedDb.webhookEvent.findUnique({ where: { provider_eventId: { provider: "razorpay", eventId: id } } });
+        if (seen?.processedAt || seen?.hotelId !== hotelId) return { ok: true, duplicate: true };
       }
       await withTenant(hotelId, () => handleRazorpayEvent(event));
       await unscopedDb.webhookEvent.update({ where: { provider_eventId: { provider: "razorpay", eventId: id } }, data: { processedAt: new Date() } });
@@ -134,7 +142,7 @@ async function handleRazorpayEvent(event: RazorpayEvent) {
   const p = await db.payment.findUnique({ where: { gatewayOrderId: entity.order_id } });
   if (!p) return;
   if (event.event === "payment.captured" || event.event === "order.paid") {
-    if (entity.amount !== undefined && entity.amount !== p.amount) {
+    if (entity.amount !== p.amount) {
       await db.payment.update({ where: { id: p.id }, data: { status: "FAILED", gatewayRef: "AMOUNT_MISMATCH" } });
       return; // amount tampering / mismatch: never settle the bill on it
     }

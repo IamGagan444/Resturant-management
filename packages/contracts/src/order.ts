@@ -14,7 +14,7 @@ export type PlaceOrderInput = z.infer<typeof PlaceOrderInput>;
 export const StaffOrderLine = z.object({
   itemId: Id,
   variantId: Id.nullish(),
-  addonIds: z.array(Id).default([]),
+  addonIds: z.array(Id).max(50).default([]),
   quantity: z.number().int().min(1).max(50),
   note: z.string().trim().max(140).nullish(),
 });
@@ -80,7 +80,7 @@ export const ReplaceItemInput = z.object({
   clientId: ClientId,
   itemId: Id,
   variantId: Id.nullish(),
-  addonIds: z.array(Id).default([]),
+  addonIds: z.array(Id).max(50).default([]),
 });
 export type ReplaceItemInput = z.infer<typeof ReplaceItemInput>;
 

@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { LeadPin, ResetPinInput, StaffCreateInput, StaffUpdateInput, type StaffRole } from "@rms/contracts";
-import { KeyRound, Pencil, Phone, Power, UserPlus, Users } from "lucide-react";
+import { KeyRound, Pencil, Phone, Power, ShieldOff, UserPlus, Users } from "lucide-react";
 import { api } from "@/lib/api";
+import { useMe } from "@/lib/auth";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, FormError, SelectField, orNull, useForm } from "@/components/ui";
 import { DropdownMenuItem, DropdownMenuSeparator, RowActions } from "@/components/ui/dropdown-menu";
 import { Loadable, confirm, notify } from "@/components/ui/feedback";
@@ -34,6 +35,23 @@ export function StaffTab() {
   const [pinFor, setPinFor] = useState<Staff | null>(null);
   const refresh = () => void qc.invalidateQueries({ queryKey: ["admin"] });
   const stationName = (id: string | null) => (id ? stations.data?.find((s) => s.id === id)?.name : undefined);
+  const me = useMe().data;
+  const isOwner = me?.typ === "staff" && me.role === "OWNER";
+
+  async function resetMfa(s: Staff) {
+    const ok = await confirm({
+      title: `Reset ${s.name}'s two-step sign-in?`,
+      description: "For a lost phone. They're signed out and set up a new authenticator at their next sign-in.",
+      confirmLabel: "Reset",
+    });
+    if (!ok) return;
+    try {
+      await api("POST", `/v1/admin/staff/${s.id}/mfa-reset`);
+      notify.ok(`${s.name} will set up two-step sign-in again`);
+    } catch (e) {
+      notify.error(e);
+    }
+  }
 
   async function toggleActive(s: Staff) {
     if (
@@ -98,6 +116,11 @@ export function StaffTab() {
                       <DropdownMenuItem onSelect={() => setPinFor(s)}>
                         <KeyRound aria-hidden /> Reset PIN
                       </DropdownMenuItem>
+                      {isOwner && s.role === "MANAGER" && s.email && (
+                        <DropdownMenuItem onSelect={() => void resetMfa(s)}>
+                          <ShieldOff aria-hidden /> Reset two-step sign-in
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem destructive={s.isActive} onSelect={() => void toggleActive(s)}>
                         <Power aria-hidden /> {s.isActive ? "Deactivate" : "Activate"}

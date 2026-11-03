@@ -4,15 +4,33 @@
 	email {$ACME_EMAIL}
 }
 
+# Security headers for every host. HSTS: browsers only ever use HTTPS here.
+(secure_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+		-X-Powered-By
+	}
+}
+
 # Guest app (the address printed in table QR codes)
 {$CUSTOMER_HOST} {
+	import secure_headers
 	encode zstd gzip
 	reverse_proxy customer:3000
 }
 
 # Staff console: static files; pages are folders (trailingSlash export)
 {$CONSOLE_HOST} {
-	encode zstd gzip
+	import secure_headers
+	# static app: no framing; source maps are never published
+	header X-Frame-Options "DENY"
+	header Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+	header Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	@sourcemaps path *.map
+	respond @sourcemaps 404
 	root * /srv/console
 	# the service worker must never be cached, or devices keep an old app
 	header /sw.js Cache-Control "no-cache"
@@ -27,5 +45,6 @@
 
 # API + live updates (WebSocket upgrades are proxied automatically)
 {$API_HOST} {
+	import secure_headers
 	reverse_proxy api:4000
 }

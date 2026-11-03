@@ -1,15 +1,18 @@
 import { randomInt } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { db, unscopedDb, type StaffRole } from "@rms/db";
-import { DeviceClaimInput, DevicePairInput, LEAD_PIN_LENGTH, LoginInput, PinLoginInput, isLeadRole, type Me } from "@rms/contracts";
+import { DeviceClaimInput, DevicePairInput, LEAD_PIN_LENGTH, PinLoginInput, isLeadRole, type Me } from "@rms/contracts";
 import { AppError, forbidden, notFound, parse, unauthorized } from "../lib/errors";
 import { randomToken, sha256, verifySecret } from "../lib/crypto";
 import {
   COOKIE,
+  bearer,
   clearSession,
+  endSession,
   issueSession,
   readAccess,
   setDeviceCookie,
+  verifyAccessToken,
   type AccessClaims,
   type StaffClaims,
 } from "../lib/auth";
@@ -58,25 +61,6 @@ async function deviceFromCookie(token: string | undefined) {
 }
 
 export async function authRoutes(app: FastifyInstance) {
-  const strict = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
-
-  /** Email + password: super admin, or hotel owner/manager on the web admin. */
-  app.post("/v1/auth/login", strict, async (req, reply) => {
-    const { email, password } = parse(LoginInput, req.body);
-    const normalized = email.toLowerCase();
-    const pu = await unscopedDb.platformUser.findUnique({ where: { email: normalized } });
-    if (pu) {
-      if (!(await verifySecret(pu.passwordHash, password))) throw unauthorized("Wrong email or password");
-      await issueSession(reply, { typ: "platform", sub: pu.id, role: pu.role });
-      return { ok: true, typ: "platform" };
-    }
-    const s = await unscopedDb.staff.findUnique({ where: { email: normalized } });
-    if (!s || !s.passwordHash || !s.isActive || !MANAGERS.includes(s.role)) throw unauthorized("Wrong email or password");
-    if (!(await verifySecret(s.passwordHash, password))) throw unauthorized("Wrong email or password");
-    assertHotelOperational(await getHotel(s.hotelId));
-    await issueSession(reply, { typ: "staff", sub: s.id, hid: s.hotelId, role: s.role, did: null, sid: null });
-    return { ok: true, typ: "staff" };
-  });
 
   /** A manager, signed in on the device itself, pairs it once. Staff then switch with PIN only. */
   app.post(
@@ -195,13 +179,20 @@ export async function authRoutes(app: FastifyInstance) {
       claims = { typ: "staff", sub: s.id, hid: s.hotelId, role: s.role, did: device?.id ?? null, sid: device?.stationId ?? s.stationId ?? null };
     }
     await unscopedDb.refreshToken.update({ where: { id: rt.id }, data: { revokedAt: new Date() } });
-    const { accessToken } = await issueSession(reply, claims);
+    const { accessToken } = await issueSession(reply, claims, rt.familyId); // same sign-in, new tokens
     return { ok: true, accessToken };
   });
 
+  /** Ends this browser's sign-in now: refresh token revoked and its access token stops working (other devices stay signed in). */
   app.post("/v1/auth/logout", async (req, reply) => {
     const raw = req.cookies[COOKIE.refresh];
+    const rows = raw ? await unscopedDb.refreshToken.findMany({ where: { tokenHash: sha256(raw) }, select: { familyId: true } }) : [];
     if (raw) await unscopedDb.refreshToken.updateMany({ where: { tokenHash: sha256(raw), revokedAt: null }, data: { revokedAt: new Date() } });
+    // the access token may belong to a newer rotation than the cookie we got (or come as a bearer): end that sign-in too
+    const access = bearer(req) ?? req.cookies[COOKIE.access];
+    const claims = access ? await verifyAccessToken(access) : null;
+    const ended = new Set([...rows.map((r) => r.familyId), ...(claims?.rid ? [claims.rid] : [])]);
+    await Promise.all([...ended].map(endSession));
     clearSession(reply);
     return { ok: true };
   });

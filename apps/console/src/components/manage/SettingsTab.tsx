@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { Badge, Button, Card, CardHeader, Field, FormError, orNull, useForm } from "@/components/ui";
 import { Loadable, notify } from "@/components/ui/feedback";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { TwoStepCard } from "@/components/TwoStepCard";
 
 interface Settings {
   name: string;
@@ -38,7 +39,12 @@ export function SettingsTab() {
         </div>
       }
     >
-      {(data) => <SettingsForm key={JSON.stringify(data)} settings={data} />}
+      {(data) => (
+        <div className="space-y-6">
+          <TwoStepCard />
+          <SettingsForm key={JSON.stringify(data)} settings={data} />
+        </div>
+      )}
     </Loadable>
   );
 }
@@ -151,7 +157,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
       <Card>
         <CardHeader
           title="UPI payments (Razorpay)"
-          hint={settings.razorpayConfigured ? `Connected (${settings.razorpayKeyId}). Enter new keys only to replace them.` : "Not connected. Guests can still pay at the counter."}
+          hint={`${settings.razorpayConfigured ? `Connected (${settings.razorpayKeyId}). Enter new keys only to replace them.` : "Not connected. Guests can still pay at the counter."} Only the owner can change these keys.`}
           action={settings.razorpayConfigured ? <Badge tone="fresh">Connected</Badge> : <Badge>Not connected</Badge>}
         />
         <div className="grid gap-4 sm:grid-cols-3">

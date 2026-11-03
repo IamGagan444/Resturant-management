@@ -1,4 +1,5 @@
 import { API_URL, getMode, reportUnreachable, target } from "./net";
+import { proofFor } from "./devicekey";
 
 export { API_URL };
 
@@ -42,10 +43,12 @@ export async function api<T>(method: Method, path: string, body?: unknown, retri
   const t = target();
   let res: Response;
   try {
-    res = await fetch(`${t.base}${path}`, {
+    const url = `${t.base}${path}`;
+    const proof: Record<string, string> = t.hub ? { dpop: await proofFor(method, url) } : {};
+    res = await fetch(url, {
       method,
       credentials: t.credentials,
-      headers: { ...t.headers, ...(body === undefined || isForm ? {} : { "content-type": "application/json" }) },
+      headers: { ...t.headers, ...proof, ...(body === undefined || isForm ? {} : { "content-type": "application/json" }) },
       body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       cache: "no-store",
     });
@@ -53,7 +56,8 @@ export async function api<T>(method: Method, path: string, body?: unknown, retri
     reportUnreachable();
     throw new NetworkError();
   }
-  if (res.status === 401 && !retried && getMode() === "cloud" && !path.startsWith("/v1/auth/")) {
+  // sign-in calls answer 401 for wrong credentials: never "refresh" those (two-step settings are ordinary signed-in calls)
+  if (res.status === 401 && !retried && getMode() === "cloud" && (!path.startsWith("/v1/auth/") || path.startsWith("/v1/auth/mfa"))) {
     if (await refresh()) return api<T>(method, path, body, true);
   }
   const json = (await res.json().catch(() => ({}))) as { error?: { code: string; message: string; details?: unknown } };

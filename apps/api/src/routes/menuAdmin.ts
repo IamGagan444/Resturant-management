@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db, type Prisma } from "@rms/db";
-import { AddonGroupInput, CategoryInput, Id, MenuItemInput } from "@rms/contracts";
+import { AddonGroupInput, CategoryInput, CategoryPatch, Id, MenuItemInput, MenuItemPatch } from "@rms/contracts";
 import { audit } from "../lib/audit";
 import { notFound, parse } from "../lib/errors";
 import { assertOwned } from "../lib/owned";
@@ -47,7 +47,7 @@ export async function menuAdminRoutes(app: FastifyInstance) {
   app.patch(
     "/v1/admin/categories/:id",
     staff(MANAGERS, async (req) => {
-      const input = parse(CategoryInput.partial(), req.body);
+      const input = parse(CategoryPatch, req.body);
       return db.menuCategory.update({ where: { id: parse(IdParam, req.params).id }, data: { ...input, translations: input.translations ?? undefined } });
     }),
   );
@@ -55,7 +55,9 @@ export async function menuAdminRoutes(app: FastifyInstance) {
     "/v1/admin/categories/order",
     staff(MANAGERS, async (req) => {
       const { ids } = parse(z.object({ ids: z.array(Id).max(200) }), req.body);
-      await db.$transaction(ids.map((id, i) => db.menuCategory.update({ where: { id }, data: { sortOrder: i } })));
+      await db.$transaction(async (tx) => {
+        for (const [i, id] of ids.entries()) await tx.menuCategory.update({ where: { id }, data: { sortOrder: i } });
+      });
       return { ok: true };
     }),
   );
@@ -72,10 +74,10 @@ export async function menuAdminRoutes(app: FastifyInstance) {
         await db.menuCategory.delete({ where: { id } });
         return { ok: true, deactivated: false };
       }
-      await db.$transaction([
-        db.menuItem.updateMany({ where: { categoryId: id, isActive: true }, data: { isActive: false } }),
-        db.menuCategory.update({ where: { id }, data: { isActive: false } }),
-      ]);
+      await db.$transaction(async (tx) => {
+        await tx.menuItem.updateMany({ where: { categoryId: id, isActive: true }, data: { isActive: false } });
+        await tx.menuCategory.update({ where: { id }, data: { isActive: false } });
+      });
       return { ok: true, deactivated: true };
     }),
   );
@@ -129,7 +131,7 @@ export async function menuAdminRoutes(app: FastifyInstance) {
     "/v1/admin/items/:id",
     staff(MANAGERS, async (req, _reply, ctx) => {
       const { id } = parse(IdParam, req.params);
-      const input = parse(MenuItemInput.partial(), req.body);
+      const input = parse(MenuItemPatch, req.body);
       const before = await db.menuItem.findUnique({ where: { id } });
       if (!before) throw notFound("Item");
       await Promise.all([

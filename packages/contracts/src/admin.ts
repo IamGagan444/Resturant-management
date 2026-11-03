@@ -1,11 +1,50 @@
 import { z } from "zod";
-import { Bps, HHMM, Id, LeadPin, Phone, Pin, Slug, isLeadRole } from "./common";
+import { Bps, HHMM, Id, LeadPin, Phone, Pin, Slug, isLeadRole, patchOf } from "./common";
 import { DeviceKind, HotelStatus, Language, StaffRole, TableStatus } from "./enums";
 
 // ── Auth ────────────────────────────────────────
 
-export const LoginInput = z.object({ email: z.string().email(), password: z.string().min(1).max(200) });
+export const LoginInput = z.object({ email: z.email(), password: z.string().min(1).max(200) });
 export type LoginInput = z.infer<typeof LoginInput>;
+
+/**
+ * Password accepted. If `mfaRequired`, send the authenticator code to POST /v1/auth/login/mfa with `mfaToken`.
+ * If `mfaSetupRequired`, the account must set up an authenticator first: POST /v1/auth/mfa/enroll/start and /finish.
+ */
+export interface LoginResult {
+  ok: boolean;
+  typ: "platform" | "staff";
+  mfaRequired?: boolean;
+  mfaSetupRequired?: boolean;
+  mfaToken?: string;
+}
+
+/** 6-digit authenticator code, or a recovery code (xxxx-xxxx-xxxx). */
+export const MfaCode = z.string().trim().min(6, "Enter the 6-digit code").max(20);
+export const TotpCode = z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code");
+const PendingToken = z.string().min(10).max(1000);
+export const LoginMfaInput = z.object({ mfaToken: PendingToken, code: MfaCode });
+export const MfaEnrollStartInput = z.object({ mfaToken: PendingToken });
+export const MfaEnrollFinishInput = z.object({ mfaToken: PendingToken, code: TotpCode });
+/** Signed in: new authenticator. Replacing an active one also needs a current code (or a recovery code). */
+export const MfaSetupInput = z.object({ password: z.string().min(1).max(200), code: MfaCode.optional() });
+export const MfaEnableInput = z.object({ code: TotpCode });
+export const MfaDisableInput = z.object({ password: z.string().min(1).max(200), code: MfaCode });
+export interface MfaStatus {
+  enabled: boolean;
+  required: boolean; // can't be turned off, only moved to a new phone
+  available: boolean; // false for PIN-only staff (no password sign-in to protect)
+  recoveryCodesLeft: number;
+}
+export interface MfaSetup {
+  secret: string;
+  otpauthUrl: string;
+  qrDataUrl: string; // PNG of otpauthUrl to scan
+}
+export interface MfaEnabled {
+  ok: true;
+  recoveryCodes: string[];
+}
 
 export const PinLoginInput = z.object({ staffId: Id, pin: Pin });
 export type PinLoginInput = z.infer<typeof PinLoginInput>;
@@ -66,9 +105,11 @@ export type HotelSettingsInput = z.infer<typeof HotelSettingsInput>;
 
 export const StationInput = z.object({ name: z.string().trim().min(1).max(40), color: z.string().max(20).nullish() });
 export type StationInput = z.infer<typeof StationInput>;
+export const StationPatch = patchOf(StationInput);
 
 export const FloorInput = z.object({ name: z.string().trim().min(1).max(40), sortOrder: z.number().int().default(0) });
 export type FloorInput = z.infer<typeof FloorInput>;
+export const FloorPatch = patchOf(FloorInput);
 
 export const TableInput = z.object({
   label: z.string().trim().min(1).max(20),
@@ -80,6 +121,7 @@ export const TableInput = z.object({
   isActive: z.boolean().default(true),
 });
 export type TableInput = z.infer<typeof TableInput>;
+export const TablePatch = patchOf(TableInput);
 
 export const TableStatusInput = z.object({ status: z.enum(["FREE", "CLEANING", "RESERVED"]) });
 
@@ -87,7 +129,7 @@ const StaffFields = z.object({
   name: z.string().trim().min(1).max(60),
   role: StaffRole,
   phone: Phone.nullish(),
-  email: z.string().email().nullish(),
+  email: z.email().nullish(),
   password: z.string().min(8, "At least 8 characters").max(200).nullish(), // owners/managers who use the web admin
   pin: Pin,
   stationId: Id.nullish(),
@@ -99,9 +141,7 @@ export const StaffCreateInput = StaffFields.superRefine((v, ctx) => {
 });
 export type StaffCreateInput = z.infer<typeof StaffCreateInput>;
 
-export const StaffUpdateInput = StaffFields.omit({ pin: true })
-  .partial()
-  .extend({ isActive: z.boolean().optional() });
+export const StaffUpdateInput = patchOf(StaffFields.omit({ pin: true })).extend({ isActive: z.boolean().optional() });
 export type StaffUpdateInput = z.infer<typeof StaffUpdateInput>;
 
 export const ResetPinInput = z.object({ pin: Pin });
@@ -125,10 +165,10 @@ export const CreateHotelInput = z.object({
   gstin: Gstin.nullish(),
   planId: Id.nullish(),
   status: HotelStatus.default("TRIAL"),
-  trialEndsAt: z.string().datetime().nullish(),
+  trialEndsAt: z.iso.datetime().nullish(),
   owner: z.object({
     name: z.string().trim().min(1).max(60),
-    email: z.string().email(),
+    email: z.email(),
     password: z.string().min(8).max(200),
     phone: Phone.nullish(),
     pin: LeadPin,
@@ -144,7 +184,7 @@ export const UpdateHotelInput = z
     gstin: Gstin.nullable(),
     status: HotelStatus,
     planId: Id.nullable(),
-    trialEndsAt: z.string().datetime().nullable(),
+    trialEndsAt: z.iso.datetime().nullable(),
     featureOverrides: z.record(z.string(), z.boolean()).nullable(),
   })
   .partial();

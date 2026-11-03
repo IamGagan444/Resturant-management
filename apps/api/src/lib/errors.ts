@@ -1,6 +1,6 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { Prisma } from "@rms/db";
-import type { z } from "zod";
+import { z } from "zod";
 
 export class AppError extends Error {
   constructor(
@@ -21,9 +21,9 @@ export const notFound = (what: string) => new AppError(404, "NOT_FOUND", `${what
 export const conflict = (code: string, message: string, details?: unknown) => new AppError(409, code, message, details);
 
 /** Validate untrusted input. Throws 400 VALIDATION with field errors. */
-export function parse<S extends z.ZodTypeAny>(schema: S, data: unknown): z.output<S> {
+export function parse<S extends z.ZodType>(schema: S, data: unknown): z.output<S> {
   const r = schema.safeParse(data);
-  if (!r.success) throw new AppError(400, "VALIDATION", "Invalid input", r.error.flatten());
+  if (!r.success) throw new AppError(400, "VALIDATION", "Invalid input", z.flattenError(r.error));
   return r.data;
 }
 

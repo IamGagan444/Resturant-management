@@ -1,8 +1,8 @@
 import { createHmac } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { SignJWT } from "jose";
+import { SignJWT, calculateJwkThumbprint } from "jose";
 import { db, unscopedDb, withTenant, type StaffRole } from "@rms/db";
-import { HubPairInput, HubSyncInput, type HubPass, type HubSnapshot, type SyncResult } from "@rms/contracts";
+import { HubPairInput, HubPassInput, HubSyncInput, type HubPass, type HubSnapshot, type SyncResult } from "@rms/contracts";
 import { env } from "../env";
 import { audit } from "../lib/audit";
 import { bearer } from "../lib/auth";
@@ -81,14 +81,19 @@ export async function hubRoutes(app: FastifyInstance) {
     }),
   );
 
-  /** Signed-in devices fetch this while online, so an outage needs no new login. */
-  app.get(
+  /**
+   * Signed-in devices fetch this while online, so an outage needs no new login. Bound to the device's own key:
+   * the hub accepts the pass only together with a proof signed by that (non-extractable) key.
+   */
+  app.post(
     "/v1/s/hub/pass",
-    staff(ANY_STAFF, async (_req, _reply, ctx): Promise<HubPass> => {
+    staff(ANY_STAFF, async (req, _reply, ctx): Promise<HubPass> => {
+      const { jwk } = parse(HubPassInput, req.body);
       const [hotel, hub] = await Promise.all([getHotel(ctx.hid), activeHub(ctx.hid)]);
       if (!hub || !hotel.hubUrl) return { hubUrl: null, hotelId: ctx.hid, pass: null, expiresAt: null };
       const exp = new Date(Date.now() + PASS_TTL_SEC * 1000);
-      const pass = await new SignJWT({ typ: "hubpass", hid: ctx.hid, role: ctx.role, sid: ctx.sid })
+      const jkt = await calculateJwkThumbprint(jwk, "sha256");
+      const pass = await new SignJWT({ typ: "hubpass", hid: ctx.hid, role: ctx.role, sid: ctx.sid, cnf: { jkt } })
         .setProtectedHeader({ alg: "HS256" })
         .setSubject(ctx.sub)
         .setIssuedAt()

@@ -5,6 +5,7 @@ import { jwtVerify } from "jose";
 import { Server } from "socket.io";
 import { HubPassClaims, SyncInput, type ClientToServerEvents, type HubHealth, type Me, type ServerToClientEvents, type StaffRole, type SyncResult } from "@rms/contracts";
 import { CloudLink } from "./cloud";
+import { verifyProof } from "./dpop";
 import { applyCommand, boardView, kdsView, type HubActor, type HubEvent } from "./state";
 import { Store } from "./store";
 
@@ -51,7 +52,7 @@ export async function createHub(opts: HubOptions) {
   app.addHook("onRequest", async (req, reply) => {
     if (req.headers["access-control-request-private-network"]) reply.header("access-control-allow-private-network", "true");
   });
-  await app.register(cors, { origin: opts.origins, credentials: false, allowedHeaders: ["authorization", "content-type"] });
+  await app.register(cors, { origin: opts.origins, credentials: false, allowedHeaders: ["authorization", "content-type", "dpop"] });
 
   app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
     if (err instanceof HttpError) return reply.status(err.status).send({ error: { code: err.code, message: err.message } });
@@ -60,7 +61,8 @@ export async function createHub(opts: HubOptions) {
     return reply.status(status).send({ error: { code: status >= 500 ? "INTERNAL" : "BAD_REQUEST", message: err.message } });
   });
 
-  async function identify(token: string | undefined): Promise<HubActor & { name: string }> {
+  /** Pass (signed by the cloud for this hub) + proof that the caller holds the device key the pass is bound to. */
+  async function identify(token: string | undefined, proof: string | undefined, method: string, path: string): Promise<HubActor & { name: string }> {
     const snap = store.state.snapshot;
     if (!snap) throw new HttpError(503, "HUB_NOT_READY", "The hub hasn't synced with the cloud yet");
     if (!token) throw new HttpError(401, "UNAUTHORIZED", "Not signed in");
@@ -69,6 +71,7 @@ export async function createHub(opts: HubOptions) {
       const claims = HubPassClaims.parse({ ...payload, sub: payload.sub });
       const person = snap.staff.find((s) => s.id === claims.sub);
       if (claims.hid !== snap.hotel.id || !person) throw new Error("not this hotel");
+      await verifyProof(proof, claims.cnf.jkt, method, path);
       return { staffId: person.id, name: person.name, role: person.role, sid: claims.sid };
     } catch {
       throw new HttpError(401, "UNAUTHORIZED", "Sign in again when the internet is back");
@@ -79,7 +82,8 @@ export async function createHub(opts: HubOptions) {
 
   function guard(roles: StaffRole[] | null, handler: (req: FastifyRequest, reply: FastifyReply, who: HubActor & { name: string }) => unknown) {
     return async (req: FastifyRequest, reply: FastifyReply) => {
-      const who = await identify(bearer(req));
+      const proof = typeof req.headers.dpop === "string" ? req.headers.dpop : undefined;
+      const who = await identify(bearer(req), proof, req.method, req.url);
       if (roles && !roles.includes(who.role)) throw new HttpError(403, "FORBIDDEN", "Not allowed");
       return handler(req, reply, who);
     };
@@ -152,8 +156,8 @@ export async function createHub(opts: HubOptions) {
   // ── Realtime on the LAN: same event names as the cloud; few devices, so every event goes to everyone ──
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(app.server, { path: "/socket.io", cors: { origin: opts.origins } });
   io.use((socket, next) => {
-    const token = (socket.handshake.auth as { token?: string }).token;
-    identify(token).then(
+    const { token, proof } = socket.handshake.auth as { token?: string; proof?: string };
+    identify(token, proof, "GET", "/socket.io/").then(
       () => next(),
       () => next(new Error("UNAUTHORIZED")),
     );

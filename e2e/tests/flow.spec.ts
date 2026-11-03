@@ -2,6 +2,7 @@ import path from "node:path";
 import { config } from "dotenv";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { E2E } from "../ports";
+import { signedInContext } from "../totp";
 
 config({ path: path.resolve(import.meta.dirname, "../../.env") });
 
@@ -14,12 +15,9 @@ const OWNER = { email: "owner@spicegarden.test", password: "owner12345" };
  * (nobody signs in on it). Then the staff member signs in there with their PIN.
  */
 async function staffDevice(browser: Browser, kind: "Kitchen screen" | "Waiter phone" | "Counter", who: string, pin: string, viewport = { width: 1280, height: 800 }): Promise<Page> {
-  const ownerCtx = await browser.newContext();
+  const ownerCtx = await signedInContext(browser, CONSOLE, OWNER.email, OWNER.password, "/manage");
   const owner = await ownerCtx.newPage();
-  await owner.goto(`${CONSOLE}/login/`);
-  await owner.getByLabel("Email").fill(OWNER.email);
-  await owner.getByLabel("Password").fill(OWNER.password);
-  await owner.getByRole("button", { name: "Sign in" }).click();
+  await owner.goto(`${CONSOLE}/manage/`);
   await owner.getByRole("tab", { name: "Devices" }).click();
   await owner.getByLabel("Name").fill(`${kind} (e2e)`);
   await owner.getByRole("combobox", { name: /Used as/ }).click();

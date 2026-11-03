@@ -209,10 +209,10 @@ export async function publicRoutes(app: FastifyInstance) {
         type: request.type,
       });
       if (input.type === "BILL") {
-        await db.$transaction([
-          db.tableSession.update({ where: { id: g.ses }, data: { status: "BILLING" } }),
-          db.table.update({ where: { id: session.tableId }, data: { status: "BILL_REQUESTED" } }),
-        ]);
+        await db.$transaction(async (tx) => {
+          await tx.tableSession.update({ where: { id: g.ses }, data: { status: "BILLING" } });
+          await tx.table.update({ where: { id: session.tableId }, data: { status: "BILL_REQUESTED" } });
+        });
         emit("bill:requested", [...waiters, rooms.cashiers(g.hid), rooms.managers(g.hid)], {
           hotelId: g.hid,
           sessionId: g.ses,

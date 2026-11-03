@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Bps, HHMM, Id, Paise, Translations } from "./common";
+import { Bps, HHMM, HttpUrl, Id, Paise, Translations, patchOf } from "./common";
 import { FoodType } from "./enums";
 
 // ── Admin inputs ────────────────────────────────
@@ -13,6 +13,7 @@ export const CategoryInput = z.object({
   isActive: z.boolean().default(true),
 });
 export type CategoryInput = z.infer<typeof CategoryInput>;
+export const CategoryPatch = patchOf(CategoryInput);
 
 export const VariantInput = z.object({
   id: Id.optional(),
@@ -26,7 +27,7 @@ export const MenuItemInput = z.object({
   name: z.string().min(1).max(80),
   translations: Translations.optional(),
   description: z.string().max(300).nullish(),
-  imageUrl: z.string().url().nullish(),
+  imageUrl: HttpUrl(500).nullish(),
   price: Paise,
   foodType: FoodType.default("VEG"),
   spiceLevel: z.number().int().min(0).max(3).nullish(),
@@ -34,11 +35,12 @@ export const MenuItemInput = z.object({
   isBestseller: z.boolean().default(false),
   isAvailable: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
-  taxIds: z.array(Id).default([]),
-  addonGroupIds: z.array(Id).default([]),
-  variants: z.array(VariantInput).default([]),
+  taxIds: z.array(Id).max(20).default([]),
+  addonGroupIds: z.array(Id).max(30).default([]),
+  variants: z.array(VariantInput).max(30).default([]),
 });
 export type MenuItemInput = z.infer<typeof MenuItemInput>;
+export const MenuItemPatch = patchOf(MenuItemInput);
 
 export const AddonGroupInput = z
   .object({
@@ -47,13 +49,14 @@ export const AddonGroupInput = z
     maxSelect: z.number().int().min(1).default(1),
     addons: z.array(
       z.object({ id: Id.optional(), name: z.string().min(1).max(60), price: Paise.default(0), isAvailable: z.boolean().default(true) }),
-    ),
+    ).max(50),
   })
   .refine((g) => g.minSelect <= g.maxSelect, { message: "minSelect must be <= maxSelect" });
 export type AddonGroupInput = z.infer<typeof AddonGroupInput>;
 
 export const TaxInput = z.object({ name: z.string().min(1).max(30), rateBps: Bps });
 export type TaxInput = z.infer<typeof TaxInput>;
+export const TaxPatch = patchOf(TaxInput);
 
 // ── Public menu (customer) ──────────────────────
 

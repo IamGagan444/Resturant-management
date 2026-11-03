@@ -16,7 +16,25 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [{ source: "/v1/:path*", destination: `${API_URL}/v1/:path*` }];
   },
-  images: { remotePatterns: [{ protocol: "http", hostname: "localhost" }, { protocol: "https", hostname: "**" }] },
+  // Menu photos are plain <img> tags. With no remote patterns the /_next/image optimizer can't be used
+  // as an open proxy to fetch arbitrary (or internal) URLs from the server.
+  images: { unoptimized: true, remotePatterns: [] },
+  poweredByHeader: false,
+  productionBrowserSourceMaps: false,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

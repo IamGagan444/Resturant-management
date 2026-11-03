@@ -72,11 +72,14 @@ export function saveHub(h: HubPass | null) {
   }
 }
 
-/** Base URL and auth for the current mode. */
-export function target(): { base: string; headers: Record<string, string>; credentials: RequestCredentials } {
+/**
+ * Base URL and auth for the current mode. On the hub, the pass goes with a proof signed by this device's key
+ * (`hub: true` tells the caller to add one per request; see devicekey.ts).
+ */
+export function target(): { base: string; headers: Record<string, string>; credentials: RequestCredentials; hub: boolean } {
   const hub = state.mode === "hub" ? savedHub() : null;
-  if (hub?.hubUrl && hub.pass) return { base: hub.hubUrl.replace(/\/$/, ""), headers: { authorization: `Bearer ${hub.pass}` }, credentials: "omit" };
-  return { base: API_URL, headers: {}, credentials: "include" };
+  if (hub?.hubUrl && hub.pass) return { base: hub.hubUrl.replace(/\/$/, ""), headers: { authorization: `Bearer ${hub.pass}` }, credentials: "omit", hub: true };
+  return { base: API_URL, headers: {}, credentials: "include", hub: false };
 }
 
 async function reachable(url: string): Promise<Response | null> {

@@ -26,6 +26,9 @@ const LABEL: Record<AuditAction, string> = {
   ITEM_REPLACED: "Item swapped",
   HUB_PAIRED: "Local hub set up",
   HUB_REMOVED: "Local hub removed",
+  PAYMENT_KEYS_CHANGED: "UPI keys changed",
+  STAFF_CREDENTIALS_CHANGED: "Sign-in details changed",
+  DEVICE_REMOVED: "Device removed",
 };
 
 const label = (a: string) => (a in LABEL ? LABEL[a as AuditAction] : a);

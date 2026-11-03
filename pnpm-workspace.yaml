@@ -12,3 +12,14 @@ onlyBuiltDependencies:
 # Optional native speedup for BullMQ's msgpack; pure-JS fallback is fine.
 ignoredBuiltDependencies:
   - msgpackr-extract
+
+# Security overrides (each verified against its consumers: next build, prisma CLI, eslint, @fastify/static):
+#  - postcss: Next pins 8.4.31 (source-map path traversal / XSS, GHSA-6g55-p6wh-862q & follow-ups); 8.5.x is compatible
+#  - deepmerge-ts: Prisma 6's config loader pins 7.x (stack exhaustion, GHSA-ggr8-5vv4-36mx); same API in 8
+#  - minimatch: eslint 9/10 pin 3.x/10.x (ReDoS-style blow-up, GHSA-g3hv-75wg-m249); 11 keeps the Minimatch export
+#  - glob: @fastify/static pins 13.x (AbortSignal bypass, GHSA-3g3m-2fjr-6pw4)
+overrides:
+  postcss: ^8.5.32
+  deepmerge-ts: ^8.0.2
+  minimatch: ^11.0.4
+  glob: ^14.0.3

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HotelStatus, ResetPasswordInput, UpdateHotelInput, type PlatformHotel } from "@rms/contracts";
-import { Building2, CalendarClock, KeyRound, KeySquare, LogOut, Mail, Pencil, Rocket, Search, Settings2, Trash2 } from "lucide-react";
+import { Building2, CalendarClock, KeyRound, KeySquare, LogOut, Mail, Pencil, Rocket, Search, Settings2, Trash2, ShieldOff } from "lucide-react";
 import { api } from "@/lib/api";
 import { Badge, Button, EmptyState, Field, FormError, LinkButton, SelectField, orNull, useForm } from "@/components/ui";
 import { DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, RowActions } from "@/components/ui/dropdown-menu";
@@ -48,6 +48,22 @@ export default function RestaurantsPage() {
       await api("PATCH", `/v1/platform/hotels/${h.id}`, { status: next });
       notify.ok(`${h.name} is now ${STATUS_LABEL[next].toLowerCase()}`);
       refresh();
+    } catch (e) {
+      notify.error(e);
+    }
+  }
+
+  async function resetOwnerMfa(h: PlatformHotel) {
+    if (!h.owner) return;
+    const ok = await confirm({
+      title: `Reset ${h.owner.name}'s two-step sign-in?`,
+      description: "Only after you've confirmed it's really them (e.g. on a call). They're signed out, and set up a new authenticator at their next sign-in.",
+      confirmLabel: "Reset",
+    });
+    if (!ok) return;
+    try {
+      await api("POST", `/v1/platform/staff/${h.owner.id}/mfa-reset`);
+      notify.ok("Two-step sign-in reset");
     } catch (e) {
       notify.error(e);
     }
@@ -181,6 +197,9 @@ export default function RestaurantsPage() {
                     </DropdownMenuItem>
                     <DropdownMenuItem disabled={!h.owner?.email} onSelect={() => setDialog({ kind: "password", hotel: h })}>
                       <KeyRound aria-hidden /> Reset owner password
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={!h.owner?.email} onSelect={() => void resetOwnerMfa(h)}>
+                      <ShieldOff aria-hidden /> Reset two-step sign-in
                     </DropdownMenuItem>
                     <DropdownMenuItem disabled={!h.owner} onSelect={() => void signOutOwner(h)}>
                       <LogOut aria-hidden /> Sign owner out everywhere

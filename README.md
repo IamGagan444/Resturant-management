@@ -12,8 +12,9 @@ Prerequisites: Node 20+, pnpm 10, Docker Desktop.
 cp .env.example .env            # then set the secrets (see "Environment")
 docker compose up -d            # Postgres 16 + Redis 7
 pnpm install
-pnpm db:deploy                  # apply migrations
-pnpm db:seed                    # demo hotel "Spice Garden"
+pnpm db:deploy                  # apply migrations (as DATABASE_ADMIN_URL, the owner)
+pnpm db:provision               # enable the rms_app / rms_platform roles the API connects as
+pnpm db:seed                    # demo hotel "Spice Garden" (owner's authenticator key is printed)
 pnpm dev                        # API :4000 · customer :3000 · console :3001
 ```
 
@@ -89,7 +90,13 @@ e2e/          Playwright full-flow test
 
 | Var | Purpose |
 | --- | --- |
-| `DATABASE_URL`, `REDIS_URL` | Match `docker-compose.yml` |
+| `DATABASE_ADMIN_URL` | Table owner. Only migrations, seed and `pnpm db:provision` use it — never the running API. |
+| `DATABASE_URL` | Role `rms_app`: the API's tenant pool. PostgreSQL row-level security shows it one restaurant per transaction (`rms.hotel_id`, set by `@rms/db`). |
+| `DATABASE_PLATFORM_URL` | Role `rms_platform`: the API's unscoped pool (sign-in, platform admin, jobs). Required in production. |
+| `RMS_APP_DB_PASSWORD`, `RMS_PLATFORM_DB_PASSWORD` | Passwords `pnpm db:provision` gives those roles (16+ chars, different). |
+| `REDIS_URL` | Match `docker-compose.yml` |
+| `MFA_REQUIRED` | Two-step sign-in (authenticator app) for every email + password account. Default `true`; the API refuses `false` in production. |
+| `TRUST_PROXY` | Proxies allowed to set `X-Forwarded-For` (default: loopback / private networks). Never `true`. |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY` | 32+ chars each. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. `ENCRYPTION_KEY` encrypts each hotel's Razorpay secrets at rest. |
 | `STORAGE_DRIVER`, `UPLOAD_DIR` | Menu photos, resized to at most 1200 px WebP on upload. `local` stores them on disk, served by the API; `s3` uses the S3 settings below. |
 | `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_PUBLIC_URL`, `S3_ENDPOINT` | Only for `STORAGE_DRIVER=s3`. The API refuses to start if one is missing. `S3_ENDPOINT` is only for R2 / MinIO. |

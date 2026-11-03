@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { jwtVerify } from "jose";
+import { calculateJwkThumbprint, jwtVerify } from "jose";
 import { unscopedDb } from "@rms/db";
-import type { AuditPage, HubPass, HubSnapshot, OrderView, QueuedCommand, SyncResult, SyncRejectionView } from "@rms/contracts";
+import type { AuditPage, HubSnapshot, OrderView, QueuedCommand, SyncResult, SyncRejectionView } from "@rms/contracts";
 import { closeQueue } from "../src/jobs/queue";
-import { Client, cid, createHotel, createPlatformAdmin, getApp, resetDb, staffOnDevice } from "./helpers";
+import { Client, boundHubPass, cid, createHotel, createPlatformAdmin, getApp, resetDb, staffOnDevice } from "./helpers";
 
 /** Phase 3: device offline queue (/v1/s/sync), local hub (pair, pass, snapshot, replay), audit log. */
 describe("offline sync, local hub, audit", () => {
@@ -90,7 +90,8 @@ describe("offline sync, local hub, audit", () => {
   });
 
   it("hub: pair, device pass, snapshot, and replay of LAN work after an outage", async () => {
-    expect((await waiter.ok<HubPass>("GET", "/v1/s/hub/pass")).pass).toBeNull(); // no hub yet
+    expect((await boundHubPass(waiter)).pass.pass).toBeNull(); // no hub yet
+    expect((await waiter.req("POST", "/v1/s/hub/pass", {})).statusCode).toBe(400); // a pass is only issued for a device key
 
     const paired = await owner.ok<{ token: string; deviceId: string }>("POST", "/v1/admin/hub", { url: "https://hub.local.test:4100" });
     const hubReq = (method: "GET" | "POST", url: string, body?: unknown) =>
@@ -113,10 +114,10 @@ describe("offline sync, local hub, audit", () => {
     expect(snap).not.toHaveProperty("staff.0.pinHash");
 
     // the waiter's device pass verifies with the key the hub got in its snapshot
-    const pass = await waiter.ok<HubPass>("GET", "/v1/s/hub/pass");
+    const { pass, key } = await boundHubPass(waiter);
     expect(pass.hubUrl).toBe("https://hub.local.test:4100");
     const { payload } = await jwtVerify(pass.pass!, new TextEncoder().encode(snap.passKey));
-    expect(payload).toMatchObject({ typ: "hubpass", sub: waiterId, role: "WAITER" });
+    expect(payload).toMatchObject({ typ: "hubpass", sub: waiterId, role: "WAITER", cnf: { jkt: await calculateJwkThumbprint(key.jwk, "sha256") } });
 
     // outage: cook and waiter work on the hub; it replays as each of them, in order
     const itemId = order.items[0]!.id;
