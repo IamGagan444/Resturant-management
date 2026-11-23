@@ -33,11 +33,11 @@ export function DialogContent({ className, children, hideClose = false, ...props
 }
 
 export function DialogHeader({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("px-6 pt-6 pb-2 pr-16", className)} {...props} />;
+  return <div className={cn("px-5 pt-5 pb-2 pr-16 sm:px-6 sm:pt-6", className)} {...props} />;
 }
 
 export function DialogTitle({ className, ...props }: ComponentProps<typeof DialogPrimitive.Title>) {
-  return <DialogPrimitive.Title className={cn("text-2xl font-bold tracking-tight", className)} {...props} />;
+  return <DialogPrimitive.Title className={cn("text-2xl font-bold tracking-tight text-balance", className)} {...props} />;
 }
 
 export function DialogDescription({ className, ...props }: ComponentProps<typeof DialogPrimitive.Description>) {
@@ -45,9 +45,9 @@ export function DialogDescription({ className, ...props }: ComponentProps<typeof
 }
 
 export function DialogBody({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-4", className)} {...props} />;
+  return <div className={cn("min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6", className)} {...props} />;
 }
 
 export function DialogFooter({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("flex flex-wrap items-center justify-end gap-2 px-6 pt-2 pb-6", className)} {...props} />;
+  return <div className={cn("flex flex-wrap items-center justify-end gap-2 px-5 pt-2 pb-5 sm:px-6 sm:pb-6", className)} {...props} />;
 }

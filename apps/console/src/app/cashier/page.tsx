@@ -47,7 +47,7 @@ export default function CashierPage() {
         </Button>
       </TopBar>
       <OfflineBanner online={online} />
-      <div className="mx-auto grid max-w-7xl gap-5 px-3 py-4 sm:px-6 sm:py-6 md:grid-cols-[minmax(280px,1fr)_1.35fr] md:items-start">
+      <div className="mx-auto grid max-w-7xl gap-5 px-4 py-4 sm:px-6 sm:py-6 md:grid-cols-[minmax(280px,1fr)_1.35fr] md:items-start">
         <section className={`no-print md:sticky md:top-20 ${open ? "hidden md:block" : ""}`} aria-label="Open bills">
           <h2 className="muted mb-3 flex items-center justify-between text-xs font-bold tracking-wider uppercase">
             Open bills

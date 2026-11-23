@@ -117,7 +117,7 @@ export default function FloorPage() {
         </section>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 px-3 py-3 text-sm sm:px-6">
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm sm:px-6">
         <div className={`scroll-x flex max-w-full gap-1.5 ${floors.length > 1 ? "" : "hidden"}`}>
           {floors.map((f) => (
             <button
@@ -153,7 +153,7 @@ export default function FloorPage() {
           </Button>
         )}
       </div>
-      <div className="px-3 sm:px-6">
+      <div className="px-4 sm:px-6">
         <ErrorText error={error} />
       </div>
 

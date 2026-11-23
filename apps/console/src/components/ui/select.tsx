@@ -14,8 +14,8 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "flex h-12 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-transparent bg-(--field) px-3.5 text-left text-[15px] transition outline-none",
-        "focus-visible:border-(--ink) focus-visible:bg-(--surface) focus-visible:shadow-[0_0_0_1px_var(--ink)] data-[state=open]:border-(--ink) data-[state=open]:bg-(--surface)",
+        "flex h-(--control-h) w-full min-w-0 items-center justify-between gap-2 rounded-[0.625rem] border border-transparent bg-(--field) px-3.5 text-left text-base transition outline-none sm:text-[15px]",
+        "focus-visible:border-brand focus-visible:bg-(--surface) focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-brand)_20%,transparent)] data-[state=open]:border-brand data-[state=open]:bg-(--surface)",
         "aria-invalid:border-late data-[placeholder]:text-(--muted) disabled:opacity-50 [&>span]:truncate",
         className,
       )}

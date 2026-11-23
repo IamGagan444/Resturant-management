@@ -169,6 +169,46 @@ describe("security controls", () => {
     expect((await other.req("GET", "/v1/admin/floors")).statusCode).toBe(200); // the other browser is untouched
   });
 
+  // ── Refresh-token reuse ─────
+  /** Another tab of the same browser: same cookies, sent before the first tab's refresh lands. */
+  const tabOf = (c: Client) => {
+    const t = new Client(app);
+    for (const [k, v] of c.cookies) t.cookies.set(k, v);
+    return t;
+  };
+
+  it("two tabs refreshing with the same cookie at once both stay signed in (no false theft alarm)", async () => {
+    const { c } = await manager("tabs@sec.test");
+    const elsewhere = new Client(app);
+    await signIn(elsewhere, "tabs@sec.test", "managerpass1");
+    const tab2 = tabOf(c);
+    await c.ok("POST", "/v1/auth/refresh");
+    await tab2.ok("POST", "/v1/auth/refresh"); // old cookie, seconds later: a race, not theft
+    expect((await c.req("GET", "/v1/admin/floors")).statusCode).toBe(200);
+    expect((await tab2.req("GET", "/v1/admin/floors")).statusCode).toBe(200);
+    expect((await elsewhere.req("GET", "/v1/admin/floors")).statusCode).toBe(200);
+  });
+
+  it("a rotated refresh token used after the grace period revokes every session of that person", async () => {
+    const { id, c } = await manager("thief@sec.test");
+    const elsewhere = new Client(app);
+    await signIn(elsewhere, "thief@sec.test", "managerpass1");
+    const thief = tabOf(c);
+    await c.ok("POST", "/v1/auth/refresh");
+    // age the rotation past the grace window
+    await unscopedDb.refreshToken.updateMany({ where: { subjectId: id, revokedAt: { not: null } }, data: { revokedAt: new Date(Date.now() - 60_000) } });
+    expect((await thief.req("POST", "/v1/auth/refresh")).statusCode).toBe(401);
+    expect((await elsewhere.req("POST", "/v1/auth/refresh")).statusCode).toBe(401);
+    expect((await c.req("POST", "/v1/auth/refresh")).statusCode).toBe(401);
+  });
+
+  it("a signed-out refresh token gets no grace, even seconds later", async () => {
+    const { c } = await manager("loggedout@sec.test");
+    const copy = tabOf(c);
+    await c.ok("POST", "/v1/auth/logout");
+    expect((await copy.req("POST", "/v1/auth/refresh")).statusCode).toBe(401);
+  });
+
   it("platform 'sign out this session' ends exactly that browser", async () => {
     const { id, c } = await manager("one@sec.test");
     const second = new Client(app);

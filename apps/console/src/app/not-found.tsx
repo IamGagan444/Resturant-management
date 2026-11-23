@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Compass } from "lucide-react";
 
 export default function NotFound() {
@@ -8,9 +9,9 @@ export default function NotFound() {
       </span>
       <h1 className="text-2xl font-bold tracking-tight">Page not found</h1>
       <p className="muted">That address doesn&apos;t exist in the console.</p>
-      <a href="/" className="tap inline-flex items-center rounded-full bg-brand px-6 font-medium text-brand-ink">
+      <Link href="/" className="tap inline-flex items-center rounded-full bg-brand px-6 font-medium text-brand-ink">
         Go to my screen
-      </a>
+      </Link>
     </main>
   );
 }

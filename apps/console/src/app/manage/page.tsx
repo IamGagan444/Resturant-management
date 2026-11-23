@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { BarChart3, ChefHat, ClipboardList, ConciergeBell, LayoutGrid, Menu, MonitorSmartphone, QrCode, ReceiptText, Settings, Users, UtensilsCrossed, type LucideIcon } from "lucide-react";
 import { useGuard } from "@/lib/auth";
 import { NavLink, TopBar } from "@/components/ui";
@@ -35,6 +37,7 @@ const LINKS: { href: string; label: string; icon: LucideIcon; group: "manage" | 
 
 export default function ManagePage() {
   const me = useGuard(["OWNER", "MANAGER"]);
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("menu");
   if (!me || me.typ !== "staff") return null;
   return (
@@ -64,14 +67,14 @@ export default function ManagePage() {
           <DropdownMenuContent>
             <DropdownMenuLabel>Manager</DropdownMenuLabel>
             {LINKS.filter((l) => l.group === "manage").map((l) => (
-              <DropdownMenuItem key={l.href} onSelect={() => (location.href = l.href)}>
+              <DropdownMenuItem key={l.href} onSelect={() => router.push(l.href)}>
                 <l.icon aria-hidden /> {l.label}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Staff screens</DropdownMenuLabel>
             {LINKS.filter((l) => l.group === "screens").map((l) => (
-              <DropdownMenuItem key={l.href} onSelect={() => (location.href = l.href)}>
+              <DropdownMenuItem key={l.href} onSelect={() => router.push(l.href)}>
                 <l.icon aria-hidden /> {l.label}
               </DropdownMenuItem>
             ))}
@@ -82,7 +85,7 @@ export default function ManagePage() {
         {/* phones and tablets: a sticky row of pills; desktop: a sidebar */}
         <aside className="line sticky top-16 z-10 border-b bg-(--surface) lg:h-[calc(100dvh-4rem)] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-4 lg:py-6">
           <p className="muted hidden px-3 pb-2 text-xs font-medium lg:block">Restaurant</p>
-          <TabsList className="px-3 py-2.5 sm:px-6 lg:flex-col lg:gap-0.5 lg:p-0" aria-label="Manage sections">
+          <TabsList className="px-4 py-2.5 sm:px-6 lg:flex-col lg:gap-0.5 lg:p-0" aria-label="Manage sections">
             {(Object.keys(TABS) as Tab[]).map((t) => {
               const Icon = TAB_ICON[t];
               return (
@@ -135,9 +138,9 @@ export default function ManagePage() {
 
 function SideLink({ href, label, icon: Icon }: { href: string; label: string; icon: LucideIcon }) {
   return (
-    <a href={href} className="group flex h-11 items-center gap-3 rounded-full px-3.5 text-[15px] font-medium transition hover:bg-(--sunken)">
+    <Link href={href} className="group flex h-11 items-center gap-3 rounded-full px-3.5 text-[15px] font-medium transition hover:bg-(--sunken)">
       <Icon className="h-4 w-4 transition group-hover:text-brand" aria-hidden />
       {label}
-    </a>
+    </Link>
   );
 }

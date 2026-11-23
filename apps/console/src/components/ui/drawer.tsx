@@ -31,7 +31,7 @@ export function DrawerHeader({ className, ...props }: ComponentProps<"div">) {
 }
 
 export function DrawerTitle({ className, ...props }: ComponentProps<typeof DrawerPrimitive.Title>) {
-  return <DrawerPrimitive.Title className={cn("text-2xl font-bold tracking-tight", className)} {...props} />;
+  return <DrawerPrimitive.Title className={cn("text-xl font-bold tracking-tight text-balance", className)} {...props} />;
 }
 
 export function DrawerDescription({ className, ...props }: ComponentProps<typeof DrawerPrimitive.Description>) {

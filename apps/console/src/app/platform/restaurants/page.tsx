@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HotelStatus, ResetPasswordInput, UpdateHotelInput, type PlatformHotel } from "@rms/contracts";
 import { Building2, CalendarClock, KeyRound, KeySquare, LogOut, Mail, Pencil, Rocket, Search, Settings2, Trash2, ShieldOff } from "lucide-react";
@@ -18,6 +19,7 @@ type Dialog = { kind: "details" | "plan" | "password"; hotel: PlatformHotel } | 
 /** Super admin: every restaurant on the platform; edit, change plan/status, help owners, delete. */
 export default function RestaurantsPage() {
   const qc = useQueryClient();
+  const router = useRouter();
   const hotels = useQuery({ queryKey: ["p", "hotels"], queryFn: () => api<PlatformHotel[]>("GET", "/v1/platform/hotels") });
   const plans = useQuery({ queryKey: ["p", "plans"], queryFn: () => api<Plan[]>("GET", "/v1/platform/plans") });
   const [q, setQ] = useState("");
@@ -192,7 +194,7 @@ export default function RestaurantsPage() {
                     )}
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>Owner</DropdownMenuLabel>
-                    <DropdownMenuItem onSelect={() => (location.href = `/platform/sessions/?hotel=${h.id}`)}>
+                    <DropdownMenuItem onSelect={() => router.push(`/platform/sessions/?hotel=${h.id}`)}>
                       <KeySquare aria-hidden /> View sign-ins
                     </DropdownMenuItem>
                     <DropdownMenuItem disabled={!h.owner?.email} onSelect={() => setDialog({ kind: "password", hotel: h })}>

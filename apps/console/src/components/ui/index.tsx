@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useState, type ButtonHTMLAttributes, type ComponentProps, type ReactNode } from "react";
+import Link from "next/link";
 import { ArrowLeftRight, CloudOff, RefreshCw, Router, type LucideIcon } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { useNet } from "@/lib/net";
@@ -12,7 +13,7 @@ import { RestroMark } from "../RestroMark";
 type Variant = "primary" | "outline" | "subtle" | "ghost" | "danger" | "success";
 
 const BUTTON_BASE =
-  "tap inline-flex items-center justify-center gap-2 rounded-full px-5 text-[15px] font-semibold transition duration-200 select-none active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-(--bg)";
+  "tap inline-flex max-w-full items-center justify-center gap-2 rounded-full px-4 text-[15px] leading-tight font-semibold transition sm:px-5 [&_svg]:shrink-0 [&_svg:not([class*='h-'])]:h-4.5 [&_svg:not([class*='w-'])]:w-4.5 duration-200 select-none active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-(--bg)";
 const BUTTON_VARIANT: Record<Variant, string> = {
   // orange pill = the main action; white pill with a hairline = secondary; tinted pill = tertiary
   primary: "bg-brand text-brand-ink shadow-[0_6px_16px_-8px_var(--color-brand)] hover:brightness-110 hover:shadow-[0_10px_22px_-8px_var(--color-brand)]",
@@ -27,9 +28,9 @@ export function Button({ variant = "primary", className = "", ...props }: Button
   return <button className={cn(BUTTON_BASE, BUTTON_VARIANT[variant], className)} {...props} />;
 }
 
-/** A link that looks like a button (same variants). */
-export function LinkButton({ variant = "outline", className = "", ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { variant?: Variant }) {
-  return <a className={cn(BUTTON_BASE, BUTTON_VARIANT[variant], className)} {...props} />;
+/** A link that looks like a button (same variants). In-app links swap the page without a full reload. */
+export function LinkButton({ variant = "outline", className = "", ...props }: ComponentProps<typeof Link> & { variant?: Variant }) {
+  return <Link className={cn(BUTTON_BASE, BUTTON_VARIANT[variant], className)} {...props} />;
 }
 
 /** Product mark (the Restro logo) used in headers and sign-in screens. */
@@ -53,26 +54,26 @@ export function NavLink({
   labelClass?: string;
 }) {
   return (
-    <a
+    <Link
       href={href}
       title={typeof children === "string" ? children : undefined}
       aria-label={typeof children === "string" ? children : undefined}
-      className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition sm:px-3.5 ${active ? "bg-brand/12 font-semibold text-brand" : "text-(--ink) hover:bg-(--sunken)"}`}
+      className={`inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition sm:h-10 sm:px-3.5 ${active ? "bg-brand/12 font-semibold text-brand" : "text-(--ink) hover:bg-(--sunken)"}`}
     >
       <Icon className="h-4.5 w-4.5" aria-hidden />
       <span className={labelClass}>{children}</span>
-    </a>
+    </Link>
   );
 }
 
 export function TopBar({ title, subtitle, online = true, children }: { title: string; subtitle?: string; online?: boolean; children?: ReactNode }) {
   return (
     <header className="no-print line sticky top-0 z-20 border-b bg-(--surface)/90 backdrop-blur-lg">
-      <div className="flex h-16 items-center gap-3 px-3 sm:px-6">
-        <BrandMark />
+      <div className="flex h-16 items-center gap-2.5 px-4 sm:gap-3 sm:px-6">
+        <BrandMark className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl">{title}</h1>
+            <h1 className="truncate text-base font-bold tracking-tight min-[380px]:text-lg sm:text-xl">{title}</h1>
             <span
               className={`h-2.5 w-2.5 shrink-0 rounded-full ${online ? "live-dot bg-fresh" : "animate-pulse bg-late"}`}
               role="img"
@@ -87,7 +88,7 @@ export function TopBar({ title, subtitle, online = true, children }: { title: st
           onClick={() => void signOut()}
           aria-label="Switch user"
           title="Switch user"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-(--sunken) transition hover:bg-(--line)"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-(--sunken) transition hover:bg-(--line) sm:h-10 sm:w-10"
         >
           <ArrowLeftRight className="h-5 w-5" aria-hidden />
         </button>
@@ -103,7 +104,7 @@ export function TopBar({ title, subtitle, online = true, children }: { title: st
 export function OfflineBanner({ online }: { online: boolean }) {
   const { mode, pending } = useNet();
   const waiting = pending > 0 ? ` ${pending} action${pending > 1 ? "s" : ""} waiting to sync.` : "";
-  const bar = "no-print flex items-center justify-center gap-2 px-4 py-2 text-center text-sm font-semibold";
+  const bar = "no-print flex items-center justify-center gap-2 px-4 py-2 text-center text-[13px] leading-snug font-semibold text-balance sm:text-sm";
   if (mode === "hub") {
     return (
       <div role="status" className={`${bar} bg-warn text-warn-ink`}>
@@ -142,14 +143,14 @@ export function OfflineBanner({ online }: { online: boolean }) {
 export { Field, FormError, SelectField, orNull, useForm } from "./form";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`surface rounded-2xl p-5 shadow-soft sm:p-6 ${className}`}>{children}</section>;
+  return <section className={`surface rounded-2xl p-4 shadow-soft min-[380px]:p-5 sm:p-6 ${className}`}>{children}</section>;
 }
 
 /** Card title row: heading, optional one-line explanation, optional action on the right. */
 export function CardHeader({ title, hint, action }: { title: string; hint?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3 sm:mb-5">
+      <div className="min-w-0 flex-1 basis-60">
         <h2 className="text-xl font-bold tracking-tight">{title}</h2>
         {hint && <p className="muted mt-1 max-w-2xl text-sm leading-relaxed">{hint}</p>}
       </div>
@@ -168,35 +169,35 @@ const TONE: Record<Tone, string> = {
 };
 
 export function Badge({ tone = "neutral", children, className = "" }: { tone?: Tone; children: ReactNode; className?: string }) {
-  return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${TONE[tone]} ${className}`}>{children}</span>;
+  return <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${TONE[tone]} ${className}`}>{children}</span>;
 }
 
 /** Big number tile for reports and the platform dashboard. */
 export function Stat({ label, value, hint, bad = false, icon: Icon }: { label: string; value: ReactNode; hint?: string; bad?: boolean; icon?: LucideIcon }) {
   return (
-    <div className={`surface lift rounded-2xl p-5 shadow-soft ${bad ? "ring-1 ring-late/50" : ""}`}>
+    <div className={`surface lift min-w-0 rounded-2xl p-4 shadow-soft sm:p-5 ${bad ? "ring-1 ring-late/50" : ""}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="muted text-sm font-medium">{label}</p>
+        <p className="muted min-w-0 text-[13px] leading-tight font-medium sm:text-sm">{label}</p>
         {Icon && (
-          <span className={`grid h-9 w-9 place-items-center rounded-xl ${bad ? "bg-late/12 text-late" : "bg-brand/12 text-brand"}`}>
-            <Icon className="h-4.5 w-4.5" aria-hidden />
+          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl sm:h-9 sm:w-9 ${bad ? "bg-late/12 text-late" : "bg-brand/12 text-brand"}`}>
+            <Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" aria-hidden />
           </span>
         )}
       </div>
-      <p className={`mt-3 font-display text-[28px] leading-none font-bold tracking-tight tabular-nums sm:text-[32px] ${bad ? "text-late" : ""}`}>{value}</p>
-      {hint && <p className="muted mt-0.5 text-xs">{hint}</p>}
+      <p className={`mt-3 font-display text-[26px] leading-none font-bold tracking-tight tabular-nums sm:text-[32px] ${bad ? "text-late" : ""}`}>{value}</p>
+      {hint && <p className="muted mt-1 text-xs leading-snug">{hint}</p>}
     </div>
   );
 }
 
 export function EmptyState({ icon: Icon, title, hint }: { icon: LucideIcon; title: string; hint?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 px-6 py-14 text-center">
-      <span className="grid h-14 w-14 animate-pop place-items-center rounded-full bg-brand/12 text-brand">
-        <Icon className="h-7 w-7" aria-hidden />
+    <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center sm:px-6 sm:py-14">
+      <span className="grid h-12 w-12 animate-pop place-items-center rounded-full bg-brand/12 text-brand sm:h-14 sm:w-14">
+        <Icon className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
       </span>
-      <p className="mt-2 text-xl font-bold tracking-tight">{title}</p>
-      {hint && <p className="muted max-w-sm text-sm">{hint}</p>}
+      <p className="mt-2 text-xl font-bold tracking-tight text-balance">{title}</p>
+      {hint && <p className="muted max-w-sm text-sm text-pretty">{hint}</p>}
     </div>
   );
 }

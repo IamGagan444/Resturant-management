@@ -36,6 +36,8 @@ const DEVICE_ROLES: Record<string, StaffRole[]> = {
 // Pairing codes: the owner creates one on their own phone and types it on the new device, so their
 // password never touches a staff device. 6 digits, one use, 10 minutes.
 const PAIR_CODE_TTL_SEC = 10 * 60;
+/** A refresh token presented again this soon after its rotation is a race (tabs, lost answer), not theft. */
+const REUSE_GRACE_MS = 30_000;
 const pairKey = (code: string) => `auth:pair-code:${code}`;
 interface PairCodeData {
   hotelId: string;
@@ -151,13 +153,23 @@ export async function authRoutes(app: FastifyInstance) {
     return { ok: true, accessToken };
   });
 
-  /** Rotate refresh token. Reuse of a rotated token revokes every session of that user (theft signal). */
+  /**
+   * Rotate refresh token. Reuse of a rotated token revokes every session of that user (theft signal) — except
+   * within REUSE_GRACE_MS of its rotation while the sign-in is still alive: that is two tabs refreshing at once
+   * (they share the cookie) or a refresh whose answer was lost on a bad network, not theft. Without this grace
+   * every 15-minute access-token expiry with two tabs open signed the user out everywhere.
+   */
   app.post("/v1/auth/refresh", async (req, reply) => {
     const raw = req.cookies[COOKIE.refresh];
     if (!raw) throw unauthorized();
     const rt = await unscopedDb.refreshToken.findUnique({ where: { tokenHash: sha256(raw) } });
     if (!rt || rt.expiresAt < new Date()) throw unauthorized();
-    if (rt.revokedAt) {
+    const justRotated =
+      rt.revokedAt !== null &&
+      Date.now() - rt.revokedAt.getTime() < REUSE_GRACE_MS &&
+      // the sign-in still has a live token (logout revokes it, so a signed-out token never gets this grace)
+      (await unscopedDb.refreshToken.count({ where: { familyId: rt.familyId, revokedAt: null, createdAt: { gte: rt.createdAt } } })) > 0;
+    if (rt.revokedAt && !justRotated) {
       await unscopedDb.refreshToken.updateMany({
         where: { subjectType: rt.subjectType, subjectId: rt.subjectId, revokedAt: null },
         data: { revokedAt: new Date() },
@@ -178,7 +190,7 @@ export async function authRoutes(app: FastifyInstance) {
       assertHotelOperational(await getHotel(s.hotelId));
       claims = { typ: "staff", sub: s.id, hid: s.hotelId, role: s.role, did: device?.id ?? null, sid: device?.stationId ?? s.stationId ?? null };
     }
-    await unscopedDb.refreshToken.update({ where: { id: rt.id }, data: { revokedAt: new Date() } });
+    if (!rt.revokedAt) await unscopedDb.refreshToken.update({ where: { id: rt.id }, data: { revokedAt: new Date() } });
     const { accessToken } = await issueSession(reply, claims, rt.familyId); // same sign-in, new tokens
     return { ok: true, accessToken };
   });

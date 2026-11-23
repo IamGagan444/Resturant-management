@@ -3,26 +3,21 @@
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { Toaster as Sonner, toast } from "sonner";
 import { describeError } from "@/lib/errors";
 import { Button } from "./index";
 import { Modal } from "./modal";
+import { showToast } from "./toast";
 
-/** Toasts (sonner), placed where they don't cover the bottom actions on phones. */
-export function Toaster() {
-  return (
-    <Sonner
-      position="top-center"
-      richColors
-      closeButton
-      toastOptions={{ className: "!rounded-2xl !font-sans !shadow-lift", duration: 4000 }}
-    />
-  );
-}
+export { Toaster } from "./toast";
 
+/** App-wide toasts. Errors get a friendly title with the reason underneath. */
 export const notify = {
-  ok: (message: string) => toast.success(message),
-  error: (e: unknown) => toast.error(describeError(e)),
+  ok: (message: string, description?: string) => showToast("success", message, description),
+  error: (e: unknown, title = "Couldn't do that") => showToast("error", title, describeError(e)),
+  info: (message: string, description?: string) => showToast("info", message, description),
+  warn: (message: string, description?: string) => showToast("warning", message, description),
+  /** new order or guest call: wiggling bell in the brand colour */
+  order: (message: string, description?: string) => showToast("order", message, description),
 };
 
 /**

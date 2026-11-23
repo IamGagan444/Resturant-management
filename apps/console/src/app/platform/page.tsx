@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import type { HotelStatus, PlatformOverview } from "@rms/contracts";
 import { AlertTriangle, ArrowRight, Building2, CalendarClock, CloudOff, KeySquare, Rocket, ShoppingBag, TrendingUp, Utensils } from "lucide-react";
@@ -33,7 +34,7 @@ export default function PlatformDashboard() {
         skeleton={
           <div className="space-y-6">
             <StatsSkeleton count={4} />
-            <div className="grid gap-6 xl:grid-cols-2">
+            <div className="grid gap-4 sm:gap-6 xl:grid-cols-2">
               <CardSkeleton lines={4} />
               <CardSkeleton lines={4} />
             </div>
@@ -62,7 +63,7 @@ export default function PlatformDashboard() {
                 </div>
               )}
 
-              <div className="stagger grid gap-6 xl:grid-cols-2">
+              <div className="stagger grid gap-4 sm:gap-6 xl:grid-cols-2">
                 <Card>
                   <CardHeader title="Restaurants by status" />
                   <div className="flex h-3 overflow-hidden rounded-full bg-(--sunken)">
@@ -132,9 +133,9 @@ export default function PlatformDashboard() {
                   <CardHeader
                     title="Recently onboarded"
                     action={
-                      <a href="/platform/restaurants/" className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">
+                      <Link href="/platform/restaurants/" className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">
                         All restaurants <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-                      </a>
+                      </Link>
                     }
                   />
                   {o.recentHotels.length === 0 ? (
