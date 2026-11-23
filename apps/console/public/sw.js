@@ -5,7 +5,7 @@
  *    /…/index.txt page data. Answering those from here once put that raw data on screen
  *    instead of the page, so the worker never touches them.
  */
-const CACHE = "rms-console-v2"; // v2: drops v1, which held router .txt data
+const CACHE = "rms-console-v3"; // v2: dropped v1, which held router .txt data; v3: drops pages cached from older deploys
 const SHELL = ["/", "/kds/", "/waiter/", "/device/", "/login/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -48,6 +48,16 @@ self.addEventListener("fetch", (event) => {
 
   // only whole-page loads; keep cached copies to real HTML pages
   if (req.mode !== "navigate") return;
+
+  // A page load of router data (/kds/index.txt?_rsc=…): Next hard-navigates there when this phone runs an older
+  // deploy than the server, which put the raw data on screen and kept it there on every refresh. Go to the page.
+  if (url.pathname.endsWith("/index.txt")) {
+    const page = new URL(url);
+    page.pathname = url.pathname.slice(0, -"index.txt".length);
+    page.searchParams.delete("_rsc");
+    event.respondWith(Response.redirect(page.href, 302));
+    return;
+  }
   event.respondWith(
     fetch(req)
       .then((res) => {

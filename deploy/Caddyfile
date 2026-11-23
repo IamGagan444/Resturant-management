@@ -32,6 +32,14 @@
 	@sourcemaps path *.map
 	respond @sourcemaps 404
 	root * /srv/console
+	# Next's router data (/page/index.txt?_rsc=…) opened as a page: a phone still running the previous deploy
+	# makes Next hard-navigate to that raw data URL (a Next bug), and every refresh showed the raw text.
+	# Send whole-page loads of it to the page itself; the router's own fetches (Sec-Fetch-Dest: empty) are untouched.
+	@routerDataAsPage {
+		path_regexp page ^(.*/)index\.txt$
+		header Sec-Fetch-Dest document
+	}
+	redir @routerDataAsPage {re.page.1} 302
 	# the service worker must never be cached, or devices keep an old app
 	header /sw.js Cache-Control "no-cache"
 	header /_next/static/* Cache-Control "public, max-age=31536000, immutable"
