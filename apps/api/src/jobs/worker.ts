@@ -5,7 +5,9 @@ import { getHotel } from "../lib/hotel";
 import { createRedis } from "../lib/redis";
 import { emit } from "../realtime/io";
 import { billView, PAYMENT_LOCK_MS, settleIfPaid } from "../services/billing";
+import { sendTest, sweepAll, sweepHotel } from "../services/alerts";
 import { waiterRooms } from "../services/notify";
+import { sessionLabel } from "../services/views";
 import { QUEUE, queue, type JobData } from "./queue";
 
 /** READY item not picked up within readyPickupAlertSec → alert managers (and the waiter again). */
@@ -20,7 +22,7 @@ async function pickupEscalation(hotelId: string, orderItemId: string) {
     emit("pickup:escalated", [rooms.managers(hotelId), ...(await waiterRooms(hotelId, tableId))], {
       hotelId,
       orderItemId,
-      tableLabel: item.order.session.table.label,
+      tableLabel: sessionLabel(item.order.session),
       itemName: item.nameSnapshot,
       waitingSec: Math.round((Date.now() - item.readyAt.getTime()) / 1000),
     });
@@ -29,14 +31,14 @@ async function pickupEscalation(hotelId: string, orderItemId: string) {
 
 /**
  * Periodic housekeeping across all hotels:
- *  - close abandoned sessions (no orders, idle past hotel.sessionIdleMin) and free their tables
+ *  - close abandoned sessions (no orders or only cancelled ones, nothing paid, idle past hotel.sessionIdleMin) and free their tables
  *  - cancel pay-now orders nobody paid for within UNPAID_ORDER_MIN
  *  - close tables that are fully paid (pay-now) and idle past hotel.sessionIdleMin
  *  - sweep idempotency keys older than 48h
  */
 async function maintenance() {
   const candidates = await unscopedDb.tableSession.findMany({
-    where: { status: "OPEN", orders: { none: {} } },
+    where: { status: "OPEN", orders: { every: { status: "CANCELLED" } }, payments: { none: { status: { in: ["SUCCESS", "PENDING"] } } } },
     select: { id: true, hotelId: true, tableId: true, lastActivityAt: true },
   });
   for (const s of candidates) {
@@ -98,12 +100,15 @@ export async function startWorker() {
     async (job) => {
       if (job.data.kind === "pickup-escalation") return pickupEscalation(job.data.hotelId, job.data.orderItemId);
       if (job.data.kind === "maintenance") return maintenance();
+      if (job.data.kind === "alerts") return job.data.hotelId ? sweepHotel(job.data.hotelId) : sweepAll();
+      if (job.data.kind === "alert-test") return sendTest(job.data.hotelId, job.data.subscriptionId);
     },
     { connection, concurrency: 10 },
   );
   worker.on("error", () => {}); // connection errors are logged by createRedis
   worker.on("failed", (job, err) => console.error(`job ${job?.id} failed:`, err.message));
   await queue.upsertJobScheduler("maintenance", { every: 10 * 60_000 }, { name: "maintenance", data: { kind: "maintenance" } });
+  await queue.upsertJobScheduler("alerts", { every: 10_000 }, { name: "alerts", data: { kind: "alerts" }, opts: { removeOnComplete: true, removeOnFail: 20 } });
   return async () => {
     await worker.close();
     connection.disconnect();

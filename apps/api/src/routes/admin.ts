@@ -1,6 +1,8 @@
+import { reachableStaffIds } from "../services/alerts";
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import PDFDocument from "pdfkit";
+import { TABLE_CODE_ALPHABET, TABLE_CODE_LENGTH, formatTableCode } from "@rms/domain";
 import QRCode from "qrcode";
 import { z } from "zod";
 import { db, unscopedDb, type Prisma } from "@rms/db";
@@ -39,6 +41,12 @@ import { invalidateMenu } from "../services/menu";
 import { resetMfa } from "./login";
 
 const IdParam = z.object({ id: Id });
+
+/** New QR and typed code together: an old print must not keep working either way. */
+const freshQr = () => ({
+  qrToken: randomBytes(12).toString("base64url"),
+  code: Array.from(randomBytes(TABLE_CODE_LENGTH), (b) => TABLE_CODE_ALPHABET[b % TABLE_CODE_ALPHABET.length]).join(""), // 256 is a multiple of 32: no bias
+});
 
 export const qrUrl = (slug: string, qrToken: string) => `${env.CUSTOMER_URL}/h/${slug}/t/${qrToken}`;
 
@@ -162,7 +170,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const existing = await db.table.findFirst({ where: { label: input.label } });
       if (existing?.isActive) throw conflict("TABLE_EXISTS", `There's already a table called ${input.label}`);
       const t = existing
-        ? await db.table.update({ where: { id: existing.id }, data: { ...data, qrToken: randomBytes(12).toString("base64url") } })
+        ? await db.table.update({ where: { id: existing.id }, data: { ...data, ...freshQr() } })
         : await db.table.create({ data: { hotelId: ctx.hid, ...data } });
       reply.status(201);
       return { ...t, qrUrl: qrUrl((await getHotel(ctx.hid)).slug, t.qrToken) };
@@ -174,6 +182,9 @@ export async function adminRoutes(app: FastifyInstance) {
       const { id } = parse(IdParam, req.params);
       const input = parse(TablePatch, req.body);
       await assertOwned("floor", [input.floorId]);
+      if (input.isParcelCounter !== undefined && (await db.tableSession.count({ where: { tableId: id, status: { in: ["OPEN", "BILLING"] } } }))) {
+        throw conflict("TABLE_IN_USE", "Close its open bills before changing this");
+      }
       if (input.label) {
         const clash = await db.table.findFirst({ where: { label: input.label, id: { not: id } }, select: { isActive: true } });
         if (clash) {
@@ -214,7 +225,7 @@ export async function adminRoutes(app: FastifyInstance) {
     "/v1/admin/tables/:id/rotate-qr",
     staff(MANAGERS, async (req, _reply, ctx) => {
       const { id } = parse(IdParam, req.params);
-      const t = await db.table.update({ where: { id }, data: { qrToken: randomBytes(12).toString("base64url") } });
+      const t = await db.table.update({ where: { id }, data: freshQr() });
       await audit(ctx.sub, "QR_ROTATED", "Table", id);
       return { ...t, qrUrl: qrUrl((await getHotel(ctx.hid)).slug, t.qrToken) };
     }),
@@ -229,7 +240,7 @@ export async function adminRoutes(app: FastifyInstance) {
         where: { isActive: true, ...(floorId ? { floorId } : {}) },
         orderBy: { label: "asc" },
       });
-      const pdf = await qrSheet(hotel.name, tables.map((t) => ({ label: t.label, url: qrUrl(hotel.slug, t.qrToken) })));
+      const pdf = await qrSheet(hotel.name, tables.map((t) => ({ label: t.label, code: t.code, isParcelCounter: t.isParcelCounter, url: qrUrl(hotel.slug, t.qrToken) })));
       return reply.header("content-type", "application/pdf").header("content-disposition", 'inline; filename="table-qr.pdf"').send(pdf);
     }),
   );
@@ -247,7 +258,10 @@ export async function adminRoutes(app: FastifyInstance) {
     createdAt: true,
   } satisfies Prisma.StaffSelect;
 
-  app.get("/v1/admin/staff", staff(MANAGERS, async () => db.staff.findMany({ select: staffSelect, orderBy: [{ role: "asc" }, { name: "asc" }] })));
+  app.get("/v1/admin/staff", staff(MANAGERS, async (_req, _reply, ctx) => {
+    const [people, ringing] = await Promise.all([db.staff.findMany({ select: staffSelect, orderBy: [{ role: "asc" }, { name: "asc" }] }), reachableStaffIds(ctx.hid)]);
+    return people.map((p) => ({ ...p, alertsOn: ringing.has(p.id) }));
+  }));
 
   app.post(
     "/v1/admin/staff",
@@ -323,7 +337,7 @@ export async function adminRoutes(app: FastifyInstance) {
     }),
   );
 
-  /** Owner only: a manager lost their authenticator phone. Their next sign-in sets up a new one. (Owners ask the platform.) */
+  /** Owner only: a manager lost their authenticator phone. Two-step sign-in is off until they set it up again. (Owners ask the platform.) */
   app.post(
     "/v1/admin/staff/:id/mfa-reset",
     staff(MANAGERS, async (req, _reply, ctx) => {
@@ -456,7 +470,7 @@ export async function adminRoutes(app: FastifyInstance) {
   );
 }
 
-async function qrSheet(hotelName: string, cards: { label: string; url: string }[]): Promise<Buffer> {
+async function qrSheet(hotelName: string, cards: { label: string; code: string; isParcelCounter: boolean; url: string }[]): Promise<Buffer> {
   const doc = new PDFDocument({ size: "A4", margin: 36 });
   const chunks: Buffer[] = [];
   doc.on("data", (c: Buffer) => chunks.push(c));
@@ -474,12 +488,21 @@ async function qrSheet(hotelName: string, cards: { label: string; url: string }[
     const x = 36 + (slot % cols) * cellW;
     const y = 36 + Math.floor(slot / cols) * cellH;
     doc.roundedRect(x + 6, y + 6, cellW - 12, cellH - 12, 10).lineWidth(1).stroke("#cccccc");
-    doc.fillColor("#111111").fontSize(14).text(hotelName, x, y + 20, { width: cellW, align: "center" });
+    // one line each, whatever the length, so nothing runs into the QR or the next line
+    const line = (text: string, top: number, size: number, opts: { bold?: boolean; color?: string } = {}) =>
+      doc
+        .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
+        .fontSize(size)
+        .fillColor(opts.color ?? "#111111")
+        .text(text, x + 14, y + top, { width: cellW - 28, height: size, ellipsis: true, align: "center" });
+    line(hotelName, 16, 13);
     const png = await QRCode.toBuffer(card.url, { margin: 1, width: 360, errorCorrectionLevel: "M" });
-    const size = Math.min(cellW, cellH) - 110;
-    doc.image(png, x + (cellW - size) / 2, y + 44, { width: size, height: size });
-    doc.fontSize(22).text(card.label, x, y + 52 + size, { width: cellW, align: "center" });
-    doc.fontSize(10).fillColor("#555555").text("Scan to see the menu and order", x, y + 80 + size, { width: cellW, align: "center" });
+    const size = 124;
+    doc.image(png, x + (cellW - size) / 2, y + 34, { width: size, height: size });
+    line(card.label, 162, 19, { bold: true });
+    line(card.isParcelCounter ? "Scan to order a parcel" : "Scan to see the menu and order", 184, 9, { color: "#555555" });
+    line(`${card.isParcelCounter ? "Code" : "Table code"}: ${formatTableCode(card.code)}`, 202, 15, { bold: true });
+    line(`Can't scan? Go to ${new URL(card.url).host} and type the code`, 223, 8, { color: "#555555" });
   }
   if (cards.length === 0) doc.fontSize(14).text("No tables yet.");
   doc.end();

@@ -3,14 +3,17 @@
 import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BillView, SendBillResult, SplitBillInput } from "@rms/contracts";
+import { parcelNumber } from "@rms/domain";
 import { api, newClientId, rupees, toPaise } from "@/lib/api";
 import { useGuard } from "@/lib/auth";
+import { AlertsBar } from "@/components/AlertsBar";
 import { chime, unlockSound, useStaffSocket } from "@/lib/realtime";
 import { ArrowLeft, BarChart3, Banknote, Bell, CheckCircle2, CreditCard, MessageCircle, Printer, ReceiptText, Smartphone } from "lucide-react";
-import { Badge, Button, Card, EmptyState, ErrorText, Field, NavLink, OfflineBanner, TopBar } from "@/components/ui";
+import { ParcelTag, Badge, Button, Card, EmptyState, ErrorText, Field, NavLink, OfflineBanner, TopBar } from "@/components/ui";
 import { QueryError } from "@/components/ui/feedback";
 import { ListSkeleton } from "@/components/ui/skeleton";
 
+const placeName = (label: string) => (parcelNumber(label) ? label : `Table ${label}`);
 const pct = (bps: number) => `${(bps / 100).toFixed(bps % 100 ? 1 : 0)}%`;
 
 /** Counter: every live table's running bill. Collect in one tap (amount defaults to what's due). */
@@ -47,6 +50,7 @@ export default function CashierPage() {
         </Button>
       </TopBar>
       <OfflineBanner online={online} />
+      <AlertsBar enabled waiting={true} />
       <div className="mx-auto grid max-w-7xl gap-5 px-4 py-4 sm:px-6 sm:py-6 md:grid-cols-[minmax(280px,1fr)_1.35fr] md:items-start">
         <section className={`no-print md:sticky md:top-20 ${open ? "hidden md:block" : ""}`} aria-label="Open bills">
           <h2 className="muted mb-3 flex items-center justify-between text-xs font-bold tracking-wider uppercase">
@@ -137,7 +141,7 @@ function BillPanel({ bill, onChange }: { bill: BillView; onChange: (b?: BillView
   return (
     <Card>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-2xl font-extrabold tracking-tight">Table {bill.tableLabel}</h2>
+        <h2 className="text-2xl font-extrabold tracking-tight">{placeName(bill.tableLabel)}</h2>
         <Badge className="capitalize">{bill.status.replace("_", " ").toLowerCase()}</Badge>
       </div>
       <ul className="mt-4 space-y-1.5">
@@ -145,7 +149,7 @@ function BillPanel({ bill, onChange }: { bill: BillView; onChange: (b?: BillView
           <li key={l.orderItemId} className="flex justify-between gap-3">
             <span className="min-w-0">
               {l.quantity} × {l.name}
-              {l.variantName ? ` (${l.variantName})` : ""}
+              {l.variantName ? ` (${l.variantName})` : ""} {l.isParcel && <ParcelTag />}
               {l.guestName && <span className="muted text-xs"> · {l.guestName}</span>}
             </span>
             <span className="tabular-nums">{rupees(l.amount)}</span>
@@ -367,7 +371,7 @@ function SettledPanel({ bill, onDone }: { bill: BillView; onDone: () => void }) 
       <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-fresh/12 text-fresh">
         <CheckCircle2 className="h-9 w-9" aria-hidden />
       </span>
-      <h2 className="mt-3 text-center text-2xl font-extrabold tracking-tight">Table {bill.tableLabel} paid</h2>
+      <h2 className="mt-3 text-center text-2xl font-extrabold tracking-tight">{placeName(bill.tableLabel)} paid</h2>
       <p className="muted text-center">
         {bill.billNumber} · {rupees(bill.total)}
       </p>

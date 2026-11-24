@@ -12,7 +12,7 @@ import { RecoveryCodes, ScanAndConfirm } from "@/components/Authenticator";
 
 /**
  * Two-step sign-in for the signed-in person's own email + password login.
- * Required: it was set up at first sign-in; here it can be moved to a new phone (password + a current code).
+ * Optional for owners and managers (turn on / off here). Required for platform admins: only moved to a new phone.
  */
 export function TwoStepCard() {
   const qc = useQueryClient();
@@ -66,7 +66,7 @@ export function TwoStepCard() {
         hint={
           enabled
             ? `After your password, sign-in asks for a code from your authenticator app. ${recoveryCodesLeft} recovery codes left.`
-            : "After your password, sign-in also asks for a code from an authenticator app on your phone."
+            : "Optional. When on, sign-in also asks for a code from an authenticator app on your phone."
         }
         action={enabled ? <Badge tone="fresh">On</Badge> : <Badge>Off</Badge>}
       />

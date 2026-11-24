@@ -31,7 +31,7 @@ import { emit } from "../realtime/io";
 import { loadPublicMenu } from "../services/menu";
 import { bumpOrder, replaceItem, transitionItem } from "../services/items";
 import { releaseOrders } from "../services/orders";
-import { afterPayment, billView, liveBill, receiptUrl, settleIfPaid, splitBill } from "../services/billing";
+import { afterPayment, assertNothingPending, billView, liveBill, receiptUrl, settleAfterReject, settleIfPaid, splitBill } from "../services/billing";
 import { dayReport, floorView } from "../services/reports";
 import { waiterRooms } from "../services/notify";
 import { toOrderView } from "../services/views";
@@ -145,6 +145,7 @@ export async function staffRoutes(app: FastifyInstance) {
       });
       if (!r) throw conflict("NOT_PENDING", "Order is no longer waiting for confirmation");
       emit("order:cancelled", [rooms.session(r.sessionId), rooms.managers(ctx.hid)], { hotelId: ctx.hid, orderId: id, sessionId: r.sessionId, reason });
+      await settleAfterReject(r.sessionId);
       return { ok: true };
     }),
   );
@@ -332,6 +333,7 @@ export async function staffRoutes(app: FastifyInstance) {
       if (view.status !== "PAID") {
         if (view.due > 0) throw conflict("BILL_DUE", "This table still has an unpaid bill");
         if (view.paid === 0) throw conflict("NOTHING_PAID", "Nothing was ordered and paid at this table");
+        await assertNothingPending(id);
         await settleIfPaid(id);
       }
       return billView(id);

@@ -17,6 +17,7 @@ export const StaffOrderLine = z.object({
   addonIds: z.array(Id).max(50).default([]),
   quantity: z.number().int().min(1).max(50),
   note: z.string().trim().max(140).nullish(),
+  isParcel: z.boolean().default(false),
 });
 export const StaffPlaceOrderInput = z.object({
   clientId: ClientId,
@@ -38,6 +39,7 @@ export const OrderItemView = z.object({
   unitPrice: Paise,
   quantity: z.number().int(),
   note: z.string().nullable(),
+  isParcel: z.boolean(),
   status: ItemStatus,
   startedAt: z.string().nullable(),
   readyAt: z.string().nullable(),
@@ -50,6 +52,7 @@ export type OrderItemView = z.infer<typeof OrderItemView>;
 export const OrderView = z.object({
   id: Id,
   sessionId: Id,
+  tableId: Id,
   tableLabel: z.string(),
   orderNumber: z.number().int(),
   source: OrderSource,
@@ -94,6 +97,7 @@ export type CreateRequestInput = z.infer<typeof CreateRequestInput>;
 export const ServiceRequestView = z.object({
   id: Id,
   sessionId: Id,
+  tableId: Id,
   tableLabel: z.string(),
   type: RequestType,
   note: z.string().nullable(),

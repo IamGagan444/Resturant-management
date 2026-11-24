@@ -4,13 +4,21 @@ import { SessionStatus, TableStatus } from "./enums";
 
 export const TableLookup = z.object({
   hotel: z.object({ id: Id, name: z.string(), slug: z.string() }),
-  table: z.object({ id: Id, label: z.string(), status: TableStatus }),
+  table: z.object({ id: Id, label: z.string(), status: TableStatus, isParcelCounter: z.boolean() }),
   /** true if a session is already running at this table → joining needs the join code */
   hasOpenSession: z.boolean(),
   /** true if this device is already a guest of the open session (rejoin without code) */
   isMember: z.boolean(),
 });
 export type TableLookup = z.infer<typeof TableLookup>;
+
+/** POST /p/table-code: the code printed under the QR, as typed (spaces, dashes and case don't matter). */
+export const TableCodeInput = z.object({ code: z.string().max(40) });
+/** Where that table's QR leads. */
+export interface TableCodeResult {
+  slug: string;
+  qrToken: string;
+}
 
 export const JoinSessionInput = z.object({
   qrToken: z.string().min(1),
@@ -36,6 +44,7 @@ export const CartItem = z.object({
   addonNames: z.array(z.string()),
   quantity: z.number().int().min(1).max(50),
   note: z.string().max(140).nullable(),
+  isParcel: z.boolean(),
   /** Server-computed. 0 when the line is no longer valid (item went out of stock etc.). */
   unitPrice: Paise,
   lineTotal: Paise,
@@ -50,6 +59,7 @@ export const UpsertCartItemInput = z.object({
   addonIds: z.array(Id).max(20).default([]),
   quantity: z.number().int().min(1).max(50),
   note: z.string().trim().max(140).nullish(),
+  isParcel: z.boolean().default(false),
 });
 export type UpsertCartItemInput = z.infer<typeof UpsertCartItemInput>;
 
@@ -64,6 +74,8 @@ export const SessionView = z.object({
   id: Id,
   status: SessionStatus,
   tableLabel: z.string(),
+  /** walk-in parcel: everything is packed */
+  isParcel: z.boolean(),
   joinCode: z.string().nullable(), // only sent to the host guest and staff
   isConfirmed: z.boolean(),
   me: Guest,

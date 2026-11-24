@@ -50,7 +50,7 @@ const Env = z.object({
     .default("loopback, linklocal, uniquelocal")
     .refine((v) => v !== "true", "TRUST_PROXY=true trusts spoofed X-Forwarded-For; list proxy addresses instead")
     .transform((v): string | boolean => (v === "false" ? false : v)),
-  /** Password sign-in needs an authenticator code too (enrolled at first sign-in). Mandatory in production. */
+  /** Platform admins need an authenticator (enrolled at first sign-in); mandatory in production. Optional for owners and managers. */
   MFA_REQUIRED: z
     .enum(["true", "false"])
     .default("true")
@@ -77,7 +77,7 @@ if (parsed.data.NODE_ENV === "production" && !parsed.data.COOKIE_SECURE) {
   throw new Error("COOKIE_SECURE must be true in production (auth cookies would travel over plain HTTP)");
 }
 if (parsed.data.NODE_ENV === "production" && !parsed.data.MFA_REQUIRED) {
-  throw new Error("MFA_REQUIRED must be true in production (password-only sign-in to the admin is not allowed)");
+  throw new Error("MFA_REQUIRED must be true in production (password-only platform admin sign-in is not allowed)");
 }
 if (parsed.data.NODE_ENV === "production" && (!parsed.data.DATABASE_PLATFORM_URL || parsed.data.DATABASE_PLATFORM_URL === parsed.data.DATABASE_URL)) {
   throw new Error("Production needs DATABASE_URL (role rms_app) and a different DATABASE_PLATFORM_URL (role rms_platform)");

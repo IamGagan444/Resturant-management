@@ -4,3 +4,5 @@ export * from "./pricing";
 export * from "./bill";
 export * from "./time";
 export * from "./kitchen";
+export * from "./tableCode";
+export * from "./parcel";

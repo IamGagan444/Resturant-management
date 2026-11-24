@@ -89,7 +89,7 @@ Fill in `deploy/.env`:
   - `POSTGRES_PASSWORD` is the tables' owner. Only the one-shot `migrate` service gets it. The API connects as `rms_app` (row-level security limits it to one restaurant per request) and `rms_platform` (sign-in, platform admin, jobs), and refuses to start in production on any role that could bypass row-level security.
   - **Do not reuse** the values from your PC's `.env`.
   - **Keep `ENCRYPTION_KEY` safe:** it decrypts each hotel's Razorpay secrets.
-- **`ADMIN_EMAIL` / `ADMIN_PASSWORD`:** your super admin login. The password must be at least 12 characters. Two-step sign-in is required: at the first sign-in you scan a QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…) and save the recovery codes it shows. Lost the phone and the codes? Set `ADMIN_RESET_MFA=true` in `deploy/.env`, redeploy, sign in (you set up a new authenticator), then remove the line.
+- **`ADMIN_EMAIL` / `ADMIN_PASSWORD`:** your super admin login. The password must be at least 12 characters. Two-step sign-in is required for the super admin (optional for owners and managers): at the first sign-in you scan a QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…) and save the recovery codes it shows. Lost the phone and the codes? Set `ADMIN_RESET_MFA=true` in `deploy/.env`, redeploy, sign in (you set up a new authenticator), then remove the line.
 - **Menu photos (`STORAGE_DRIVER=s3`):** copy the `S3_*` values from your PC's `.env`. Check that the region in `S3_PUBLIC_URL` matches the bucket's region (yours is `ap-south-2`, Hyderabad), or photo links will break.
 
 `deploy/.env` is ignored by git. Never commit it.

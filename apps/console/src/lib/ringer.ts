@@ -36,6 +36,8 @@ export const RING_EVERY_MS = 1400;
 export function ring() {
   // four quick buzzes in step with the beeps, then one long one
   buzz([180, 60, 180, 60, 180, 60, 180, 60, 400]);
+  // phones suspend sound when the screen locks; wake it up again (the next burst is heard)
+  if (ctx && ctx.state !== "running") void ctx.resume();
   if (!ctx || ctx.state !== "running") return;
   const out = ctx.createGain();
   out.gain.value = 0.3;

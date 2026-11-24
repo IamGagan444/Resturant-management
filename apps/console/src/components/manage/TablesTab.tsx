@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FloorInput, TableInput } from "@rms/contracts";
+import { formatTableCode } from "@rms/domain";
 import { Download, ExternalLink, Layers, Plus, QrCode, RefreshCw, Trash2 } from "lucide-react";
 import { API_URL, api } from "@/lib/api";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, FormError, SelectField, orNull, useForm } from "@/components/ui";
@@ -10,7 +11,7 @@ import { Loadable, confirm, notify } from "@/components/ui/feedback";
 import { ListSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 interface Floor { id: string; name: string }
-interface Table { id: string; label: string; seats: number; floorId: string | null; status: string; isActive: boolean; qrUrl: string }
+interface Table { id: string; label: string; seats: number; floorId: string | null; status: string; isActive: boolean; qrUrl: string; code: string; isParcelCounter: boolean }
 
 export function TablesTab() {
   const qc = useQueryClient();
@@ -24,6 +25,15 @@ export function TablesTab() {
     schema: TableInput,
     build: (v) => ({ label: v.label.trim(), seats: v.seats.trim() === "" ? undefined : Number(v.seats), floorId: orNull(v.floorId) }),
   });
+  const addCounter = async () => {
+    try {
+      await api("POST", "/v1/admin/tables", { label: "Parcel counter", seats: 1, isParcelCounter: true });
+      notify.ok("Parcel counter added. Print its QR from the sheet.");
+      refresh();
+    } catch (e) {
+      notify.error(e);
+    }
+  };
   const addTable = table.submit(async (body) => {
     if (tables.data?.some((t) => t.isActive && t.label.toLowerCase() === body.label.toLowerCase())) {
       return table.setFormError(`There's already a table called ${body.label}.`);
@@ -51,7 +61,7 @@ export function TablesTab() {
   async function newQr(t: Table) {
     const ok = await confirm({
       title: `New QR code for ${t.label}?`,
-      description: "The QR code printed on this table stops working. Print the new one from the QR sheet and replace it.",
+      description: "The QR code and table code printed on this table stop working. Print the new one from the QR sheet and replace it.",
       confirmLabel: "Make new QR",
     });
     if (!ok) return;
@@ -65,7 +75,7 @@ export function TablesTab() {
   }
 
   async function remove(t: Table) {
-    if (!(await confirm({ title: `Remove table ${t.label}?`, description: "Its QR code stops working. Past bills are kept.", confirmLabel: "Remove table", destructive: true }))) return;
+    if (!(await confirm({ title: `Remove table ${t.label}?`, description: "Its QR code and table code stop working. Past bills are kept.", confirmLabel: "Remove table", destructive: true }))) return;
     try {
       await api("DELETE", `/v1/admin/tables/${t.id}`);
       qc.setQueryData<Table[]>(["admin", "tables"], (old) => old?.filter((x) => x.id !== t.id));
@@ -81,7 +91,7 @@ export function TablesTab() {
       <Card>
         <CardHeader
           title="Tables"
-          hint="Each table gets its own QR code. Print the sheet and stick one on every table."
+          hint="Each table gets its own QR code, with a table code below it for guests who can't scan. Print the sheet and stick one on every table."
           action={
             <a
               href={`${API_URL}/v1/admin/tables/qr-sheet.pdf`}
@@ -114,6 +124,17 @@ export function TablesTab() {
             </div>
           )}
         </form>
+        {tables.data && !tables.data.some((t) => t.isActive && t.isParcelCounter) && (
+          <div className="line mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 sm:p-4">
+            <p className="min-w-0 flex-1 text-sm">
+              <strong>Walk-in parcels?</strong> <span className="muted">Add a parcel counter: customers scan its QR, order, and get a token. Many can order at the same time.</span>
+            </p>
+            <Button variant="outline" onClick={() => void addCounter()}>
+              <Plus className="h-4 w-4" aria-hidden />
+              Add parcel counter
+            </Button>
+          </div>
+        )}
         <Loadable query={tables} skeleton={<ListSkeleton rows={6} cols={2} />}>
           {(all) => {
             const list = all.filter((t) => t.isActive);
@@ -125,12 +146,15 @@ export function TablesTab() {
                     <span className="grid h-12 min-w-12 shrink-0 place-items-center rounded-xl bg-brand/10 px-2 text-lg font-extrabold text-brand">{t.label}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold">
-                        {floorName(t.floorId)} · {t.seats} seats
+                        {t.isParcelCounter ? "Walk-in parcels: each scan is its own order" : `${floorName(t.floorId)} · ${t.seats} seats`}
                       </span>
                       <span className="mt-1 flex flex-wrap items-center gap-2">
-                        <Badge tone={t.status === "FREE" ? "fresh" : "brand"} className="capitalize">
-                          {t.status.toLowerCase().replace("_", " ")}
+                        <Badge tone={t.isParcelCounter || t.status !== "FREE" ? "brand" : "fresh"} className="capitalize">
+                          {t.isParcelCounter ? "parcel" : t.status.toLowerCase().replace("_", " ")}
                         </Badge>
+                        <span className="muted text-xs">
+                          Code <strong className="tracking-wider text-(--ink)">{formatTableCode(t.code)}</strong>
+                        </span>
                         <a href={t.qrUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-brand hover:underline">
                           Guest page
                           <ExternalLink className="h-3 w-3" aria-hidden />

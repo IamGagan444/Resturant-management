@@ -1,3 +1,4 @@
+import { sessionLabel } from "./views";
 import { db, type Hotel } from "@rms/db";
 import type { DayReport, FloorView } from "@rms/contracts";
 import { businessDayRange } from "@rms/domain";
@@ -111,15 +112,17 @@ export async function floorView(hotel: Hotel): Promise<FloorView> {
     db.order.findMany({ where: { sessionId: { in: sessionIds }, status: "PENDING_CONFIRMATION" }, select: { sessionId: true } }),
     Promise.all(sessionIds.map((id) => billView(id))), // recomputes, so totals include orders nobody has billed yet
   ]);
-  const count = (sid: string, st: string) => items.filter((i) => i.order.sessionId === sid && i.status === st).length;
   const now = Date.now();
-  const labelOf = new Map(tables.flatMap((t) => t.sessions.map((s) => [s.id, t.label] as const)));
+  const labelOf = new Map(tables.flatMap((t) => t.sessions.map((s) => [s.id, sessionLabel({ ...s, table: t })] as const)));
 
   return {
     floors,
     tables: tables.map((t) => {
       const s = t.sessions[0];
-      const bill = s ? bills.find((b) => b.sessionId === s.id) : undefined;
+      // a table has one session; a parcel counter adds up all its open parcels
+      const ids = new Set(t.sessions.map((x) => x.id));
+      const own = bills.filter((b) => ids.has(b.sessionId));
+      const counted = (...sts: string[]) => items.filter((i) => ids.has(i.order.sessionId) && sts.includes(i.status)).length;
       return {
         id: t.id,
         label: t.label,
@@ -131,14 +134,14 @@ export async function floorView(hotel: Hotel): Promise<FloorView> {
         session: s
           ? {
               id: s.id,
-              guestCount: s._count.guests,
+              guestCount: t.sessions.reduce((n, x) => n + x._count.guests, 0),
               openedAt: s.openedAt.toISOString(),
-              total: bill?.total ?? 0,
-              due: bill?.due ?? 0,
-              cooking: count(s.id, "QUEUED") + count(s.id, "COOKING"),
-              ready: count(s.id, "READY"),
-              openRequests: requests.find((r) => r.sessionId === s.id)?._count ?? 0,
-              pendingConfirm: pending.some((p) => p.sessionId === s.id),
+              total: own.reduce((n, b) => n + b.total, 0),
+              due: own.reduce((n, b) => n + b.due, 0),
+              cooking: counted("QUEUED", "COOKING"),
+              ready: counted("READY"),
+              openRequests: requests.filter((r) => ids.has(r.sessionId)).reduce((n, r) => n + r._count, 0),
+              pendingConfirm: pending.some((p) => ids.has(p.sessionId)),
             }
           : null,
       };

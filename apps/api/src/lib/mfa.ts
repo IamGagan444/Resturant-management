@@ -11,13 +11,14 @@ import { normalizeRecoveryCode, verifyTotp } from "./totp";
  * Two-step sign-in for password accounts (platform admins, owners, managers) and brute-force limits.
  * PIN sign-in on a paired device is already two factors (the paired device + the PIN), so it is not affected.
  *
- * With MFA_REQUIRED (default, and mandatory in production) a password alone never opens a session:
- * accounts without an authenticator are walked through enrolling it right at sign-in.
+ * Owners and managers choose: whoever turned it on is always asked for a code, everyone else signs in with
+ * the password. Platform admins reach every restaurant, so with MFA_REQUIRED (default, and mandatory in
+ * production) they are walked through enrolling an authenticator right at sign-in.
  */
 
 export type AccountKind = "platform" | "staff";
 
-export const mfaRequired = () => env.MFA_REQUIRED;
+export const mfaRequired = (kind: AccountKind) => kind === "platform" && env.MFA_REQUIRED;
 
 export interface MfaAccount {
   id: string;
@@ -57,7 +58,7 @@ export async function updateAccount(kind: AccountKind, id: string, data: MfaData
   else await unscopedDb.staff.update({ where: { id }, data });
 }
 
-/** Everything about the second factor wiped: the next sign-in enrolls a new authenticator. */
+/** Everything about the second factor wiped. Platform admins enroll a new authenticator at the next sign-in; for others it is simply off. */
 export const MFA_CLEARED: MfaData = { mfaSecretEnc: null, mfaPendingSecretEnc: null, mfaEnabledAt: null, mfaLastStep: null, mfaRecoveryHashes: [] };
 
 /**

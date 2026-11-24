@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import type { PublicMenu, PublicMenuItem } from "@rms/contracts";
 import { isWithinWindow, priceLine, type PricingAddonGroup } from "@rms/domain";
 import { useI18n, type Lang } from "@/lib/i18n";
-import { Flame, Minus, Plus, Search } from "lucide-react";
+import { Flame, Minus, Package, Plus, Search } from "lucide-react";
 import { Button, FoodMark, Sheet, rupees } from "./ui";
 
 export const tName = (item: { name: string; translations: PublicMenuItem["translations"] }, lang: Lang) =>
@@ -12,12 +12,16 @@ export const tName = (item: { name: string; translations: PublicMenuItem["transl
 
 const tDesc = (item: PublicMenuItem, lang: Lang) => (lang !== "en" && item.translations?.[lang]?.description) || item.description;
 
+/** Walk-in parcel: everything is packed, so there is nothing to choose. */
+export const AllParcel = createContext(false);
+
 export interface AddLine {
   itemId: string;
   variantId: string | null;
   addonIds: string[];
   quantity: number;
   note: string | null;
+  isParcel: boolean;
 }
 
 /** Categories → orderable items, filtered. Shared by the menu and the out-of-stock swap picker. */
@@ -260,6 +264,8 @@ function ItemSheet({
   );
   const [qty, setQty] = useState(fixedQty ?? 1);
   const [note, setNote] = useState("");
+  const allParcel = useContext(AllParcel);
+  const [isParcel, setIsParcel] = useState(allParcel);
   const [busy, setBusy] = useState(false);
   const desc = tDesc(item, lang);
 
@@ -343,6 +349,19 @@ function ItemSheet({
         </label>
       )}
 
+      {fixedQty === undefined && !allParcel && (
+        <label className="tap mb-5 flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-(--sunken) px-4 py-2.5">
+          <span className="flex items-center gap-3">
+            <Package className="h-5 w-5 shrink-0 text-brand" aria-hidden />
+            <span>
+              <span className="block text-sm font-bold">{t("parcelThis")}</span>
+              <span className="muted block text-xs">{t("parcelHint")}</span>
+            </span>
+          </span>
+          <input type="checkbox" checked={isParcel} onChange={(e) => setIsParcel(e.target.checked)} className="h-5 w-5 shrink-0 accent-brand" />
+        </label>
+      )}
+
       <div className="surface sticky bottom-0 -mx-5 flex items-center gap-3 px-5 pt-2">
         {fixedQty === undefined ? (
           <div className="flex h-14 items-center rounded-2xl border border-brand/30 bg-brand/5 text-brand">
@@ -365,7 +384,7 @@ function ItemSheet({
           onClick={async () => {
             setBusy(true);
             try {
-              await onAdd({ itemId: item.id, variantId, addonIds, quantity: qty, note: note.trim() || null });
+              await onAdd({ itemId: item.id, variantId, addonIds, quantity: qty, note: note.trim() || null, isParcel });
               onClose();
             } catch {
               // caller showed the error; keep the sheet open

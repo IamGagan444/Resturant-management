@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { Languages, X } from "lucide-react";
+import { Languages, Package, X } from "lucide-react";
 import type { FoodType } from "@rms/contracts";
-import { formatPaise } from "@rms/domain";
+import { formatPaise, parcelNumber } from "@rms/domain";
 import { LANGS, useI18n, type Lang } from "@/lib/i18n";
 
 export const rupees = (paise: number) => formatPaise(paise).replace(/\.00$/, "");
@@ -103,6 +103,26 @@ export function LangPicker() {
         ))}
       </select>
     </label>
+  );
+}
+
+/** "Table T4", or the token of a walk-in parcel. */
+export function usePlace() {
+  const { t } = useI18n();
+  return (label: string) => {
+    const n = parcelNumber(label);
+    return n === null ? t("table", { label }) : t("parcelNo", { n });
+  };
+}
+
+/** Dish packed to take away. */
+export function ParcelTag() {
+  const { t } = useI18n();
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-brand/12 px-1.5 py-0.5 align-middle text-xs font-bold whitespace-nowrap text-brand">
+      <Package className="h-3 w-3" aria-hidden />
+      {t("parcel")}
+    </span>
   );
 }
 

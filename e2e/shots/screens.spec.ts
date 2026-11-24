@@ -53,7 +53,6 @@ async function device(browser: Browser, owner: Page, size: Size, kind: string, w
   await page.getByRole("button", { name: new RegExp(who) }).click();
   await shot(page, `${size}-${tag}-pin`);
   for (const d of pin) await page.getByRole("button", { name: d, exact: true }).click();
-  await page.getByRole("button", { name: "Enter" }).click();
   await page.waitForURL((u) => !u.pathname.startsWith("/device"));
   await shot(page, `${size}-${tag}`);
   return page;

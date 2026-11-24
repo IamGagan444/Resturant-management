@@ -7,7 +7,8 @@ import { redactUrl } from "../src/lib/security";
 import { sniffImage } from "../src/lib/storage";
 import { base32Encode, currentStep, hotp, verifyTotp } from "../src/lib/totp";
 import { MOCK_SECRET } from "../src/payments/gateway";
-import { Client, authenticators, createHotel, createPlatformAdmin, getApp, resetDb, signIn } from "./helpers";
+import { hashSecret } from "../src/lib/crypto";
+import { Client, authenticators, createHotel, createPlatformAdmin, enableMfa, getApp, resetDb, signIn } from "./helpers";
 
 const CONSOLE = "http://localhost:3001";
 const EVIL = "https://evil.example";
@@ -72,9 +73,27 @@ describe("security controls", () => {
     expect(unknown.json().error.message).toBe("Wrong email or password");
   });
 
-  // ── MFA (required) ─────────────────────
-  it("a password alone never opens a session: first sign-in enrolls an authenticator", async () => {
-    await owner.ok("POST", "/v1/admin/staff", { name: "New", role: "MANAGER", pin: "246813", email: "new@sec.test", password: "newpass1234" });
+  // ── MFA (optional for owners and managers, required for platform admins) ─────────────────────
+  it("owners and managers: password alone signs in until they turn two-step on, then a code is needed, and they can turn it off", async () => {
+    const { c } = await manager("opt@sec.test", "optpass1234");
+    expect(await c.ok("GET", "/v1/auth/mfa")).toMatchObject({ enabled: false, required: false, available: true });
+    expect(await owner.ok("GET", "/v1/auth/mfa")).toMatchObject({ enabled: false, required: false });
+    await enableMfa(c, "opt@sec.test", "optpass1234");
+    const next = new Client(app);
+    expect(await next.ok("POST", "/v1/auth/login", { email: "opt@sec.test", password: "optpass1234" })).toMatchObject({ mfaRequired: true });
+    expect(next.cookies.has("rms_at")).toBe(false);
+
+    const { recovery } = authenticators.get("opt@sec.test")!;
+    expect((await c.req("POST", "/v1/auth/mfa/disable", { password: "wrong-pass", code: recovery[0] })).statusCode).toBe(401);
+    await c.ok("POST", "/v1/auth/mfa/disable", { password: "optpass1234", code: recovery[1] });
+    const after = new Client(app);
+    const r = await after.ok<{ mfaRequired?: boolean; mfaSetupRequired?: boolean }>("POST", "/v1/auth/login", { email: "opt@sec.test", password: "optpass1234" });
+    expect(r.mfaRequired ?? r.mfaSetupRequired).toBeUndefined();
+    expect(after.cookies.has("rms_at")).toBe(true);
+  });
+
+  it("platform admins: a password alone never opens a session, the first sign-in enrolls an authenticator", async () => {
+    await unscopedDb.platformUser.create({ data: { email: "new@sec.test", name: "New", passwordHash: await hashSecret("newpass1234") } });
     const browser = new Client(app);
     const r = await browser.ok<{ mfaSetupRequired?: boolean; mfaToken: string }>("POST", "/v1/auth/login", { email: "new@sec.test", password: "newpass1234" });
     expect(r.mfaSetupRequired).toBe(true);
@@ -96,7 +115,8 @@ describe("security controls", () => {
   });
 
   it("second step: codes can't be replayed, pending tokens are single use, recovery codes work once", async () => {
-    await manager("mfa@sec.test", "mfapass1234"); // enrolled
+    const { c } = await manager("mfa@sec.test", "mfapass1234");
+    await enableMfa(c, "mfa@sec.test", "mfapass1234");
     const { secret, recovery } = authenticators.get("mfa@sec.test")!;
     const step1 = await new Client(app).ok<{ mfaRequired?: boolean; mfaToken: string }>("POST", "/v1/auth/login", { email: "mfa@sec.test", password: "mfapass1234" });
     expect(step1.mfaRequired).toBe(true);
@@ -115,8 +135,7 @@ describe("security controls", () => {
     const t3 = await new Client(app).ok<{ mfaToken: string }>("POST", "/v1/auth/login", { email: "mfa@sec.test", password: "mfapass1234" });
     expect((await new Client(app).req("POST", "/v1/auth/login/mfa", { mfaToken: t3.mfaToken, code })).statusCode).toBe(401);
 
-    // can't be turned off while required; moving to a new phone needs password + current factor
-    expect((await browser.req("POST", "/v1/auth/mfa/disable", { password: "mfapass1234", code: recovery[2] })).statusCode).toBe(409);
+    // moving to a new phone needs password + current factor
     expect((await browser.req("POST", "/v1/auth/mfa/setup", { password: "mfapass1234" })).statusCode).toBe(401);
     const moved = await browser.ok<{ secret: string }>("POST", "/v1/auth/mfa/setup", { password: "mfapass1234", code: recovery[3] });
     await browser.ok("POST", "/v1/auth/mfa/enable", { code: hotp(moved.secret, currentStep()) });
@@ -129,15 +148,17 @@ describe("security controls", () => {
   it("platform admins are held to two-step sign-in too, and can reset an owner's lost authenticator", async () => {
     const r = await new Client(app).ok<{ mfaRequired?: boolean; typ: string }>("POST", "/v1/auth/login", { email: "root@test.dev", password: "rootpass123" });
     expect(r).toMatchObject({ mfaRequired: true, typ: "platform" });
+    expect((await admin.req("POST", "/v1/auth/mfa/disable", { password: "rootpass123", code: authenticators.get("root@test.dev")!.recovery[0] })).statusCode).toBe(409); // can't turn it off
     const { id } = await manager("lost@sec.test");
+    await enableMfa(owner, "owner@sec-hotel.test", "ownerpass123");
     const ownerRow = await unscopedDb.staff.findFirstOrThrow({ where: { hotelId, role: "OWNER" } });
     await admin.ok("POST", `/v1/platform/staff/${ownerRow.id}/mfa-reset`);
-    const again = await new Client(app).ok<{ mfaSetupRequired?: boolean }>("POST", "/v1/auth/login", { email: "owner@sec-hotel.test", password: "ownerpass123" });
-    expect(again.mfaSetupRequired).toBe(true);
+    const again = await new Client(app).ok<{ mfaRequired?: boolean; mfaSetupRequired?: boolean }>("POST", "/v1/auth/login", { email: "owner@sec-hotel.test", password: "ownerpass123" });
+    expect(again.mfaRequired ?? again.mfaSetupRequired).toBeUndefined(); // back to password only
     expect((await owner.req("GET", "/v1/admin/floors")).statusCode).toBe(401); // reset signs them out
     authenticators.delete("owner@sec-hotel.test");
     owner = new Client(app);
-    await signIn(owner, "owner@sec-hotel.test", "ownerpass123"); // enrolls a new one
+    await signIn(owner, "owner@sec-hotel.test", "ownerpass123");
     // the owner resets a manager's; a manager can't
     const m = await manager("resetter@sec.test");
     expect((await m.c.req("POST", `/v1/admin/staff/${id}/mfa-reset`)).statusCode).toBe(403);
@@ -145,7 +166,8 @@ describe("security controls", () => {
   });
 
   it("5 wrong second-step codes lock the second step", async () => {
-    await manager("mfa2@sec.test", "mfapass5678");
+    const { c } = await manager("mfa2@sec.test", "mfapass5678");
+    await enableMfa(c, "mfa2@sec.test", "mfapass5678");
     const { secret } = authenticators.get("mfa2@sec.test")!;
     const { mfaToken } = await new Client(app).ok<{ mfaToken: string }>("POST", "/v1/auth/login", { email: "mfa2@sec.test", password: "mfapass5678" });
     const bad = (st: number) => String((Number(hotp(secret, st)) + 1) % 1_000_000).padStart(6, "0");

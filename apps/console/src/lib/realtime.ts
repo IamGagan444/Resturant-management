@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type { ClientToServerEvents, ServerToClientEvents } from "@rms/contracts";
+import { refresh } from "./api";
 import { target, useNet } from "./net";
 import { proofFor } from "./devicekey";
 
@@ -28,6 +29,8 @@ export function useStaffSocket(enabled: boolean, onSync: () => void, bind: (s: S
       setOnline(false);
       return;
     }
+    let stopped = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
     const t = target();
     const token = t.headers.authorization?.slice(7);
     const s: StaffSocket = io(t.base, {
@@ -49,11 +52,29 @@ export function useStaffSocket(enabled: boolean, onSync: () => void, bind: (s: S
       syncRef.current();
     });
     s.on("disconnect", () => setOnline(false));
-    s.on("connect_error", () => setOnline(false));
+    s.on("connect_error", (e) => {
+      setOnline(false);
+      // Refused, not unreachable: the 15-minute token ran out while the phone slept. Socket.IO doesn't retry that by
+      // itself, which left the screen silent until someone reloaded it.
+      if (e.message !== "UNAUTHORIZED" || mode !== "cloud" || retry) return;
+      void refresh().then((r) => {
+        if (!stopped && r !== "denied") retry = setTimeout(() => ((retry = undefined), s.connect()), r === "ok" ? 300 : 5000);
+      });
+    });
+    // back from the lock screen: reconnect now instead of waiting for the next retry
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!s.connected && !retry) s.connect();
+      syncRef.current();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     bindRef.current(s);
     const goOnline = () => syncRef.current();
     window.addEventListener("online", goOnline);
     return () => {
+      stopped = true;
+      clearTimeout(retry);
+      document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", goOnline);
       s.disconnect();
     };

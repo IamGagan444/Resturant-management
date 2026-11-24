@@ -9,6 +9,7 @@ import { emit } from "../realtime/io";
 import { invalidateMenu } from "./menu";
 import { waiterRooms } from "./notify";
 import { announceOrder, createOrder, releaseOrders } from "./orders";
+import { openParcelSession } from "./sessions";
 import { orderInclude } from "./views";
 
 /**
@@ -76,7 +77,7 @@ export async function confirmSession(a: StaffActor, sessionId: string): Promise<
 export interface StaffOrderParams {
   clientId: string;
   tableId: string;
-  lines: { id?: string; itemId: string; variantId?: string | null; addonIds: readonly string[]; quantity: number; note?: string | null }[];
+  lines: { id?: string; itemId: string; variantId?: string | null; addonIds: readonly string[]; quantity: number; note?: string | null; isParcel?: boolean }[];
   note?: string;
 }
 
@@ -87,9 +88,14 @@ export async function placeStaffOrder(a: StaffActor, p: StaffOrderParams) {
   if (existing) return { order: existing, created: false };
   await assertOwned("table", [p.tableId]);
   const hotel = await getHotel(a.hid);
-  let session = await db.tableSession.findFirst({ where: { tableId: p.tableId, status: { in: ["OPEN", "BILLING"] } } });
+  const table = await db.table.findUniqueOrThrow({ where: { id: p.tableId } });
+  // parcel counter: every order is another customer
+  let session = table.isParcelCounter ? null : await db.tableSession.findFirst({ where: { tableId: p.tableId, status: { in: ["OPEN", "BILLING"] } } });
+  if (table.isParcelCounter) {
+    if (!table.isActive) throw conflict("TABLE_INACTIVE", "This table is no longer in use");
+    session = await db.$transaction((tx) => openParcelSession(tx, hotel, p.tableId, true));
+  }
   if (!session) {
-    const table = await db.table.findUniqueOrThrow({ where: { id: p.tableId } });
     if (!table.isActive) throw conflict("TABLE_INACTIVE", "This table is no longer in use");
     session = await db.$transaction(async (tx) => {
       const s = await tx.tableSession.create({ data: { hotelId: a.hid, tableId: p.tableId, joinCode: joinCode(), isConfirmed: true } });

@@ -37,12 +37,17 @@ export const Phone = z.preprocess(
   z.string().regex(/^\+?\d{10,15}$/, "Enter a 10-digit mobile number"),
 );
 
+/** Any PIN, as typed at sign-in. New PINs must be a StaffPin or LeadPin. */
 export const Pin = z.string().regex(/^\d{4,6}$/, "PIN must be 4–6 digits");
+
+export const STAFF_PIN_LENGTH = 4;
+export const StaffPin = z.string().regex(/^\d{4}$/, "PIN must be 4 digits");
 
 /** Owners and managers can do everything, so their PIN is longer: 6 digits. */
 export const LEAD_PIN_LENGTH = 6;
 export const LeadPin = z.string().regex(/^\d{6}$/, "Owners and managers need a 6-digit PIN");
 export const isLeadRole = (role: string) => role === "OWNER" || role === "MANAGER";
+export const pinLengthFor = (role: string) => (isLeadRole(role) ? LEAD_PIN_LENGTH : STAFF_PIN_LENGTH);
 
 export const Slug = z
   .string()

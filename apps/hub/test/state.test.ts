@@ -16,6 +16,7 @@ function item(id: string, status: KdsTicket["items"][number]["status"], stationI
     stationId,
     name: "Naan",
     variantName: null,
+    isParcel: false,
     addons: [],
     unitPrice: 6000,
     quantity: 1,
@@ -60,6 +61,7 @@ function state(): HubState {
       {
         id: "o1",
         sessionId: "s1",
+        tableId: "t1",
         tableLabel: "T1",
         orderNumber: 7,
         source: "QR_CUSTOMER",
@@ -71,7 +73,7 @@ function state(): HubState {
       },
     ],
     pendingOrders: [],
-    requests: [{ id: "r1", sessionId: "s1", tableLabel: "T1", type: "WATER", note: null, status: "OPEN", createdAt: "2026-10-30T09:00:00.000Z" }],
+    requests: [{ id: "r1", sessionId: "s1", tableId: "t1", tableLabel: "T1", type: "WATER", note: null, status: "OPEN", createdAt: "2026-10-30T09:00:00.000Z" }],
   };
   return { ...emptyState(), snapshot };
 }
@@ -139,6 +141,33 @@ describe("hub state", () => {
     expect(board.ready.map((i) => [i.id, i.orderNumber])).toEqual([["i1", 7]]);
     applyCommand(s, waiter, q({ type: "request.done", requestId: "r1" }));
     expect(boardView(s.snapshot!, "waiter-1").requests).toEqual([]);
+  });
+
+  it("parcel counter: every order is its own customer, all packed, on every waiter's list", () => {
+    const s = state();
+    s.snapshot!.tables.push({ id: "pc", label: "Parcel counter", floor: null, status: "FREE", isParcelCounter: true, parcels: [], session: null });
+    const order = (id: string) => q({ type: "order.create", tableId: "pc", lines: [{ id, itemId: "naan", addonIds: [], quantity: 1 }] });
+    for (const id of ["33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"]) expect(applyCommand(s, waiter, order(id)).outcome).toBe("APPLIED");
+    const [a, b] = s.snapshot!.orders.slice(-2);
+    expect(a!.sessionId).not.toBe(b!.sessionId);
+    expect(a!.items[0]!.isParcel).toBe(true);
+    expect(s.snapshot!.tables.at(-1)).toMatchObject({ status: "FREE", session: null });
+    applyCommand(s, cook, q({ type: "item.transition", orderItemId: a!.items[0]!.id, to: "READY" }));
+    const board = boardView(s.snapshot!, "waiter-1"); // assigned to T1 only; nobody has the counter
+    expect(board.ready.find((i) => i.id === a!.items[0]!.id)?.tableLabel).toBe("Parcel");
+    s.snapshot!.assignments.pc = ["waiter-2"];
+    expect(boardView(s.snapshot!, "waiter-1").ready.some((i) => i.id === a!.items[0]!.id)).toBe(false);
+  });
+
+  it("a dish ready after the bill was paid stays on the list until the table is cleared", () => {
+    const s = state();
+    const t1 = s.snapshot!.tables[0]!;
+    Object.assign(t1, { session: null, status: "CLEANING" });
+    s.snapshot!.orders[0]!.placedAt = new Date().toISOString();
+    applyCommand(s, cook, q({ type: "item.transition", orderItemId: "i1", to: "READY" }));
+    expect(boardView(s.snapshot!, "waiter-1").ready.map((i) => i.id)).toContain("i1");
+    t1.status = "FREE";
+    expect(boardView(s.snapshot!, "waiter-1").ready).toEqual([]);
   });
 
   it("refuses everything until the first snapshot arrives", () => {

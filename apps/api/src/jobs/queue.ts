@@ -9,7 +9,9 @@ queue.on("error", () => {}); // connection errors are logged by createRedis
 
 export type JobData =
   | { kind: "pickup-escalation"; hotelId: string; orderItemId: string }
-  | { kind: "maintenance" };
+  | { kind: "maintenance" }
+  | { kind: "alerts"; hotelId?: string } // one restaurant, or all of them
+  | { kind: "alert-test"; hotelId: string; subscriptionId: string };
 
 // BullMQ job ids must not contain ':'.
 const pickupJobId = (orderItemId: string) => `pickup-${orderItemId}`;
@@ -25,6 +27,20 @@ export async function schedulePickupEscalation(hotelId: string, orderItemId: str
 
 export async function cancelPickupEscalation(orderItemId: string) {
   await queue.remove(pickupJobId(orderItemId));
+}
+
+/**
+ * Something new is waiting: ring phones now instead of at the next tick. Deterministic id, so a burst of events is
+ * one sweep. Best effort (never holds up the order): the repeating sweep catches anything missed.
+ */
+export function nudgeAlerts(hotelId: string) {
+  void queue
+    .add("alerts", { kind: "alerts", hotelId } satisfies JobData, { jobId: `alerts-${hotelId}`, delay: 500, removeOnComplete: true, removeOnFail: true })
+    .catch(() => undefined);
+}
+
+export async function scheduleTestAlert(hotelId: string, subscriptionId: string) {
+  await queue.add("alert-test", { kind: "alert-test", hotelId, subscriptionId } satisfies JobData, { delay: 8000, removeOnComplete: true, removeOnFail: true });
 }
 
 export async function closeQueue() {

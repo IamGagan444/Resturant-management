@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FloorTable, FloorView } from "@rms/contracts";
 import { api, rupees } from "@/lib/api";
 import { useGuard } from "@/lib/auth";
+import { AlertsBar } from "@/components/AlertsBar";
 import { chime, unlockSound, useStaffSocket } from "@/lib/realtime";
 import { AlarmClock, BarChart3, Bell, CheckCircle2, Flame, HandHelping, Move, Settings2, Users } from "lucide-react";
 import { Button, ErrorText, NavLink, OfflineBanner, TopBar } from "@/components/ui";
@@ -105,6 +106,7 @@ export default function FloorPage() {
         </Button>
       </TopBar>
       <OfflineBanner online={online} />
+      <AlertsBar enabled waiting={true} />
 
       {data && data.escalations.length > 0 && (
         <section aria-label="Overdue pickups" className="space-y-1 bg-late px-4 py-2.5 text-white">

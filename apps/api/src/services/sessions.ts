@@ -1,13 +1,14 @@
-import { db, unscopedDb, withTenant, type Hotel } from "@rms/db";
-import { rooms, type Cart, type JoinSessionInput, type SessionView, type TableLookup } from "@rms/contracts";
-import { sum } from "@rms/domain";
+import { db, nextCounter, unscopedDb, withTenant, type Hotel } from "@rms/db";
+import { rooms, type Cart, type JoinSessionInput, type SessionView, type TableCodeResult, type TableLookup } from "@rms/contracts";
+import { normalizeTableCode, sum, tableCodeProblem } from "@rms/domain";
 import { AppError, isUniqueViolation, notFound } from "../lib/errors";
 import { joinCode, safeEqual } from "../lib/crypto";
 import { JOIN_MAX_FAILS, assertNotLocked, failures, recordFailure } from "../lib/mfa";
-import { assertHotelOperational, getHotel } from "../lib/hotel";
+import { assertHotelOperational, businessDay, getHotel } from "../lib/hotel";
 import { emit } from "../realtime/io";
 import { waiterRooms } from "./notify";
 import { priceSelections } from "./menu";
+import { sessionLabel } from "./views";
 
 const LIVE = { in: ["OPEN", "BILLING"] as ("OPEN" | "BILLING")[] };
 
@@ -20,17 +21,29 @@ export async function resolveQr(qrToken: string) {
   return { table, hotel };
 }
 
+/** A typed table code → where its QR leads. Every code that isn't a live table gets the same answer. */
+export async function resolveTableCode(typed: string): Promise<TableCodeResult> {
+  if (tableCodeProblem(typed)) throw new AppError(400, "TABLE_CODE_INVALID", "That isn't a table code. It has 6 letters and numbers, printed under the QR code.");
+  const table = await unscopedDb.table.findUnique({ where: { code: normalizeTableCode(typed) } });
+  if (!table || !table.isActive) throw new AppError(404, "TABLE_CODE_NOT_FOUND", "No table has that code. Check it and try again, or ask the staff.");
+  const hotel = await getHotel(table.hotelId);
+  assertHotelOperational(hotel);
+  return { slug: hotel.slug, qrToken: table.qrToken };
+}
+
 export async function lookupTable(qrToken: string, deviceId: string | undefined): Promise<TableLookup> {
   const { table, hotel } = await resolveQr(qrToken);
   return withTenant(hotel.id, async () => {
-    const live = await db.tableSession.findFirst({ where: { tableId: table.id, status: LIVE }, select: { id: true } });
+    // parcel counter: only this phone's own order counts, other customers' orders are none of its business
+    const own = table.isParcelCounter ? { guests: { some: { deviceId: deviceId ?? "" } } } : {};
+    const live = await db.tableSession.findFirst({ where: { tableId: table.id, status: LIVE, ...own }, select: { id: true } });
     const member =
       live && deviceId
         ? await db.sessionGuest.findUnique({ where: { sessionId_deviceId: { sessionId: live.id, deviceId } }, select: { id: true } })
         : null;
     return {
       hotel: { id: hotel.id, name: hotel.name, slug: hotel.slug },
-      table: { id: table.id, label: table.label, status: table.status },
+      table: { id: table.id, label: table.label, status: table.status, isParcelCounter: table.isParcelCounter },
       hasOpenSession: Boolean(live),
       isMember: Boolean(member),
     };
@@ -47,6 +60,7 @@ export async function lookupTable(qrToken: string, deviceId: string | undefined)
 export async function joinSession(input: JoinSessionInput) {
   const { table, hotel } = await resolveQr(input.qrToken);
   return withTenant(hotel.id, async () => {
+    if (table.isParcelCounter) return joinParcel(hotel, table.id, input);
     for (let attempt = 0; attempt < 2; attempt++) {
       const live = await db.tableSession.findFirst({ where: { tableId: table.id, status: LIVE } });
       if (live) {
@@ -96,6 +110,32 @@ export async function joinSession(input: JoinSessionInput) {
   });
 }
 
+/** Parcel counter: this phone's open order, or a new one with its own token. Never anyone else's, so no join code. */
+async function joinParcel(hotel: Hotel, tableId: string, input: JoinSessionInput) {
+  const mine = await db.sessionGuest.findFirst({
+    where: { deviceId: input.deviceId, session: { tableId, status: LIVE, parcelNo: { not: null } } },
+    orderBy: { joinedAt: "desc" },
+  });
+  if (mine) return { hotel, sessionId: mine.sessionId, guestId: mine.id };
+  const customerId = await upsertCustomer(hotel.id, input);
+  const { s, g } = await db.$transaction(async (tx) => {
+    const s = await openParcelSession(tx, hotel, tableId, false);
+    const g = await tx.sessionGuest.create({
+      data: { hotelId: hotel.id, sessionId: s.id, deviceId: input.deviceId, displayName: input.name, customerId, isHost: true },
+    });
+    return { s, g };
+  });
+  return { hotel, sessionId: s.id, guestId: g.id };
+}
+
+type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
+
+/** New walk-in parcel with the day's next token number. */
+export async function openParcelSession(tx: Tx, hotel: Hotel, tableId: string, isConfirmed: boolean) {
+  const parcelNo = await nextCounter(tx, hotel.id, `parcel:${businessDay(hotel).key}`);
+  return tx.tableSession.create({ data: { hotelId: hotel.id, tableId, joinCode: joinCode(), parcelNo, isConfirmed } });
+}
+
 async function upsertCustomer(hotelId: string, input: JoinSessionInput): Promise<string | null> {
   if (!input.phone) return null;
   const c = await db.customer.upsert({
@@ -128,6 +168,7 @@ export async function cartView(hotel: Hotel, sessionId: string): Promise<Cart> {
       addonNames: ok ? p.line.addons.map((a) => a.name) : [],
       quantity: r.quantity,
       note: r.note,
+      isParcel: r.isParcel,
       unitPrice: ok ? p.line.unitPrice : 0,
       lineTotal: ok ? p.line.lineTotal : 0,
       isValid: ok,
@@ -149,8 +190,9 @@ export async function sessionView(sessionId: string, guestId: string): Promise<S
   return {
     id: s.id,
     status: s.status,
-    tableLabel: s.table.label,
-    joinCode: me.isHost ? s.joinCode : null,
+    tableLabel: sessionLabel(s),
+    isParcel: s.parcelNo !== null,
+    joinCode: me.isHost && s.parcelNo === null ? s.joinCode : null,
     isConfirmed: s.isConfirmed,
     me: { id: me.id, displayName: me.displayName, isHost: me.isHost },
     guests,

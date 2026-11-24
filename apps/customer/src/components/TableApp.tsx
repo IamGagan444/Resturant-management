@@ -8,11 +8,12 @@ import { LangProvider, useI18n } from "@/lib/i18n";
 import { useSessionSocket } from "@/lib/realtime";
 import { PaymentCancelled, isBusyPaying, payByUpi } from "@/lib/upi";
 import { Join, type Joined } from "./Join";
-import { Menu, SwapSheet, tName, type AddLine } from "./Menu";
+import { AllParcel, Menu, SwapSheet, tName, type AddLine } from "./Menu";
 import { Orders } from "./Orders";
+import { ParcelStatus, forgetPaid, recallPaid, rememberPaid, waitingParcels } from "./ParcelStatus";
 import { Bill } from "./Bill";
 import { CheckCircle2, MessageCircle, RotateCcw, ShoppingBag, WifiOff } from "lucide-react";
-import { Button, FoodMark, LangPicker, Pill, Sheet, Toast, rupees } from "./ui";
+import { Button, FoodMark, LangPicker, Pill, Sheet, Toast, rupees, usePlace } from "./ui";
 
 export function TableApp(props: { initialMenu: PublicMenu; qrToken: string }) {
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } }));
@@ -30,7 +31,7 @@ type Phase =
   | { kind: "join"; lookup: TableLookup }
   | { kind: "in"; guestToken: string }
   | { kind: "paid"; receiptUrl: string | null }
-  | { kind: "ended"; message: string };
+  | { kind: "ended"; message: string; badQr?: boolean };
 type Tab = "menu" | "orders" | "bill";
 
 function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: string }) {
@@ -44,10 +45,18 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
   const [toast, setToast] = useState<string | null>(null);
   const clearToast = useCallback(() => setToast(null), []);
   const inSession = phase.kind === "in";
+  const place = usePlace();
 
   // ── Boot: same phone rejoins silently; new phone sees the join screen ──
   useEffect(() => {
     (async () => {
+      // paid, but a parcel is still coming: the page was closed or reloaded, so show its status again
+      const paid = recallPaid(qrToken);
+      if (paid) {
+        const orders = await api<OrderView[]>("GET", "/v1/p/orders").catch(() => []);
+        if (waitingParcels(orders).length) return setPhase({ kind: "paid", receiptUrl: paid.receiptUrl });
+        forgetPaid();
+      }
       try {
         const lookup = await api<TableLookup>("GET", `/v1/p/t/${qrToken}?deviceId=${deviceId()}`);
         const name = localStorage.getItem("rms.name");
@@ -56,13 +65,18 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
           enter(j);
         } else setPhase({ kind: "join", lookup });
       } catch (e) {
-        setPhase({ kind: "ended", message: e instanceof Error ? e.message : "Could not open this table" });
+        setPhase({ kind: "ended", message: e instanceof Error ? e.message : "Could not open this table", badQr: e instanceof ApiError && e.code === "QR_INVALID" });
       }
     })();
     // Runs once per QR; `enter` only touches stable setters.
   }, [qrToken]);
 
+  useEffect(() => {
+    if (phase.kind === "paid") rememberPaid(qrToken, phase.receiptUrl);
+  }, [phase, qrToken]);
+
   function enter(j: Joined) {
+    forgetPaid();
     qc.setQueryData(["session"], j.session);
     setPhase({ kind: "in", guestToken: j.guestToken });
   }
@@ -161,8 +175,9 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
 
   const payOrder = (o: OrderView) =>
     act(async () => {
-      await payByUpi({ kind: "ORDER", orderId: o.id });
+      const { receiptUrl } = await payByUpi({ kind: "ORDER", orderId: o.id });
       setToast(t("orderPaid"));
+      if (receiptUrl) setPhase({ kind: "paid", receiptUrl }); // walk-in parcel: paid is done, the food follows
     }, t("payFailed"));
 
   // ── Screens ──
@@ -178,6 +193,11 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
         <Button className="mt-6 px-8" onClick={() => location.reload()}>
           {t("startAgain")}
         </Button>
+        {phase.badQr && (
+          <a href="/" className="tap mt-2 inline-flex items-center px-5 font-medium text-brand underline">
+            {t("typeTableCode")}
+          </a>
+        )}
       </main>
     );
   }
@@ -190,6 +210,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
         </span>
         <h1 className="font-display text-3xl font-bold">{t("thankYou")}</h1>
         <p className="muted max-w-xs">{t("paidThanks", { name: initialMenu.hotel.name })}</p>
+        <ParcelStatus onOrderAgain={() => (forgetPaid(), location.reload())} />
         {phase.receiptUrl && (
           <div className="mt-4 flex w-full flex-col gap-2.5">
             <a
@@ -229,7 +250,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
         <div className="min-w-0">
           <h1 className="font-display truncate text-[26px] leading-tight font-bold md:text-4xl">{menu.hotel.name}</h1>
           <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm">
-            <Pill className="bg-brand/10 text-brand">{t("table", { label: session?.tableLabel ?? "" })}</Pill>
+            <Pill className="bg-brand/10 text-brand">{session ? place(session.tableLabel) : "…"}</Pill>
             {session?.joinCode && (
               <Pill>
                 <span className="muted font-medium">{t("code")}</span> <strong className="tracking-[0.2em]">{session.joinCode}</strong>
@@ -253,7 +274,11 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
         ))}
       </nav>
 
-      {tab === "menu" && <Menu menu={menu} onAdd={addToCart} />}
+      {tab === "menu" && (
+        <AllParcel.Provider value={session?.isParcel ?? false}>
+          <Menu menu={menu} onAdd={addToCart} />
+        </AllParcel.Provider>
+      )}
       {tab === "orders" && (
         <Orders
           orders={orders}
@@ -301,13 +326,15 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
               <span>{t("viewCart")}</span>
             </Button>
           )}
-          <div className="surface line grid grid-cols-3 gap-1 rounded-2xl border p-1 shadow-lift">
+          <div className={`surface line grid ${session?.isParcel ? "grid-cols-2" : "grid-cols-3"} gap-1 rounded-2xl border p-1 shadow-lift`}>
             <Button variant="ghost" className="px-1 text-sm" onClick={() => request("CALL_WAITER")}>
               {t("btnWaiter")}
             </Button>
-            <Button variant="ghost" className="px-1 text-sm" onClick={() => request("WATER")}>
-              {t("btnWater")}
-            </Button>
+            {!session?.isParcel && (
+              <Button variant="ghost" className="px-1 text-sm" onClick={() => request("WATER")}>
+                {t("btnWater")}
+              </Button>
+            )}
             <Button variant="ghost" className="px-1 text-sm" onClick={() => request("BILL")}>
               {t("btnBill")}
             </Button>
@@ -377,14 +404,31 @@ function CartSheet({
   const byId = new Map(menu.items.map((i) => [i.id, i]));
   const { allowPayNow, allowPayLater } = menu.hotel;
 
-  async function setQty(id: string, quantity: number) {
-    const line = items.find((i) => i.id === id);
-    if (!line) return;
-    const s =
-      quantity <= 0
-        ? await api<SessionView>("DELETE", `/v1/p/cart/items/${id}`)
-        : await api<SessionView>("PUT", `/v1/p/cart/items/${id}`, { itemId: line.itemId, variantId: line.variantId, addonIds: line.addonIds, quantity, note: line.note });
-    qc.setQueryData(["session"], s);
+  async function change(line: (typeof items)[number], patch: { quantity?: number; isParcel?: boolean }) {
+    const quantity = patch.quantity ?? line.quantity;
+    setError(null);
+    try {
+      const s =
+        quantity <= 0
+          ? await api<SessionView>("DELETE", `/v1/p/cart/items/${line.id}`)
+          : await api<SessionView>("PUT", `/v1/p/cart/items/${line.id}`, {
+              itemId: line.itemId,
+              variantId: line.variantId,
+              addonIds: line.addonIds,
+              quantity,
+              note: line.note,
+              isParcel: patch.isParcel ?? line.isParcel,
+            });
+      qc.setQueryData(["session"], s);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("couldNotSend"));
+    }
+  }
+
+  async function parcelAll(isParcel: boolean) {
+    setBusy(true);
+    for (const line of items) if (line.isValid && line.isParcel !== isParcel) await change(line, { isParcel });
+    setBusy(false);
   }
 
   async function checkout(payment: "PAY_LATER" | "PAY_NOW") {
@@ -414,6 +458,16 @@ function CartSheet({
         <p className="muted py-8 text-center">{t("cartEmpty")}</p>
       ) : (
         <>
+          <label className={`tap cursor-pointer items-center justify-between gap-3 rounded-2xl bg-(--sunken) px-4 text-sm font-bold ${session.isParcel ? "hidden" : "flex"}`}>
+            {t("parcelAll")}
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-brand"
+              checked={items.every((i) => i.isParcel || !i.isValid)}
+              disabled={busy || !items.some((i) => i.isValid)}
+              onChange={(e) => void parcelAll(e.target.checked)}
+            />
+          </label>
           <ul className="line divide-y divide-(--line)">
             {items.map((i) => {
               const m = byId.get(i.itemId);
@@ -430,16 +484,27 @@ function CartSheet({
                         {i.addonNames.join(", ")}
                         {i.note ? ` · “${i.note}”` : ""} · {t("addedBy", { name: i.guestName })}
                       </p>
+                      <label className={`mt-2 ${session.isParcel ? "hidden" : "inline-flex"} h-9 cursor-pointer items-center gap-2 rounded-full border px-3 text-xs font-semibold ${i.isParcel ? "border-brand bg-brand/10 text-brand" : "line"}`}>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-brand"
+                          aria-label={`${t("parcel")}: ${i.name}`}
+                          checked={i.isParcel}
+                          disabled={!i.isValid || busy}
+                          onChange={(e) => change(i, { isParcel: e.target.checked })}
+                        />
+                        {t("parcel")}
+                      </label>
                       {!i.isValid && <p className="mt-1 text-xs font-medium text-red-600">{t("noLongerAvailable")}</p>}
                     </div>
                     <div className="flex shrink-0 flex-col items-end">
                       <p className="font-semibold tabular-nums">{rupees(i.lineTotal)}</p>
                       <div className="mt-1.5 inline-flex items-center rounded-xl border border-brand/30 bg-brand/5 font-bold text-brand">
-                        <button className="h-9 w-9 text-lg" aria-label={`Fewer ${i.name}`} onClick={() => setQty(i.id, i.quantity - 1)}>
+                        <button className="h-9 w-9 text-lg" aria-label={`Fewer ${i.name}`} onClick={() => change(i, { quantity: i.quantity - 1 })}>
                           −
                         </button>
                         <span className="w-6 text-center tabular-nums">{i.quantity}</span>
-                        <button className="h-9 w-9 text-lg disabled:opacity-40" aria-label={`More ${i.name}`} disabled={!i.isValid} onClick={() => setQty(i.id, i.quantity + 1)}>
+                        <button className="h-9 w-9 text-lg disabled:opacity-40" aria-label={`More ${i.name}`} disabled={!i.isValid} onClick={() => change(i, { quantity: i.quantity + 1 })}>
                           +
                         </button>
                       </div>
@@ -450,7 +515,7 @@ function CartSheet({
             })}
           </ul>
           <p className="muted mt-3 rounded-xl bg-(--sunken) px-3 py-2 text-xs">
-            {t("sharedCart")} {menu.hotel.pricesIncludeTax ? t("pricesInclTax") : t("taxesAdded")}
+            {session.isParcel ? t("parcelHint") + "." : t("sharedCart")} {menu.hotel.pricesIncludeTax ? t("pricesInclTax") : t("taxesAdded")}
           </p>
           {error && (
             <p role="alert" className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm font-medium text-red-600">

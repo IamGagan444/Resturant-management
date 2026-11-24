@@ -73,12 +73,17 @@ describe("device security", () => {
     await managerTablet.ok("POST", "/v1/auth/pin", { staffId: ownerId, pin: "999999" });
   });
 
-  it("owners and managers need a 6-digit PIN", async () => {
+  it("owners and managers need a 6-digit PIN, everyone else exactly 4", async () => {
     const short = await owner.req("POST", "/v1/admin/staff", { name: "M2", role: "MANAGER", pin: "1234" });
     expect(short.statusCode).toBe(400);
     expect(short.json().error.details.fieldErrors.pin?.[0]).toMatch(/6-digit/);
     expect((await owner.req("POST", `/v1/admin/staff/${managerId}/reset-pin`, { pin: "4321" })).statusCode).toBe(400);
     await owner.ok("POST", `/v1/admin/staff/${waiterId}/reset-pin`, { pin: "4321" }); // staff keep 4 digits
+
+    for (const pin of ["12345", "123456"]) {
+      expect((await owner.req("POST", "/v1/admin/staff", { name: "Long", role: "WAITER", pin })).statusCode).toBe(400);
+      expect((await owner.req("POST", `/v1/admin/staff/${waiterId}/reset-pin`, { pin })).statusCode).toBe(400);
+    }
 
     // promoted with an old 4-digit PIN: told to set a longer one, and it doesn't count as a wrong guess
     const promoted = (await owner.ok<{ id: string }>("POST", "/v1/admin/staff", { name: "Soon manager", role: "WAITER", pin: "5555" })).id;

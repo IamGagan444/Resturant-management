@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Me, StaffRole } from "@rms/contracts";
+import { pinLengthFor, type Me, type StaffRole } from "@rms/contracts";
 import { ApiError, api } from "@/lib/api";
 import { describeError } from "@/lib/errors";
 import { homeFor } from "@/lib/auth";
-import { ChefHat, ConciergeBell, CreditCard, Crown, Delete, MonitorSmartphone, UserRoundCog, type LucideIcon } from "lucide-react";
+import { ChefHat, ConciergeBell, CreditCard, Crown, MonitorSmartphone, UserRoundCog, type LucideIcon } from "lucide-react";
 import { AuthAside } from "@/components/AuthAside";
+import { PinPad } from "@/components/PinPad";
 import { BrandMark, Button, Spinner } from "@/components/ui";
 
 interface DeviceInfo {
@@ -34,55 +35,22 @@ export default function DevicePage() {
   const qc = useQueryClient();
   const info = useQuery({ queryKey: ["device"], queryFn: () => api<DeviceInfo>("GET", "/v1/auth/device"), retry: false });
   const [picked, setPicked] = useState<DeviceInfo["staff"][number] | null>(null);
-  const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const busy = useRef(false);
 
-  async function submit(p: string) {
-    if (!picked || busy.current) return;
-    busy.current = true;
+  async function submit(pin: string): Promise<boolean> {
+    if (!picked) return false;
     setError(null);
     try {
-      await api("POST", "/v1/auth/pin", { staffId: picked.id, pin: p });
+      await api("POST", "/v1/auth/pin", { staffId: picked.id, pin });
       const me = await api<Me>("GET", "/v1/auth/me");
       qc.setQueryData(["me"], me);
       router.replace(homeFor(me));
+      return true;
     } catch (e) {
-      setPin("");
       setError(e instanceof Error ? e.message : "Wrong PIN");
-    } finally {
-      busy.current = false;
+      return false;
     }
   }
-
-  function press(d: string) {
-    const next = (pin + d).slice(0, 6);
-    setPin(next);
-    // Auto-submit only at the max length; guessing at 4 would burn lockout attempts for 6-digit PINs.
-    if (next.length === 6) void submit(next);
-  }
-
-  // Laptops and tablets with keyboards: digits, Backspace, Enter, Esc work like the keypad.
-  const keys = useRef({ press, submit, pin });
-  keys.current = { press, submit, pin };
-  useEffect(() => {
-    if (!picked) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (/^\d$/.test(e.key)) keys.current.press(e.key);
-      else if (e.key === "Backspace") setPin((p) => p.slice(0, -1));
-      else if (e.key === "Enter" && keys.current.pin.length >= 4) void keys.current.submit(keys.current.pin);
-      else if (e.key === "Escape") {
-        setPicked(null);
-        setPin("");
-        setError(null);
-      }
-      else return;
-      e.preventDefault();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [picked]);
 
   if (info.isLoading) return <Spinner />;
   if (info.error instanceof ApiError && info.error.code === "DEVICE_NOT_PAIRED") return <NotPaired onPaired={() => void info.refetch()} />;
@@ -134,36 +102,14 @@ export default function DevicePage() {
         <div className="mx-auto mt-8 w-full max-w-xs animate-rise text-center">
           <span className="mx-auto grid h-16 w-16 animate-pop place-items-center rounded-full bg-brand text-2xl font-bold text-brand-ink shadow-lift">{picked.name.slice(0, 1).toUpperCase()}</span>
           <h1 className="mt-4 text-2xl font-bold tracking-tight">Hi {picked.name}</h1>
-          <p className="muted">Enter your PIN, then tap Enter</p>
-          <div className="my-7 flex justify-center gap-3" aria-label={`${pin.length} digits entered`}>
-            {Array.from({ length: Math.max(4, pin.length) }, (_, i) => (
-              <span key={i} className={`h-3.5 w-3.5 rounded-full transition ${i < pin.length ? "scale-110 bg-brand" : "bg-(--line)"}`} />
-            ))}
-          </div>
-          {error && (
-            <p role="alert" className="mb-4 rounded-lg bg-late/10 px-3 py-2 text-sm font-medium text-late">
-              {error}
-            </p>
-          )}
-          <div className="grid grid-cols-3 gap-3">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-              <Button key={d} variant="subtle" className="h-16 rounded-full text-2xl font-semibold" onClick={() => press(d)}>
-                {d}
-              </Button>
-            ))}
-            <Button variant="ghost" className="h-16 rounded-full text-sm" onClick={() => (setPicked(null), setPin(""), setError(null))}>
-              Back
-            </Button>
-            <Button variant="subtle" className="h-16 rounded-full text-2xl font-semibold" onClick={() => press("0")}>
-              0
-            </Button>
-            <Button variant="ghost" className="h-16 rounded-full" aria-label="Delete" onClick={() => setPin((p) => p.slice(0, -1))}>
-              <Delete className="h-6 w-6" aria-hidden />
-            </Button>
-          </div>
-          <Button className="mt-5 h-14 w-full text-lg" disabled={pin.length < 4} onClick={() => void submit(pin)}>
-            Enter
-          </Button>
+          <p className="muted">Enter your {pinLengthFor(picked.role)}-digit PIN</p>
+          <PinPad
+            length={pinLengthFor(picked.role)}
+            error={error}
+            onSubmit={submit}
+            onEdit={() => setError(null)}
+            onBack={() => (setPicked(null), setError(null))}
+          />
         </div>
       )}
     </main>

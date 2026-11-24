@@ -1,20 +1,20 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db, unscopedDb, withTenant } from "@rms/db";
-import { CreateRequestInput, Id, JoinSessionInput, PlaceOrderInput, ReplaceItemInput, UpsertCartItemInput, rooms, type ReceiptView } from "@rms/contracts";
+import { CreateRequestInput, Id, JoinSessionInput, PlaceOrderInput, ReplaceItemInput, TableCodeInput, UpsertCartItemInput, rooms, type ReceiptView } from "@rms/contracts";
 import { AppError, conflict, isUniqueViolation, notFound, parse } from "../lib/errors";
 import { setGuestCookie } from "../lib/auth";
 import { assertHotelOperational, getHotel } from "../lib/hotel";
 import { guest } from "../lib/route";
 import { emit } from "../realtime/io";
 import { loadPublicMenu, priceSelections } from "../services/menu";
-import { broadcastCart, joinSession, lookupTable, sessionView } from "../services/sessions";
+import { broadcastCart, joinSession, lookupTable, resolveTableCode, sessionView } from "../services/sessions";
 import { announceOrder, createOrder } from "../services/orders";
 import { replaceItem, transitionItem } from "../services/items";
-import { billView, PAYMENT_LOCK_MS, receiptUrl, settleIfPaid, verifyReceiptToken } from "../services/billing";
+import { assertNothingPending, billView, PAYMENT_LOCK_MS, receiptUrl, settleIfPaid, verifyReceiptToken } from "../services/billing";
 import { gatewayFor } from "../payments/gateway";
 import { waiterRooms } from "../services/notify";
-import { orderInclude, requestInclude, toOrderView, toRequestView } from "../services/views";
+import { orderInclude, requestInclude, sessionLabel, toOrderView, toRequestView } from "../services/views";
 
 const IdParam = z.object({ id: Id });
 
@@ -25,6 +25,14 @@ export async function publicRoutes(app: FastifyInstance) {
     const { deviceId } = parse(z.object({ deviceId: z.string().max(64).optional() }), req.query);
     return lookupTable(qrToken, deviceId);
   });
+
+  /**
+   * Guest typed the code printed under the QR. POST keeps codes out of URLs and logs. Guessing: about a billion
+   * codes and a strict limit, always per IP (a guest cookie must not buy a fresh budget).
+   */
+  app.post("/v1/p/table-code", { config: { rateLimit: { max: 15, timeWindow: "1 minute", keyGenerator: (req) => `table-code:${req.ip}` } } }, async (req) =>
+    resolveTableCode(parse(TableCodeInput, req.body).code),
+  );
 
   /** Menu with ETag: repeat loads on slow 4G cost a 304. */
   app.get("/v1/p/h/:slug/menu", async (req, reply) => {
@@ -67,6 +75,7 @@ export async function publicRoutes(app: FastifyInstance) {
         addonIds: [...input.addonIds],
         quantity: input.quantity,
         note: input.note ?? null,
+        isParcel: input.isParcel,
       };
       if (existing) await db.cartItem.update({ where: { id }, data });
       else await db.cartItem.create({ data: { id, hotelId: g.hid, sessionId: g.ses, guestId: g.sub, ...data } });
@@ -113,7 +122,7 @@ export async function publicRoutes(app: FastifyInstance) {
         note: input.note,
         clearCart: true,
         // only the dish choices: cart line ids are the phone's own and must never become order item ids
-        lines: cart.map((c) => ({ itemId: c.itemId, variantId: c.variantId, addonIds: c.addonIds, quantity: c.quantity, note: c.note, guestId: c.guestId, ref: c.id })),
+        lines: cart.map((c) => ({ itemId: c.itemId, variantId: c.variantId, addonIds: c.addonIds, quantity: c.quantity, note: c.note, isParcel: c.isParcel, guestId: c.guestId, ref: c.id })),
       });
       if (created) {
         await announceOrder(order);
@@ -129,7 +138,7 @@ export async function publicRoutes(app: FastifyInstance) {
     guest(async (_req, _reply, g) => {
       const orders = await db.order.findMany({ where: { sessionId: g.ses }, include: orderInclude, orderBy: { placedAt: "asc" } });
       return orders.map(toOrderView);
-    }),
+    }, { closedOk: true }), // a parcel can still be on its way after the bill is paid
   );
 
   /** Guest gives up on a pay-now order before paying. Refused while a UPI attempt for it is in flight. */
@@ -205,20 +214,20 @@ export async function publicRoutes(app: FastifyInstance) {
         hotelId: g.hid,
         requestId: request.id,
         sessionId: g.ses,
-        tableLabel: session.table.label,
+        tableLabel: sessionLabel(session),
         type: request.type,
       });
       if (input.type === "BILL") {
         await db.$transaction(async (tx) => {
           await tx.tableSession.update({ where: { id: g.ses }, data: { status: "BILLING" } });
-          await tx.table.update({ where: { id: session.tableId }, data: { status: "BILL_REQUESTED" } });
+          if (session.parcelNo === null) await tx.table.update({ where: { id: session.tableId }, data: { status: "BILL_REQUESTED" } });
         });
         emit("bill:requested", [...waiters, rooms.cashiers(g.hid), rooms.managers(g.hid)], {
           hotelId: g.hid,
           sessionId: g.ses,
-          tableLabel: session.table.label,
+          tableLabel: sessionLabel(session),
         });
-        emit("table:status_changed", [...waiters, rooms.managers(g.hid)], { hotelId: g.hid, tableId: session.tableId, status: "BILL_REQUESTED" });
+        if (session.parcelNo === null) emit("table:status_changed", [...waiters, rooms.managers(g.hid)], { hotelId: g.hid, tableId: session.tableId, status: "BILL_REQUESTED" });
       }
       reply.status(201);
       return toRequestView(request);
@@ -241,6 +250,7 @@ export async function publicRoutes(app: FastifyInstance) {
     guest(async (_req, _reply, g) => {
       const view = await billView(g.ses);
       if (view.due > 0 || view.paid === 0) throw conflict("BILL_DUE", "Please pay the bill first");
+      await assertNothingPending(g.ses);
       await settleIfPaid(g.ses);
       return { receiptUrl: receiptUrl(view.id) };
     }),

@@ -75,7 +75,7 @@ export async function paymentRoutes(app: FastifyInstance) {
       // fully paid → the guest's thank-you screen shows the digital bill
       const settled = await db.bill.findFirst({ where: { sessionId: g.ses, status: "PAID" }, select: { id: true } });
       return { ok: true, receiptUrl: settled ? receiptUrl(settled.id) : null };
-    }),
+    }, { closedOk: true }), // the webhook may have settled the bill first
   );
 
   /**

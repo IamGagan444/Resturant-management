@@ -299,7 +299,7 @@ export async function platformRoutes(app: FastifyInstance) {
     }),
   );
 
-  /** Owner/manager lost their phone and recovery codes: wipe the authenticator; their next sign-in sets up a new one. */
+  /** Owner/manager lost their phone and recovery codes: wipe the authenticator; two-step sign-in is off until they set it up again. */
   app.post(
     "/v1/platform/staff/:id/mfa-reset",
     platform(async (req) => {

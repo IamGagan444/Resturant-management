@@ -21,13 +21,15 @@ export class NetworkError extends ApiError {
   }
 }
 
-let refreshing: Promise<boolean> | null = null;
+type Refreshed = "ok" | "denied" | "unreachable";
+let refreshing: Promise<Refreshed> | null = null;
 
 /** One refresh at a time; concurrent 401s wait for the same rotation. */
-function refresh(): Promise<boolean> {
+export function refresh(): Promise<Refreshed> {
   refreshing ??= fetch(`${API_URL}/v1/auth/refresh`, { method: "POST", credentials: "include" })
-    .then((r) => r.ok)
-    .catch(() => false)
+    // only a clear "no" signs someone out: a dead connection, a busy or restarting server is not one
+    .then((r): Refreshed => (r.ok ? "ok" : r.status === 401 || r.status === 403 ? "denied" : "unreachable"))
+    .catch((): Refreshed => "unreachable")
     .finally(() => setTimeout(() => (refreshing = null), 0));
   return refreshing;
 }
@@ -57,8 +59,10 @@ export async function api<T>(method: Method, path: string, body?: unknown, retri
     throw new NetworkError();
   }
   // sign-in calls answer 401 for wrong credentials: never "refresh" those (two-step settings are ordinary signed-in calls)
-  if (res.status === 401 && !retried && getMode() === "cloud" && (!path.startsWith("/v1/auth/") || path.startsWith("/v1/auth/mfa"))) {
-    if (await refresh()) return api<T>(method, path, body, true);
+  if (res.status === 401 && !retried && getMode() === "cloud" && (!path.startsWith("/v1/auth/") || path.startsWith("/v1/auth/mfa") || path === "/v1/auth/me")) {
+    const r = await refresh();
+    if (r === "ok") return api<T>(method, path, body, true);
+    if (r === "unreachable") throw new NetworkError();
   }
   const json = (await res.json().catch(() => ({}))) as { error?: { code: string; message: string; details?: unknown } };
   if (!res.ok) throw new ApiError(res.status, json.error?.code ?? "UNKNOWN", json.error?.message ?? "Request failed", json.error?.details);

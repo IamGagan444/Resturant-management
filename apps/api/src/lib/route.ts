@@ -35,14 +35,14 @@ export function platform(handler: Handler<PlatformClaims>) {
   };
 }
 
-/** Customer routes: valid guest token AND the session is still live. */
-export function guest(handler: Handler<GuestClaims>) {
+/** Customer routes: valid guest token AND the session is still live (`closedOk`: also after the bill is paid). */
+export function guest(handler: Handler<GuestClaims>, opts: { closedOk?: boolean } = {}) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const claims = await readGuest(req);
     assertHotelOperational(await getHotel(claims.hid));
     return withTenant(claims.hid, async () => {
       const session = await db.tableSession.findUnique({ where: { id: claims.ses }, select: { status: true } });
-      if (!session || session.status === "CLOSED") throw unauthorized("This table session has ended. Scan the QR again.");
+      if (!session || (session.status === "CLOSED" && !opts.closedOk)) throw unauthorized("This table session has ended. Scan the QR again.");
       return handler(req, reply, claims);
     });
   };

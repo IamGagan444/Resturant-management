@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ButtonHTMLAttributes, type ComponentProps, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeftRight, CloudOff, RefreshCw, Router, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, CloudOff, RefreshCw, Router, type LucideIcon, Package } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { useNet } from "@/lib/net";
 import { onRejected } from "@/lib/outbox";
@@ -29,6 +29,16 @@ export function Button({ variant = "primary", className = "", ...props }: Button
 }
 
 /** A link that looks like a button (same variants). In-app links swap the page without a full reload. */
+/** Dish to be packed: shown next to its name everywhere staff see it. */
+export function ParcelTag({ className = "" }: { className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-md bg-warn px-1.5 py-0.5 align-middle text-xs font-bold tracking-wide text-warn-ink uppercase ${className}`}>
+      <Package className="h-3.5 w-3.5" aria-hidden />
+      Parcel
+    </span>
+  );
+}
+
 export function LinkButton({ variant = "outline", className = "", ...props }: ComponentProps<typeof Link> & { variant?: Variant }) {
   return <Link className={cn(BUTTON_BASE, BUTTON_VARIANT[variant], className)} {...props} />;
 }

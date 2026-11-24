@@ -59,7 +59,7 @@ export default function RestaurantsPage() {
     if (!h.owner) return;
     const ok = await confirm({
       title: `Reset ${h.owner.name}'s two-step sign-in?`,
-      description: "Only after you've confirmed it's really them (e.g. on a call). They're signed out, and set up a new authenticator at their next sign-in.",
+      description: "Only after you've confirmed it's really them (e.g. on a call). They're signed out and can sign in with just their password until they turn it on again.",
       confirmLabel: "Reset",
     });
     if (!ok) return;

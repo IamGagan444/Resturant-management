@@ -6,7 +6,7 @@ import { businessDay } from "../lib/hotel";
 import { emit } from "../realtime/io";
 import { priceSelections } from "./menu";
 import { waiterRooms } from "./notify";
-import { orderInclude, type OrderWithItems } from "./views";
+import { orderInclude, sessionLabel, type OrderWithItems } from "./views";
 
 export interface NewLine {
   /** client-generated item id (offline / hub orders), so every copy agrees on it */
@@ -16,6 +16,7 @@ export interface NewLine {
   addonIds: readonly string[];
   quantity: number;
   note?: string | null;
+  isParcel?: boolean;
   guestId?: string | null;
   /** cart line id, echoed in errors so the UI can highlight it */
   ref?: string;
@@ -37,7 +38,7 @@ export interface CreateOrderParams {
 type ValidLine = Extract<Awaited<ReturnType<typeof priceSelections>>[number], { ok: true }>;
 
 /** Snapshot of a priced line: name, price and tax as they are right now, so later menu edits never change the bill. */
-export function orderItemData(hotelId: string, r: ValidLine, l: Pick<NewLine, "guestId" | "quantity" | "note">) {
+export function orderItemData(hotelId: string, r: ValidLine, l: Pick<NewLine, "guestId" | "quantity" | "note" | "isParcel">) {
   return {
     hotelId,
     itemId: r.item.id,
@@ -50,6 +51,7 @@ export function orderItemData(hotelId: string, r: ValidLine, l: Pick<NewLine, "g
     taxBps: r.taxes.reduce((a, t) => a + t.rateBps, 0),
     taxSnapshot: r.taxes.map((t) => ({ name: t.name, rateBps: t.rateBps })),
     note: l.note ?? null,
+    isParcel: l.isParcel ?? false,
     addons: { create: r.line.addons.map((a) => ({ hotelId, addonId: a.id, nameSnapshot: a.name, price: a.price })) },
   } satisfies Prisma.OrderItemUncheckedCreateWithoutOrderInput;
 }
@@ -64,6 +66,7 @@ export async function createOrder(p: CreateOrderParams): Promise<{ order: OrderW
   if (existing) return { order: existing, created: false };
   if (p.lines.length === 0) throw conflict("CART_EMPTY", "Add something to your order first");
 
+  const { parcelNo } = await db.tableSession.findUniqueOrThrow({ where: { id: p.sessionId }, select: { parcelNo: true } });
   const priced = await priceSelections(p.hotel, p.lines);
   const invalid = priced.flatMap((r, i) => (r.ok ? [] : [{ ref: p.lines[i]?.ref ?? String(i), itemId: p.lines[i]?.itemId, errors: r.errors }]));
   if (invalid.length) throw conflict("ITEM_UNAVAILABLE", "Some items are no longer available", invalid);
@@ -75,7 +78,8 @@ export async function createOrder(p: CreateOrderParams): Promise<{ order: OrderW
   const items = p.lines.map((l, i) => {
     const r = priced[i];
     if (!r?.ok) throw new Error("unreachable: invalid line after validation");
-    return { ...orderItemData(hotelId, r, l), ...(l.id ? { id: l.id } : {}) };
+    const line = { ...l, isParcel: l.isParcel || parcelNo !== null }; // walk-in parcels are packed, whatever the phone sent
+    return { ...orderItemData(hotelId, r, line), ...(l.id ? { id: l.id } : {}) };
   });
   const prepTimes = priced.flatMap((r) => (r.ok ? [r.item.prepTimeMin] : []));
 
@@ -121,7 +125,7 @@ export async function announceOrder(order: OrderWithItems) {
       orderId: order.id,
       sessionId: order.sessionId,
       tableId: order.session.tableId,
-      tableLabel: order.session.table.label,
+      tableLabel: sessionLabel(order.session),
     });
     return;
   }
@@ -131,7 +135,7 @@ export async function announceOrder(order: OrderWithItems) {
     hotelId,
     orderId: order.id,
     sessionId: order.sessionId,
-    tableLabel: order.session.table.label,
+    tableLabel: sessionLabel(order.session),
     orderNumber: order.orderNumber,
     stationIds,
   });

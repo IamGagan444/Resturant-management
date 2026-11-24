@@ -63,6 +63,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ token:
                 <td className="py-1">
                   {l.name}
                   {l.variantName ? ` (${l.variantName})` : ""}
+                  {l.isParcel ? " · Parcel" : ""}
                   {l.addons.length > 0 && <span className="muted block text-xs">{l.addons.join(", ")}</span>}
                 </td>
                 <td className="text-right">{l.quantity}</td>

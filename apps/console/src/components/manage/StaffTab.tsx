@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { LeadPin, ResetPinInput, StaffCreateInput, StaffUpdateInput, type StaffRole } from "@rms/contracts";
+import { LeadPin, ResetPinInput, StaffCreateInput, StaffUpdateInput, pinLengthFor, type StaffRole } from "@rms/contracts";
 import { KeyRound, Pencil, Phone, Power, ShieldOff, UserPlus, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/auth";
@@ -13,7 +13,7 @@ import { Loadable, confirm, notify } from "@/components/ui/feedback";
 import { Modal } from "@/components/ui/modal";
 import { ListSkeleton, Skeleton } from "@/components/ui/skeleton";
 
-interface Staff { id: string; name: string; role: StaffRole; phone: string | null; email: string | null; isActive: boolean; stationId: string | null }
+interface Staff { alertsOn?: boolean; id: string; name: string; role: StaffRole; phone: string | null; email: string | null; isActive: boolean; stationId: string | null }
 interface Station { id: string; name: string }
 interface Table { id: string; label: string; isActive: boolean }
 
@@ -41,13 +41,13 @@ export function StaffTab() {
   async function resetMfa(s: Staff) {
     const ok = await confirm({
       title: `Reset ${s.name}'s two-step sign-in?`,
-      description: "For a lost phone. They're signed out and set up a new authenticator at their next sign-in.",
+      description: "For a lost phone. They're signed out and can sign in with just their password until they turn it on again.",
       confirmLabel: "Reset",
     });
     if (!ok) return;
     try {
       await api("POST", `/v1/admin/staff/${s.id}/mfa-reset`);
-      notify.ok(`${s.name} will set up two-step sign-in again`);
+      notify.ok(`Two-step sign-in is off for ${s.name}`);
     } catch (e) {
       notify.error(e);
     }
@@ -101,6 +101,7 @@ export function StaffTab() {
                         <Badge>{roleLabel(s.role)}</Badge>
                         {stationName(s.stationId) && <Badge tone="brand">{stationName(s.stationId)}</Badge>}
                         {!s.isActive && <Badge tone="late">inactive</Badge>}
+                        {s.isActive && s.role !== "OWNER" && <Badge tone={s.alertsOn ? "fresh" : "warn"}>{s.alertsOn ? "phone alerts on" : "no phone alerts"}</Badge>}
                         {s.phone && (
                           <span className="muted inline-flex items-center gap-1 text-xs">
                             <Phone className="h-3 w-3" aria-hidden />
@@ -205,16 +206,16 @@ function StaffForm({ person, stations, onClose, onSaved }: { person: Staff | nul
           <input {...form.text("name")} autoComplete="off" maxLength={60} placeholder="e.g. Jeevan" />
         </Field>
         <Field label="Role" required error={form.error("role")} hint={
-            !adding && mgr && !isManagerRole(person.role)
-              ? "After saving, use Reset PIN to give them a 6-digit PIN: their old one won't work for this role."
+            !adding && mgr !== isManagerRole(person.role)
+              ? `After saving, use Reset PIN to give them a ${pinLengthFor(v.role)}-digit PIN: their old one won't work for this role.`
               : ROLES.find((r) => r.value === v.role)?.hint
           }
         >
           <SelectField value={v.role} onChange={(r) => form.set("role", r as StaffRole)} options={ROLES} invalid={Boolean(form.error("role"))} />
         </Field>
         {adding ? (
-          <Field label="PIN" required error={form.error("pin")} hint={mgr ? "6 digits: owners and managers can do everything" : "4–6 digits, used to sign in"}>
-            <input {...form.text("pin")} onChange={(e) => form.set("pin", e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="off" placeholder="••••" />
+          <Field label="PIN" required error={form.error("pin")} hint={mgr ? "6 digits: owners and managers can do everything" : "4 digits, used to sign in"}>
+            <input {...form.text("pin")} onChange={(e) => form.set("pin", e.target.value.replace(/\D/g, "").slice(0, pinLengthFor(v.role)))} inputMode="numeric" autoComplete="off" placeholder="••••" />
           </Field>
         ) : (
           <Field label="Mobile" error={form.error("phone")}>
@@ -275,10 +276,10 @@ function ResetPin({ person, onClose }: { person: Staff; onClose: () => void }) {
       }
     >
       <form id="pin-form" onSubmit={save} className="space-y-4" noValidate>
-        <Field label="New PIN" required error={form.error("pin")} hint={lead ? "6 digits for owners and managers" : "4–6 digits"}>
+        <Field label="New PIN" required error={form.error("pin")} hint={lead ? "6 digits for owners and managers" : "4 digits"}>
           <input
             {...form.text("pin")}
-            onChange={(e) => form.set("pin", e.target.value.replace(/\D/g, "").slice(0, 6))}
+            onChange={(e) => form.set("pin", e.target.value.replace(/\D/g, "").slice(0, pinLengthFor(person.role)))}
             inputMode="numeric"
             autoComplete="off"
             autoFocus

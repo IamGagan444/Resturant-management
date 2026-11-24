@@ -14,6 +14,7 @@ export const BillLineView = z.object({
   amount: Paise,
   guestId: Id.nullable(),
   guestName: z.string().nullable(),
+  isParcel: z.boolean(),
   splitId: Id.nullable(),
 });
 export type BillLineView = z.infer<typeof BillLineView>;

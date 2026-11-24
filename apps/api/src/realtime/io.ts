@@ -13,6 +13,7 @@ import { env } from "../env";
 import { COOKIE, verifyAccessToken, verifyGuestToken } from "../lib/auth";
 import { createRedis, watchRedis } from "../lib/redis";
 import { allowedOrigins } from "../lib/security";
+import { nudgeAlerts } from "../jobs/queue";
 
 type IO = Server<ClientToServerEvents, ServerToClientEvents>;
 let io: IO | null = null;
@@ -78,12 +79,17 @@ export function initRealtime(httpServer: HttpServer): IO {
   return server;
 }
 
+const RING_EVENTS: ReadonlySet<ServerEventName> = new Set(["order:placed", "order:pending_confirmation", "request:created", "bill:requested", "pickup:escalated"]);
+const ringsPhones = (event: ServerEventName, payload: object) =>
+  RING_EVENTS.has(event) || (event === "item:status_changed" && (payload as { to?: string }).to === "READY");
+
 /** Typed emit. No-op when realtime isn't initialised (unit/integration tests using inject). */
 export function emit<E extends ServerEventName>(
   event: E,
   to: readonly string[],
   payload: Omit<ServerEventPayload<E>, "at">,
 ): void {
+  if (ringsPhones(event, payload)) nudgeAlerts(payload.hotelId);
   if (!io || to.length === 0) return;
   const full = { ...payload, at: new Date().toISOString() } as ServerEventPayload<E>;
   const args = [full] as unknown as Parameters<ServerToClientEvents[E]>;

@@ -75,3 +75,46 @@ self.addEventListener("fetch", (event) => {
       ),
   );
 });
+
+/* ---------- Phone alerts ---------- */
+
+// A push arrives for something still waiting; the server repeats it until someone acts.
+self.addEventListener("push", (event) => {
+  let p = {};
+  try {
+    p = event.data.json();
+  } catch {
+    // shown with the defaults below: browsers require a notification for every push
+  }
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      // the open screen is already ringing by itself
+      const onScreen = wins.some((w) => w.visibilityState === "visible");
+      return self.registration.showNotification(p.title || "Restro", {
+        body: p.body || "Something is waiting for you",
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        tag: "rms-alerts", // one alert that keeps ringing, not a pile of them
+        renotify: true,
+        requireInteraction: true,
+        silent: onScreen,
+        ...(onScreen ? {} : { vibrate: [400, 150, 400, 150, 400, 150, 800] }),
+        data: { url: p.url || "/" },
+      });
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  // only ever our own pages
+  const url = new URL(event.notification.data?.url || "/", self.location.origin);
+  const target = url.origin === self.location.origin ? url.href : self.location.origin;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      const open = wins.find((w) => w.url.startsWith(target)) || wins[0];
+      if (!open) return self.clients.openWindow(target);
+      return open.focus().then((w) => (w.url.startsWith(target) ? w : w.navigate(target).catch(() => w)));
+    }),
+  );
+});

@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BoardTable, OrderItemView, PublicMenu, RequestType, WaiterBoard } from "@rms/contracts";
-import { priceLine, type PricingAddonGroup } from "@rms/domain";
+import { parcelNumber, priceLine, type PricingAddonGroup } from "@rms/domain";
 import { api, newClientId, newOrderedId, remembered, rupees } from "@/lib/api";
 import { afterSending, send } from "@/lib/outbox";
 import { unlockOnFirstTap, useRinger } from "@/lib/ringer";
 import { RingBanner } from "@/components/RingBanner";
 import { useGuard } from "@/lib/auth";
+import { AlertsBar } from "@/components/AlertsBar";
 import { buzz, chime, unlockSound, useStaffSocket } from "@/lib/realtime";
 import {
   AlarmClock,
@@ -26,7 +27,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { Button, EmptyState, OfflineBanner, RejectionToast, TopBar } from "@/components/ui";
+import { ParcelTag, Button, EmptyState, OfflineBanner, RejectionToast, TopBar } from "@/components/ui";
 import { notify } from "@/components/ui/feedback";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/Sheet";
@@ -131,11 +132,12 @@ export default function WaiterPage() {
         {!alerts && (
           <Button variant="outline" className="text-sm" onClick={() => (unlockSound(), setAlerts(true), chime())}>
             <Bell className="h-4 w-4" aria-hidden />
-            Alerts on
+            Turn on sound
           </Button>
         )}
       </TopBar>
       <OfflineBanner online={online} />
+      <AlertsBar enabled waiting={ringKey !== ""} />
       <RingBanner ringing={ringer.ringing} label={ringLabel} onSnooze={() => ringer.snooze()} />
       <RejectionToast />
       {escalation && (
@@ -173,21 +175,22 @@ export default function WaiterPage() {
                   <span
                     className={`grid h-12 min-w-12 shrink-0 place-items-center rounded-xl px-2 text-lg font-extrabold ${i.status === "OUT_OF_STOCK" ? "bg-late/12 text-late" : "bg-fresh/12 text-fresh"}`}
                   >
-                    {b.tables.find((t) => t.session?.id === i.sessionId)?.label ?? "?"}
+                    {i.tableLabel ?? b.tables.find((t) => t.session?.id === i.sessionId)?.label ?? "?"}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">
                       {i.quantity} × {i.name}
-                      {i.variantName ? ` (${i.variantName})` : ""}
+                      {i.variantName ? ` (${i.variantName})` : ""} {i.isParcel && <ParcelTag />}
                     </p>
+                    {i.unpaid && i.status !== "OUT_OF_STOCK" && <p className="text-sm font-bold text-late">Not paid yet: collect payment before handing over</p>}
                     {i.status === "OUT_OF_STOCK" && <p className="text-sm font-medium text-late">Out of stock — ask the guest what they&apos;d like instead</p>}
                   </div>
                   {i.status === "READY" && (
                     <Button variant="success" onClick={() => move(i.id, "PICKED_UP")}>
-                      Picked up
+                      {i.isParcel ? "Packed" : "Picked up"}
                     </Button>
                   )}
-                  {i.status === "PICKED_UP" && <Button onClick={() => move(i.id, "SERVED")}>Served</Button>}
+                  {i.status === "PICKED_UP" && <Button onClick={() => move(i.id, "SERVED")}>{i.isParcel ? "Handed over" : "Served"}</Button>}
                   {i.status === "OUT_OF_STOCK" && <Button onClick={() => setSwapFor(i)}>Swap</Button>}
                 </div>
               ))}
@@ -231,7 +234,7 @@ export default function WaiterPage() {
                   <p className="text-lg font-bold">
                     {o.tableLabel} · #{o.orderNumber}
                   </p>
-                  <p className="muted text-sm">{o.items.map((i) => `${i.quantity}× ${i.name}`).join(", ")}</p>
+                  <p className="muted text-sm">{o.items.map((i) => `${i.quantity}× ${i.name}${i.isParcel ? " (parcel)" : ""}`).join(", ")}</p>
                   <div className="mt-3 flex gap-2">
                     <Button
                       variant="success"
@@ -249,14 +252,14 @@ export default function WaiterPage() {
                         );
                       }}
                     >
-                      Guests are seated ✓
+                      {parcelNumber(o.tableLabel) ? "Customer is here ✓" : "Guests are seated ✓"}
                     </Button>
                     <Button
                       variant="outline"
                       onClick={() =>
                         act(
                           api("POST", `/v1/s/orders/${o.id}/reject`, {
-                            reason: "No guests at table",
+                            reason: parcelNumber(o.tableLabel) ? "No customer at the counter" : "No guests at table",
                           }),
                         )
                       }
@@ -275,7 +278,7 @@ export default function WaiterPage() {
                 <div key={t.id} className={`surface flex flex-col rounded-2xl border p-3 shadow-soft ${TABLE_STYLE[t.status]}`}>
                   <span className="flex items-baseline justify-between gap-1">
                     <span className="text-xl font-extrabold">{t.label}</span>
-                    <span className="muted truncate text-[11px] font-medium capitalize">{t.status.replace("_", " ").toLowerCase()}</span>
+                    <span className="muted truncate text-[11px] font-medium capitalize">{t.isParcelCounter ? "parcel counter" : t.status.replace("_", " ").toLowerCase()}</span>
                   </span>
                   {t.session ? (
                     <span className="mt-1 flex items-center gap-1 text-xs">
@@ -283,7 +286,7 @@ export default function WaiterPage() {
                       <strong className="tracking-wider">{t.session.joinCode}</strong>
                     </span>
                   ) : (
-                    <span className="mt-1 text-xs">&nbsp;</span>
+                    <span className="mt-1 line-clamp-2 text-xs">{t.parcels?.length ? `Open: ${t.parcels.join(", ")}` : "\u00a0"}</span>
                   )}
                   {t.status === "CLEANING" ? (
                     <button
@@ -304,7 +307,7 @@ export default function WaiterPage() {
                       onClick={() => setOrderFor(t)}
                     >
                       <Plus className="h-4 w-4" aria-hidden />
-                      Order
+                      {t.isParcelCounter ? "New parcel" : "Order"}
                     </button>
                   )}
                 </div>
@@ -352,6 +355,7 @@ interface Line {
   addonIds: string[];
   quantity: number;
   unitPrice: number;
+  isParcel: boolean;
 }
 
 /** Required groups get their first available options, so a dish is one tap. Null if it can't be priced that way. */
@@ -436,6 +440,7 @@ function TakeOrder({ table, onClose, onPlaced }: { table: BoardTable; onClose: (
   });
   const [q, setQ] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
+  const [parcel, setParcel] = useState(table.isParcelCounter === true); // dishes added while this is on are packed
   const [error, setError] = useState<string | null>(null);
   const [clientId] = useState(newClientId);
   const groups = useMemo(() => new Map<string, PricingAddonGroup>((menu.data?.addonGroups ?? []).map((g) => [g.id, g])), [menu.data]);
@@ -445,7 +450,7 @@ function TakeOrder({ table, onClose, onPlaced }: { table: BoardTable; onClose: (
     const p = quickPick(menu.data, groups, itemId, variantId);
     if (!p) return setError("That dish needs options");
     const { item, addonIds, line } = p;
-    const key = `${itemId}|${variantId}`;
+    const key = `${itemId}|${variantId}|${parcel}`;
     setLines((cur) => {
       const ex = cur.find((l) => l.key === key);
       if (ex) return cur.map((l) => (l.key === key ? { ...l, quantity: l.quantity + 1 } : l));
@@ -460,6 +465,7 @@ function TakeOrder({ table, onClose, onPlaced }: { table: BoardTable; onClose: (
           addonIds,
           quantity: 1,
           unitPrice: line.unitPrice,
+          isParcel: parcel,
         },
       ];
     });
@@ -473,12 +479,13 @@ function TakeOrder({ table, onClose, onPlaced }: { table: BoardTable; onClose: (
         {
           type: "order.create",
           tableId: table.id,
-          lines: lines.map(({ itemId, variantId, addonIds, quantity }) => ({
+          lines: lines.map(({ itemId, variantId, addonIds, quantity, isParcel }) => ({
             id: newOrderedId(),
             itemId,
             variantId,
             addonIds,
             quantity,
+            isParcel,
           })),
         },
         clientId,
@@ -495,6 +502,18 @@ function TakeOrder({ table, onClose, onPlaced }: { table: BoardTable; onClose: (
 
   return (
     <Sheet open onClose={onClose} title={`Order for ${table.label}`}>
+      <div role="group" aria-label="Add dishes as" className={`mb-3 ${table.isParcelCounter ? "hidden" : "grid"} grid-cols-2 gap-1 rounded-xl bg-(--sunken) p-1`}>
+        {[false, true].map((p) => (
+          <button
+            key={String(p)}
+            aria-pressed={parcel === p}
+            onClick={() => setParcel(p)}
+            className={`h-10 rounded-lg text-sm font-semibold ${parcel === p ? (p ? "bg-warn text-warn-ink" : "surface shadow-soft") : "muted"}`}
+          >
+            {p ? "Parcel" : "Eat here"}
+          </button>
+        ))}
+      </div>
       <SearchBox value={q} onChange={setQ} />
       <ul className="max-h-[40dvh] divide-y divide-(--line) overflow-y-auto">
         {items.map((i) => (
@@ -519,11 +538,11 @@ function TakeOrder({ table, onClose, onPlaced }: { table: BoardTable; onClose: (
           {lines.map((l) => (
             <li key={l.key} className="flex items-center justify-between gap-2 text-sm">
               <span>
-                <strong>{l.quantity} ×</strong> {l.name}
+                <strong>{l.quantity} ×</strong> {l.name} {l.isParcel && <ParcelTag />}
               </span>
               <button
                 className="muted grid h-8 w-8 place-items-center rounded-lg hover:bg-late/10 hover:text-late"
-                aria-label={`Remove ${l.name}`}
+                aria-label={`Remove ${l.name}${l.isParcel ? " (parcel)" : ""}`}
                 onClick={() => setLines((c) => c.filter((x) => x.key !== l.key))}
               >
                 <X className="h-4 w-4" aria-hidden />

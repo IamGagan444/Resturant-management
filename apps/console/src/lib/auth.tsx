@@ -8,6 +8,7 @@ import { ApiError, api } from "./api";
 import { getMode, saveHub } from "./net";
 import { deviceKey } from "./devicekey";
 import { flush, setOutboxUser } from "./outbox";
+import { clearNotifications } from "./push";
 
 export function useMe() {
   return useQuery({
@@ -72,6 +73,7 @@ export function useGuard(allowed: readonly StaffRole[] | "platform"): Me | null 
 export async function signOut() {
   await Promise.race([flush(), new Promise((r) => setTimeout(r, 3000))]);
   await api("POST", "/v1/auth/logout").catch(() => undefined);
+  await clearNotifications();
   saveHub(null);
   location.href = "/device/";
 }

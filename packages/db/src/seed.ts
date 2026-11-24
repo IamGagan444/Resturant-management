@@ -69,7 +69,7 @@ async function main() {
       role: "OWNER",
       phone: "9000000001",
       pinHash: await pin("999999"),
-      // two-step sign-in is required: the demo owner comes enrolled with a known (demo-only) authenticator
+      // the demo owner comes with two-step sign-in on, with a known (demo-only) authenticator
       mfaSecretEnc: encryptAtRest(DEMO_TOTP_SECRET, encryptionKey),
       mfaEnabledAt: new Date(),
     },

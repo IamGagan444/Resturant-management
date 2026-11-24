@@ -107,8 +107,8 @@ export async function loginRoutes(app: FastifyInstance) {
 
   /**
    * Email + password: super admin, or hotel owner/manager on the web admin.
-   * The password never opens a session on its own (when MFA is required): the answer is a short-lived `mfaToken`
-   * for the code step, or for setting up an authenticator if the account has none yet.
+   * With two-step sign-in on, the answer is a short-lived `mfaToken` for the code step. Without it the session opens,
+   * except for platform admins (when MFA is required): they get an `mfaToken` to set up an authenticator first.
    * Wrong passwords count per account (all IPs together), and unknown emails cost the same time as known ones.
    */
   app.post("/v1/auth/login", strict, async (req, reply): Promise<LoginResult> => {
@@ -134,7 +134,7 @@ export async function loginRoutes(app: FastifyInstance) {
     const acct = await loadAccount(kind, id);
     if (!acct) throw unauthorized("Wrong email or password");
     if (acct.mfaEnabledAt) return { ok: true, typ: kind, mfaRequired: true, mfaToken: await signMfaPending(kind, id, "verify") };
-    if (mfaRequired()) return { ok: true, typ: kind, mfaSetupRequired: true, mfaToken: await signMfaPending(kind, id, "enroll") };
+    if (mfaRequired(kind)) return { ok: true, typ: kind, mfaSetupRequired: true, mfaToken: await signMfaPending(kind, id, "enroll") };
     return openSession(reply, kind, id);
   });
 
@@ -196,7 +196,7 @@ export async function loginRoutes(app: FastifyInstance) {
     if (!acct) throw unauthorized();
     return {
       enabled: Boolean(acct.mfaEnabledAt),
-      required: mfaRequired(),
+      required: mfaRequired(kind),
       available: Boolean(acct.passwordHash),
       recoveryCodesLeft: acct.mfaRecoveryHashes.length,
     };
@@ -235,10 +235,10 @@ export async function loginRoutes(app: FastifyInstance) {
     return { ok: true, recoveryCodes };
   });
 
-  /** Only when two-step sign-in is optional (never in production). Needs the password and a current code. */
+  /** Only where two-step sign-in is optional (owners and managers). Needs the password and a current code. */
   app.post("/v1/auth/mfa/disable", strict, async (req) => {
     const { kind, id } = subjectOf(await readAccess(req));
-    if (mfaRequired()) throw new AppError(409, "MFA_REQUIRED", "Two-step sign-in is required here. You can move it to a new phone instead.");
+    if (mfaRequired(kind)) throw new AppError(409, "MFA_REQUIRED", "Two-step sign-in is required here. You can move it to a new phone instead.");
     const { password, code } = parse(MfaDisableInput, req.body);
     const acct = await loadAccount(kind, id);
     if (!acct?.mfaEnabledAt || !acct.passwordHash) throw new AppError(409, "MFA_OFF", "Two-step sign-in is not on");
@@ -253,7 +253,7 @@ export async function loginRoutes(app: FastifyInstance) {
   });
 }
 
-/** Lost phone and no recovery codes: an admin wipes the authenticator; the next sign-in sets up a new one. */
+/** Lost phone and no recovery codes: an admin wipes the authenticator (two-step sign-in is off until set up again). */
 export async function resetMfa(kind: AccountKind, id: string) {
   await updateAccount(kind, id, MFA_CLEARED);
   await revokeAllFor(subjectType(kind), id);

@@ -95,7 +95,7 @@ e2e/          Playwright full-flow test
 | `DATABASE_PLATFORM_URL` | Role `rms_platform`: the API's unscoped pool (sign-in, platform admin, jobs). Required in production. |
 | `RMS_APP_DB_PASSWORD`, `RMS_PLATFORM_DB_PASSWORD` | Passwords `pnpm db:provision` gives those roles (16+ chars, different). |
 | `REDIS_URL` | Match `docker-compose.yml` |
-| `MFA_REQUIRED` | Two-step sign-in (authenticator app) for every email + password account. Default `true`; the API refuses `false` in production. |
+| `MFA_REQUIRED` | Two-step sign-in (authenticator app) for platform admins. Owners and managers choose it under Manage → Settings. Default `true`; the API refuses `false` in production. |
 | `TRUST_PROXY` | Proxies allowed to set `X-Forwarded-For` (default: loopback / private networks). Never `true`. |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY` | 32+ chars each. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. `ENCRYPTION_KEY` encrypts each hotel's Razorpay secrets at rest. |
 | `STORAGE_DRIVER`, `UPLOAD_DIR` | Menu photos, resized to at most 1200 px WebP on upload. `local` stores them on disk, served by the API; `s3` uses the S3 settings below. |

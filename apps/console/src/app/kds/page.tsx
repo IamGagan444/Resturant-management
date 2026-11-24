@@ -9,9 +9,10 @@ import { afterSending, send } from "@/lib/outbox";
 import { unlockOnFirstTap, useRinger } from "@/lib/ringer";
 import { RingBanner } from "@/components/RingBanner";
 import { useGuard } from "@/lib/auth";
+import { AlertsBar } from "@/components/AlertsBar";
 import { chime, unlockSound, useStaffSocket } from "@/lib/realtime";
 import { Bell, CheckCheck, CheckCircle2, Circle, ClipboardList, Flame, PackageX, StickyNote } from "lucide-react";
-import { Button, OfflineBanner, RejectionToast, TopBar } from "@/components/ui";
+import { ParcelTag, Button, OfflineBanner, RejectionToast, TopBar } from "@/components/ui";
 import { confirm } from "@/components/ui/feedback";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -130,6 +131,7 @@ export default function KdsPage() {
         </Button>
       </TopBar>
       <OfflineBanner online={online} />
+      <AlertsBar enabled waiting={untouched.length > 0} />
       <RingBanner
         ringing={ringer.ringing}
         label={`${untouched.length} new ticket${untouched.length > 1 ? "s" : ""}: ${untouched.map((t) => t.tableLabel).join(", ")}. Tap a dish to start.`}
@@ -200,6 +202,7 @@ export default function KdsPage() {
                         <span className="flex-1">
                           <strong>{i.quantity} ×</strong> {i.name}
                           {i.variantName && <span className="muted"> ({i.variantName})</span>}
+                          {i.isParcel && <ParcelTag className="ml-2 text-sm" />}
                           {i.addons.length > 0 && <span className="muted block text-base">+ {i.addons.map((a) => a.name).join(", ")}</span>}
                           {i.note && <span className="block text-base font-semibold text-warn">“{i.note}”</span>}
                         </span>

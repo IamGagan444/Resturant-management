@@ -86,8 +86,8 @@ export class Client {
 }
 
 /**
- * Password sign-in the way a browser does it: two-step sign-in is required, so the first sign-in enrolls an
- * authenticator (remembered in `authenticators`) and later ones answer the code step with a recovery code
+ * Password sign-in the way a browser does it. A platform admin's first sign-in enrolls an authenticator
+ * (required for them; optional for owners and managers, see enableMfa), remembered in `authenticators`; later ones answer the code step with a recovery code
  * (one-time, so repeated sign-ins within one 30 s TOTP window still work).
  */
 export async function signIn(c: Client, email: string, password: string): Promise<void> {
@@ -102,6 +102,13 @@ export async function signIn(c: Client, email: string, password: string): Promis
     if (!code) throw new Error(`No authenticator enrolled for ${email}`);
     await c.ok("POST", "/v1/auth/login/mfa", { mfaToken: r.mfaToken, code });
   }
+}
+
+/** A signed-in owner or manager turns on two-step sign-in. */
+export async function enableMfa(c: Client, email: string, password: string): Promise<void> {
+  const { secret } = await c.ok<{ secret: string }>("POST", "/v1/auth/mfa/setup", { password });
+  const done = await c.ok<{ recoveryCodes: string[] }>("POST", "/v1/auth/mfa/enable", { code: hotp(secret, currentStep()) });
+  authenticators.set(email.toLowerCase(), { secret, recovery: done.recoveryCodes });
 }
 
 export async function createPlatformAdmin(app: FastifyInstance) {

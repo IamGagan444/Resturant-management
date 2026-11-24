@@ -9,6 +9,7 @@ import { cancelPickupEscalation, schedulePickupEscalation } from "../jobs/queue"
 import { priceSelections } from "./menu";
 import { waiterRooms } from "./notify";
 import { orderItemData } from "./orders";
+import { sessionLabel } from "./views";
 
 export interface TransitionActor {
   role: Actor;
@@ -17,7 +18,7 @@ export interface TransitionActor {
 
 export type TransitionOutcome = "APPLIED" | "NOOP";
 
-const itemInclude = { order: { include: { session: { select: { id: true, tableId: true } } } } } as const;
+const itemInclude = { order: { include: { session: { select: { id: true, tableId: true, status: true, parcelNo: true, table: { select: { label: true } } } } } } } as const;
 
 /**
  * The single place item status changes. Forward-only + conditional update means:
@@ -123,6 +124,8 @@ export async function replaceItem(actor: TransitionActor, orderItemId: string, i
   if (!old) throw notFound("Order item");
   if (old.replacedBy) return old.replacedBy.id;
   if (old.status !== "OUT_OF_STOCK") throw conflict("NOT_OUT_OF_STOCK", "Only out-of-stock items can be swapped");
+  // the paid bill is final: a swap would change what was charged
+  if (old.order.session.status === "CLOSED") throw conflict("BILL_CLOSED", "This bill is already paid, so the dish can't be swapped. Ask a manager to refund it.");
   const hotel = await getHotel(old.hotelId);
   const [priced] = await priceSelections(hotel, [{ itemId: input.itemId, variantId: input.variantId ?? null, addonIds: input.addonIds, quantity: old.quantity }]);
   if (!priced?.ok) throw new AppError(409, "ITEM_UNAVAILABLE", "That item can't be ordered right now", priced?.errors);
@@ -135,7 +138,7 @@ export async function replaceItem(actor: TransitionActor, orderItemId: string, i
     });
     if (r.count === 0) return null;
     const item = await tx.orderItem.create({
-      data: { ...orderItemData(hotel.id, priced, { guestId: old.guestId, quantity: old.quantity, note: old.note }), orderId: old.orderId, replacesItemId: old.id },
+      data: { ...orderItemData(hotel.id, priced, { guestId: old.guestId, quantity: old.quantity, note: old.note, isParcel: old.isParcel }), orderId: old.orderId, replacesItemId: old.id },
     });
     const siblings = await tx.orderItem.findMany({ where: { orderId: old.orderId }, select: { status: true } });
     const next = deriveOrderStatus(old.order.status, siblings);
@@ -162,12 +165,11 @@ export async function replaceItem(actor: TransitionActor, orderItemId: string, i
     updatedAt: now.toISOString(),
   });
   // the replacement is new work for the kitchen: same ticket number, chimes like a new order
-  const table = await db.table.findUniqueOrThrow({ where: { id: old.order.session.tableId }, select: { label: true } });
   emit("order:placed", [rooms.kitchen(hotel.id), rooms.managers(hotel.id), rooms.session(sessionId), ...waiters], {
     hotelId: hotel.id,
     orderId: old.orderId,
     sessionId,
-    tableLabel: table.label,
+    tableLabel: sessionLabel(old.order.session),
     orderNumber: old.order.orderNumber,
     stationIds: created.stationId ? [created.stationId] : [],
   });

@@ -9,7 +9,7 @@ import type {
   StaffRole,
   WaiterBoard,
 } from "@rms/contracts";
-import { checkItemTransition, deriveOrderStatus, priceLine, stampsFor, type Actor, type PricingAddonGroup } from "@rms/domain";
+import { PAID_PARCEL_LIST_MS, PAID_PASS_MS, checkItemTransition, deriveOrderStatus, priceLine, stampsFor, type Actor, type PricingAddonGroup } from "@rms/domain";
 
 /**
  * The hub's whole world: the last cloud snapshot with local changes applied on top,
@@ -194,6 +194,7 @@ export function applyCommand(state: HubState, actor: HubActor, q: QueuedCommand,
           unitPrice: r.line.unitPrice,
           quantity: l.quantity,
           note: l.note ?? null,
+          isParcel: (l.isParcel ?? false) || table.isParcelCounter === true,
           status: "QUEUED",
           startedAt: null,
           readyAt: null,
@@ -203,15 +204,17 @@ export function applyCommand(state: HubState, actor: HubActor, q: QueuedCommand,
           prepTimeMin: m.prepTimeMin,
         });
       }
-      if (!table.session) {
+      const parcel = table.isParcelCounter === true; // every order is its own customer: the counter never holds a session
+      if (!parcel && !table.session) {
         table.session = { id: `local-${table.id}`, joinCode: "----", isConfirmed: true, guestCount: 0, openedAt: now.toISOString() };
         table.status = "OCCUPIED";
         events.push({ event: "table:status_changed", payload: { hotelId, tableId: table.id, status: "OCCUPIED" } });
       }
       const ticket: KdsTicket = {
         id: q.clientId,
-        sessionId: table.session.id,
-        tableLabel: table.label,
+        sessionId: table.session && !parcel ? table.session.id : `local-${q.clientId}`,
+        tableId: table.id,
+        tableLabel: parcel ? "Parcel" : table.label, // the cloud gives it a token when it syncs
         orderNumber: LOCAL_ORDER_BASE + ++state.localOrderSeq,
         source: "WAITER",
         status: "PLACED",
@@ -267,22 +270,27 @@ export function kdsView(snap: HubSnapshot, stationId: string | null): KdsTicket[
     .sort((a, b) => a.placedAt.localeCompare(b.placedAt));
 }
 
-export function boardView(snap: HubSnapshot, waiterId: string | null): WaiterBoard {
+export function boardView(snap: HubSnapshot, waiterId: string | null, now = new Date()): WaiterBoard {
   const mine = waiterId ? Object.entries(snap.assignments).flatMap(([tableId, staff]) => (staff.includes(waiterId) ? [tableId] : [])) : [];
-  const tables = mine.length ? snap.tables.filter((t) => mine.includes(t.id)) : snap.tables;
+  const tables = mine.length ? snap.tables.filter((t) => mine.includes(t.id) || (t.isParcelCounter && !snap.assignments[t.id]?.length)) : snap.tables;
+  const tableIds = new Set(tables.map((t) => t.id));
+  const counters = new Set(tables.filter((t) => t.isParcelCounter).map((t) => t.id));
+  const cleaning = new Set(tables.filter((t) => t.status === "CLEANING").map((t) => t.id));
   const sessions = new Set(tables.flatMap((t) => (t.session ? [t.session.id] : [])));
   const ready = snap.orders
-    .filter((o) => sessions.has(o.sessionId))
+    .filter((o) => sessions.has(o.sessionId) || (tableIds.has(o.tableId) && Date.parse(o.placedAt) > now.getTime() - PAID_PARCEL_LIST_MS))
     .flatMap((o) =>
       o.items
         .filter((i) => i.status === "READY" || i.status === "PICKED_UP" || i.status === "OUT_OF_STOCK")
-        .map(({ prepTimeMin: _p, ...i }) => ({ ...i, sessionId: o.sessionId, orderNumber: o.orderNumber })),
+        // bill paid: parcels still to hand over, and dishes that became ready around or after then, until the table is cleared
+        .filter((i) => i.isParcel || sessions.has(o.sessionId) || (i.status === "READY" && cleaning.has(o.tableId) && Date.parse(i.readyAt ?? "") > Date.parse(snap.generatedAt) - PAID_PASS_MS))
+        .map(({ prepTimeMin: _p, ...i }) => ({ ...i, sessionId: o.sessionId, orderNumber: o.orderNumber, tableLabel: o.tableLabel })),
     )
     .sort((a, b) => (a.readyAt ?? "").localeCompare(b.readyAt ?? ""));
   return {
     tables,
     ready,
-    pendingOrders: snap.pendingOrders.filter((o) => sessions.has(o.sessionId)),
-    requests: snap.requests.filter((r) => sessions.has(r.sessionId)),
+    pendingOrders: snap.pendingOrders.filter((o) => sessions.has(o.sessionId) || counters.has(o.tableId)),
+    requests: snap.requests.filter((r) => sessions.has(r.sessionId) || counters.has(r.tableId)),
   };
 }

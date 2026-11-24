@@ -35,7 +35,6 @@ async function staffDevice(browser: Browser, kind: "Kitchen screen" | "Waiter ph
   await expect(page.getByText("Who's working?")).toBeVisible();
   await page.getByRole("button", { name: new RegExp(who) }).click();
   for (const d of pin) await page.getByRole("button", { name: d, exact: true }).click();
-  await page.getByRole("button", { name: "Enter" }).click();
   return page;
 }
 

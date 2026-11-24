@@ -62,6 +62,19 @@ async function deviceFromCookie(token: string | undefined) {
   return d && !d.revokedAt ? d : null;
 }
 
+/**
+ * A phone that locked or lost signal in the middle of a refresh never got its new token and comes back, maybe hours
+ * later, with the old one. On the paired device it was issued to (its own cookie proves that), and only while the new
+ * token has never been used, that is a lost answer rather than theft: the unused token is replaced instead of signing
+ * the cook or waiter out everywhere. Returns the unused token's id.
+ */
+async function unusedSuccessor(rt: { familyId: string; deviceId: string | null; createdAt: Date }, deviceToken: string | undefined): Promise<string | null> {
+  if (!rt.deviceId || (await deviceFromCookie(deviceToken))?.id !== rt.deviceId) return null;
+  const later = await unscopedDb.refreshToken.findMany({ where: { familyId: rt.familyId, createdAt: { gt: rt.createdAt } }, select: { id: true, revokedAt: true } });
+  const only = later.length === 1 ? later[0] : undefined;
+  return only && !only.revokedAt ? only.id : null;
+}
+
 export async function authRoutes(app: FastifyInstance) {
 
   /** A manager, signed in on the device itself, pairs it once. Staff then switch with PIN only. */
@@ -169,7 +182,8 @@ export async function authRoutes(app: FastifyInstance) {
       Date.now() - rt.revokedAt.getTime() < REUSE_GRACE_MS &&
       // the sign-in still has a live token (logout revokes it, so a signed-out token never gets this grace)
       (await unscopedDb.refreshToken.count({ where: { familyId: rt.familyId, revokedAt: null, createdAt: { gte: rt.createdAt } } })) > 0;
-    if (rt.revokedAt && !justRotated) {
+    const lostAnswer = rt.revokedAt && !justRotated ? await unusedSuccessor(rt, req.cookies[COOKIE.device]) : null;
+    if (rt.revokedAt && !justRotated && !lostAnswer) {
       await unscopedDb.refreshToken.updateMany({
         where: { subjectType: rt.subjectType, subjectId: rt.subjectId, revokedAt: null },
         data: { revokedAt: new Date() },
@@ -190,6 +204,7 @@ export async function authRoutes(app: FastifyInstance) {
       assertHotelOperational(await getHotel(s.hotelId));
       claims = { typ: "staff", sub: s.id, hid: s.hotelId, role: s.role, did: device?.id ?? null, sid: device?.stationId ?? s.stationId ?? null };
     }
+    if (lostAnswer) await unscopedDb.refreshToken.updateMany({ where: { id: lostAnswer, revokedAt: null }, data: { revokedAt: new Date() } });
     if (!rt.revokedAt) await unscopedDb.refreshToken.update({ where: { id: rt.id }, data: { revokedAt: new Date() } });
     const { accessToken } = await issueSession(reply, claims, rt.familyId); // same sign-in, new tokens
     return { ok: true, accessToken };
@@ -205,6 +220,7 @@ export async function authRoutes(app: FastifyInstance) {
     const claims = access ? await verifyAccessToken(access) : null;
     const ended = new Set([...rows.map((r) => r.familyId), ...(claims?.rid ? [claims.rid] : [])]);
     await Promise.all([...ended].map(endSession));
+    if (ended.size) await unscopedDb.pushSubscription.deleteMany({ where: { familyId: { in: [...ended] } } }); // signed out: stop ringing
     clearSession(reply);
     return { ok: true };
   });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Bps, HHMM, Id, LeadPin, Phone, Pin, Slug, isLeadRole, patchOf } from "./common";
+import { Bps, HHMM, Id, LeadPin, Phone, Pin, Slug, StaffPin, isLeadRole, patchOf } from "./common";
 import { DeviceKind, HotelStatus, Language, StaffRole, TableStatus } from "./enums";
 
 // ── Auth ────────────────────────────────────────
@@ -9,7 +9,7 @@ export type LoginInput = z.infer<typeof LoginInput>;
 
 /**
  * Password accepted. If `mfaRequired`, send the authenticator code to POST /v1/auth/login/mfa with `mfaToken`.
- * If `mfaSetupRequired`, the account must set up an authenticator first: POST /v1/auth/mfa/enroll/start and /finish.
+ * If `mfaSetupRequired` (platform admins), the account must set up an authenticator first: POST /v1/auth/mfa/enroll/start and /finish.
  */
 export interface LoginResult {
   ok: boolean;
@@ -116,6 +116,8 @@ export const TableInput = z.object({
   floorId: Id.nullish(),
   seats: z.number().int().min(1).max(50).default(4),
   isRoom: z.boolean().default(false),
+  /** walk-in parcels: every scan opens its own order */
+  isParcelCounter: z.boolean().default(false),
   posX: z.number().int().nullish(),
   posY: z.number().int().nullish(),
   isActive: z.boolean().default(true),
@@ -137,14 +139,15 @@ const StaffFields = z.object({
 });
 
 export const StaffCreateInput = StaffFields.superRefine((v, ctx) => {
-  if (isLeadRole(v.role) && !LeadPin.safeParse(v.pin).success) ctx.addIssue({ code: "custom", path: ["pin"], message: "Owners and managers need a 6-digit PIN" });
+  const pin = (isLeadRole(v.role) ? LeadPin : StaffPin).safeParse(v.pin);
+  if (!pin.success) ctx.addIssue({ code: "custom", path: ["pin"], message: pin.error.issues[0]!.message });
 });
 export type StaffCreateInput = z.infer<typeof StaffCreateInput>;
 
 export const StaffUpdateInput = patchOf(StaffFields.omit({ pin: true })).extend({ isActive: z.boolean().optional() });
 export type StaffUpdateInput = z.infer<typeof StaffUpdateInput>;
 
-export const ResetPinInput = z.object({ pin: Pin });
+export const ResetPinInput = z.object({ pin: StaffPin });
 
 export const AssignmentsInput = z.object({
   /** defaults to the hotel's current business day */
@@ -247,6 +250,9 @@ export const BoardTable = z.object({
   label: z.string(),
   floor: z.string().nullable(),
   status: TableStatus,
+  isParcelCounter: z.boolean().optional(),
+  /** parcel counter: tokens still open (not paid yet) */
+  parcels: z.array(z.string()).optional(),
   session: z
     .object({
       id: Id,

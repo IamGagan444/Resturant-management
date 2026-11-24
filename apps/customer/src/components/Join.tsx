@@ -63,8 +63,8 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
           <UtensilsCrossed className="h-7 w-7" aria-hidden />
         </span>
         <p className="font-display mt-6 text-3xl leading-tight font-bold">{lookup.hotel.name}</p>
-        <h1 className="mt-2 inline-flex rounded-full bg-brand/10 px-3 py-1 text-sm font-bold text-brand">{t("table", { label: lookup.table.label })}</h1>
-        <p className="muted mt-4">{needCode ? t("needCodePrompt") : t("startOrderingPrompt")}</p>
+        <h1 className="mt-2 inline-flex rounded-full bg-brand/10 px-3 py-1 text-sm font-bold text-brand">{lookup.table.isParcelCounter ? t("parcelOrder") : t("table", { label: lookup.table.label })}</h1>
+        <p className="muted mt-4">{needCode ? t("needCodePrompt") : lookup.table.isParcelCounter ? t("parcelOrderPrompt") : t("startOrderingPrompt")}</p>
       <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-semibold">
@@ -106,7 +106,7 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
         {needCode && (
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-semibold">
-              {t("tableCode")}
+              {t("joinCode")}
               <span className="ml-0.5 text-red-600" aria-hidden>
                 *
               </span>

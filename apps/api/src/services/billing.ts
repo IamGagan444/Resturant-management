@@ -9,6 +9,7 @@ import { getHotel } from "../lib/hotel";
 import { emit } from "../realtime/io";
 import { releaseOrders } from "./orders";
 import { waiterRooms } from "./notify";
+import { sessionLabel } from "./views";
 
 const billInclude = { taxLines: true, splits: { orderBy: { label: "asc" } } } satisfies Prisma.BillInclude;
 type BillRow = Prisma.BillGetPayload<{ include: typeof billInclude }>;
@@ -162,14 +163,14 @@ export async function billView(sessionId: string): Promise<BillView> {
   const { bill, items } = await syncBill(sessionId);
   const [paid, session, splitPaid, pending] = await Promise.all([
     paidForSession(sessionId),
-    db.tableSession.findUniqueOrThrow({ where: { id: sessionId }, select: { table: { select: { label: true } } } }),
+    db.tableSession.findUniqueOrThrow({ where: { id: sessionId }, select: { parcelNo: true, table: { select: { label: true } } } }),
     paidBySplit(bill.id),
     inFlight(sessionId),
   ]);
   return {
     id: bill.id,
     sessionId,
-    tableLabel: session.table.label,
+    tableLabel: sessionLabel(session),
     billNumber: bill.billNumber,
     lines: items.map((i) => ({
       orderItemId: i.id,
@@ -181,6 +182,7 @@ export async function billView(sessionId: string): Promise<BillView> {
       amount: i.unitPrice * i.quantity,
       guestId: i.guestId,
       guestName: i.guest?.displayName ?? null,
+      isParcel: i.isParcel,
       splitId: i.billSplitId,
     })),
     subtotal: bill.subtotal,
@@ -327,10 +329,24 @@ export async function reserveUpiPayment(p: { hotel: Hotel; sessionId: string; cl
   });
 }
 
+export const hasPendingOrder = async (sessionId: string) => (await db.order.count({ where: { sessionId, status: "PENDING_CONFIRMATION" } })) > 0;
+
+export async function assertNothingPending(sessionId: string) {
+  if (await hasPendingOrder(sessionId)) throw conflict("ORDER_PENDING", "An order is still waiting for the waiter to confirm or reject it.");
+}
+
+/** The waiter rejected the order that kept a paid bill open: close it, unless guests only paid up front and are still eating. */
+export async function settleAfterReject(sessionId: string) {
+  const s = await db.tableSession.findUnique({ where: { id: sessionId }, select: { status: true, parcelNo: true } });
+  if (!s || s.status === "CLOSED") return;
+  const paidBill = await db.payment.count({ where: { sessionId, status: "SUCCESS", billId: { not: null } } });
+  if (s.status === "BILLING" || s.parcelNo !== null || paidBill > 0) await settleIfPaid(sessionId);
+}
+
 // ── Settlement ────────────────────────────────
 /**
  * If the session is fully paid: freeze the bill with a GST invoice number, close the session,
- * send the table to CLEANING. Safe to call repeatedly / concurrently (conditional update).
+ * send the table to CLEANING (not for walk-in parcels). Safe to call repeatedly / concurrently (conditional update).
  */
 export async function settleIfPaid(sessionId: string): Promise<boolean> {
   const view = await billView(sessionId);
@@ -339,6 +355,8 @@ export async function settleIfPaid(sessionId: string): Promise<boolean> {
     if (view.paid > 0 && view.status === "OPEN") await db.bill.update({ where: { id: view.id }, data: { status: "PARTIALLY_PAID" } });
     return false;
   }
+  // an order still waiting for the waiter isn't on the bill yet: closing now would lose it
+  if (await hasPendingOrder(sessionId)) return false;
   const session = await db.tableSession.findUniqueOrThrow({ where: { id: sessionId } });
   const hotel = await getHotel(session.hotelId);
   const now = new Date();
@@ -355,7 +373,7 @@ export async function settleIfPaid(sessionId: string): Promise<boolean> {
       await tx.payment.updateMany({ where: { sessionId, billId: null }, data: { billId: view.id } });
       await tx.billSplit.updateMany({ where: { billId: view.id }, data: { isPaid: true } });
       await tx.tableSession.update({ where: { id: sessionId }, data: { status: "CLOSED", closedAt: now } });
-      await tx.table.update({ where: { id: session.tableId }, data: { status: "CLEANING" } });
+      if (session.parcelNo === null) await tx.table.update({ where: { id: session.tableId }, data: { status: "CLEANING" } });
       await tx.serviceRequest.updateMany({ where: { sessionId, status: { not: "DONE" } }, data: { status: "DONE", doneAt: now } });
       await tx.cartItem.deleteMany({ where: { sessionId } });
       // pay-now orders abandoned before payment can't be paid once the table is closed
@@ -375,7 +393,9 @@ export async function settleIfPaid(sessionId: string): Promise<boolean> {
   const waiters = await waiterRooms(hotel.id, session.tableId);
   const to = [rooms.session(sessionId), rooms.cashiers(hotel.id), rooms.managers(hotel.id), ...waiters];
   emit("bill:paid", to, { hotelId: hotel.id, billId: view.id, sessionId, receiptUrl: receiptUrl(view.id) });
-  emit("table:status_changed", [rooms.managers(hotel.id), ...waiters], { hotelId: hotel.id, tableId: session.tableId, status: "CLEANING" });
+  if (session.parcelNo === null) {
+    emit("table:status_changed", [rooms.managers(hotel.id), ...waiters], { hotelId: hotel.id, tableId: session.tableId, status: "CLEANING" });
+  }
   return true;
 }
 
@@ -398,8 +418,9 @@ export async function afterPayment(payment: { sessionId: string; splitId: string
   if (payment.orderId) {
     // Pay-now: the order goes to the kitchen. Guests are still eating, so only settle if they already asked for the bill.
     await releaseOrders({ id: payment.orderId, status: "AWAITING_PAYMENT" }, null);
-    const s = await db.tableSession.findUnique({ where: { id: payment.sessionId }, select: { status: true } });
-    if (s?.status === "BILLING") await settleIfPaid(payment.sessionId);
+    const s = await db.tableSession.findUnique({ where: { id: payment.sessionId }, select: { status: true, parcelNo: true } });
+    // a walk-in parcel is done once paid: receipt now, the food follows
+    if (s && (s.status === "BILLING" || s.parcelNo !== null)) await settleIfPaid(payment.sessionId);
   } else {
     await settleIfPaid(payment.sessionId);
   }

@@ -4,7 +4,7 @@ import type { OrderItemView, OrderView } from "@rms/contracts";
 import { trackerStep, type TrackerStep } from "@rms/domain";
 import { useI18n, type MsgKey } from "@/lib/i18n";
 import { Clock, ReceiptText } from "lucide-react";
-import { Button, rupees } from "./ui";
+import { Button, ParcelTag, rupees } from "./ui";
 
 const STEPS: { key: TrackerStep; label: MsgKey }[] = [
   { key: "RECEIVED", label: "stepReceived" },
@@ -89,7 +89,7 @@ function ItemRow({ item, held, actions }: { item: OrderItemView; held: boolean; 
       <div className="flex justify-between gap-3">
         <span className={`font-medium ${step === "CANCELLED" ? "muted line-through" : ""}`}>
           <span className="font-bold">{item.quantity} ×</span> {item.name}
-          {item.variantName ? ` (${item.variantName})` : ""}
+          {item.variantName ? ` (${item.variantName})` : ""} {item.isParcel && <ParcelTag />}
         </span>
         <span className="muted text-sm tabular-nums">{rupees(item.unitPrice * item.quantity)}</span>
       </div>

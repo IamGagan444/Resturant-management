@@ -5,7 +5,7 @@ import type { BillView, StartUpiPaymentInput } from "@rms/contracts";
 import { useI18n } from "@/lib/i18n";
 import { PaymentCancelled, isBusyPaying, payByUpi } from "@/lib/upi";
 import { CheckCircle2, ReceiptText, Smartphone } from "lucide-react";
-import { Button, rupees } from "./ui";
+import { ParcelTag, Button, rupees, usePlace } from "./ui";
 
 const pct = (bps: number) => `${(bps / 100).toFixed(bps % 100 ? 1 : 0)}%`;
 
@@ -23,6 +23,7 @@ export function Bill({
   onPaid: (receiptUrl: string | null) => void;
 }) {
   const { t } = useI18n();
+  const place = usePlace();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,14 +60,14 @@ export function Bill({
         <div className="p-5">
         <h3 className="mb-4 flex items-center gap-2 font-bold">
           <ReceiptText className="h-4.5 w-4.5 text-brand" aria-hidden />
-          {t("table", { label: bill.tableLabel })}
+          {place(bill.tableLabel)}
         </h3>
         <ul className="space-y-2 text-sm">
           {bill.lines.map((l) => (
             <li key={l.orderItemId} className="flex justify-between gap-3">
               <span>
                 {l.quantity} × {l.name}
-                {l.variantName ? ` (${l.variantName})` : ""}
+                {l.variantName ? ` (${l.variantName})` : ""} {l.isParcel && <ParcelTag />}
               </span>
               <span className="tabular-nums">{rupees(l.amount)}</span>
             </li>

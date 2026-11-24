@@ -23,6 +23,7 @@ export const StaffOrderLineCmd = z.object({
   addonIds: z.array(Id).max(50).default([]),
   quantity: z.number().int().min(1).max(50),
   note: z.string().trim().max(140).nullish(),
+  isParcel: z.boolean().optional(), // absent from older queued orders
 });
 
 export const Command = z.discriminatedUnion("type", [
@@ -149,7 +150,8 @@ export interface HubHealth {
 /** Waiter board as served by the cloud and the hub. */
 export interface WaiterBoard {
   tables: BoardTable[];
-  ready: (OrderItemView & { sessionId: string; orderNumber: number })[];
+  /** `unpaid`: walk-in parcel whose bill is still open */
+  ready: (OrderItemView & { sessionId: string; orderNumber: number; tableId?: string; tableLabel: string; unpaid?: boolean })[];
   pendingOrders: OrderView[];
   requests: ServiceRequestView[];
 }
