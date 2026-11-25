@@ -6,8 +6,10 @@ import type { FloorTable, FloorView } from "@rms/contracts";
 import { api, rupees } from "@/lib/api";
 import { useGuard } from "@/lib/auth";
 import { AlertsBar } from "@/components/AlertsBar";
-import { chime, unlockSound, useStaffSocket } from "@/lib/realtime";
-import { AlarmClock, BarChart3, Bell, CheckCircle2, Flame, HandHelping, Move, Settings2, Users } from "lucide-react";
+import { SoundToggle } from "@/components/SoundToggle";
+import { chime, useStaffSocket } from "@/lib/realtime";
+import { unlockOnTap } from "@/lib/sound";
+import { AlarmClock, BarChart3, CheckCircle2, Flame, HandHelping, Move, Settings2, Users } from "lucide-react";
 import { Button, ErrorText, NavLink, OfflineBanner, TopBar } from "@/components/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -64,6 +66,7 @@ export default function FloorPage() {
     return () => clearInterval(t);
   }, []);
 
+  useEffect(() => unlockOnTap(), []);
   if (!me) return null;
   const data = floor.data;
   const floors = data?.floors ?? [];
@@ -101,9 +104,7 @@ export default function FloorPage() {
         <NavLink href="/reports/" icon={BarChart3}>
           Reports
         </NavLink>
-        <Button variant="ghost" className="px-0" onClick={() => (unlockSound(), chime())} aria-label="Turn on sound alerts" title="Turn on sound alerts">
-          <Bell className="h-5 w-5" aria-hidden />
-        </Button>
+        <SoundToggle />
       </TopBar>
       <OfflineBanner online={online} />
       <AlertsBar enabled waiting={true} />

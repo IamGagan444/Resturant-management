@@ -1,28 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { buzz, unlockSound } from "./realtime";
-
-let ctx: AudioContext | null = null;
-
-/** Browsers only play sound after a tap; unlock on the first tap anywhere so nobody has to find a button. */
-export function unlockOnFirstTap() {
-  const once = () => {
-    unlockSound();
-    ctx ??= new AudioContext();
-    void ctx.resume();
-    window.removeEventListener("pointerdown", once);
-    window.removeEventListener("keydown", once);
-  };
-  window.addEventListener("pointerdown", once);
-  window.addEventListener("keydown", once);
-  return () => {
-    window.removeEventListener("pointerdown", once);
-    window.removeEventListener("keydown", once);
-  };
-}
-
-export const soundReady = () => ctx?.state === "running";
+import { buzz } from "./realtime";
+import { answerAlertChecks, audioOut, unlockOnTap } from "./sound";
 
 /** Time between bursts while an order waits: short, so it feels like an incoming delivery-partner order. */
 export const RING_EVERY_MS = 1400;
@@ -36,9 +16,8 @@ export const RING_EVERY_MS = 1400;
 export function ring() {
   // four quick buzzes in step with the beeps, then one long one
   buzz([180, 60, 180, 60, 180, 60, 180, 60, 400]);
-  // phones suspend sound when the screen locks; wake it up again (the next burst is heard)
-  if (ctx && ctx.state !== "running") void ctx.resume();
-  if (!ctx || ctx.state !== "running") return;
+  const ctx = audioOut();
+  if (!ctx) return;
   const out = ctx.createGain();
   out.gain.value = 0.3;
   const tone = ctx.createBiquadFilter();
@@ -84,6 +63,9 @@ export function useRinger(active: boolean, reasonKey: string, everyMs = RING_EVE
     const t = setInterval(ring, everyMs);
     return () => clearInterval(t);
   }, [ringing, everyMs]);
+
+  useEffect(() => unlockOnTap(), []);
+  useEffect(() => answerAlertChecks(), []);
 
   // re-check when the snooze runs out
   useEffect(() => {

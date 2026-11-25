@@ -1,19 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BoardTable, OrderItemView, PublicMenu, RequestType, WaiterBoard } from "@rms/contracts";
 import { parcelNumber, priceLine, type PricingAddonGroup } from "@rms/domain";
 import { api, newClientId, newOrderedId, remembered, rupees } from "@/lib/api";
 import { afterSending, send } from "@/lib/outbox";
-import { unlockOnFirstTap, useRinger } from "@/lib/ringer";
+import { useRinger } from "@/lib/ringer";
 import { RingBanner } from "@/components/RingBanner";
 import { useGuard } from "@/lib/auth";
 import { AlertsBar } from "@/components/AlertsBar";
-import { buzz, chime, unlockSound, useStaffSocket } from "@/lib/realtime";
+import { SoundToggle } from "@/components/SoundToggle";
+import { buzz, chime, useStaffSocket } from "@/lib/realtime";
 import {
   AlarmClock,
-  Bell,
   BellRing,
   Check,
   GlassWater,
@@ -53,7 +53,6 @@ const TABLE_STYLE: Record<string, string> = {
 export default function WaiterPage() {
   const me = useGuard(["WAITER", "MANAGER", "OWNER"]);
   const qc = useQueryClient();
-  const [alerts, setAlerts] = useState(false);
   const [orderFor, setOrderFor] = useState<BoardTable | null>(null);
   const [swapFor, setSwapFor] = useState<OrderItemView | null>(null);
   const [escalation, setEscalation] = useState<string | null>(null);
@@ -121,7 +120,6 @@ export default function WaiterPage() {
   ]
     .filter(Boolean)
     .join(" · ");
-  useEffect(() => unlockOnFirstTap(), []);
 
   if (!me) return null;
   const b = board.data;
@@ -129,12 +127,7 @@ export default function WaiterPage() {
   return (
     <div className="min-h-dvh pb-12">
       <TopBar title="Floor" online={online}>
-        {!alerts && (
-          <Button variant="outline" className="text-sm" onClick={() => (unlockSound(), setAlerts(true), chime())}>
-            <Bell className="h-4 w-4" aria-hidden />
-            Turn on sound
-          </Button>
-        )}
+        <SoundToggle />
       </TopBar>
       <OfflineBanner online={online} />
       <AlertsBar enabled waiting={ringKey !== ""} />

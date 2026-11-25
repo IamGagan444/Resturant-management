@@ -76,9 +76,10 @@ export function NavLink({
   );
 }
 
-export function TopBar({ title, subtitle, online = true, children }: { title: string; subtitle?: string; online?: boolean; children?: ReactNode }) {
+/** `plain` = no panel or hairline behind the bar: it blends into the page. */
+export function TopBar({ title, subtitle, online = true, plain = false, children }: { title: string; subtitle?: string; online?: boolean; plain?: boolean; children?: ReactNode }) {
   return (
-    <header className="no-print line sticky top-0 z-20 border-b bg-(--surface)/90 backdrop-blur-lg">
+    <header className={cn("no-print sticky top-0 z-20 backdrop-blur-lg", plain ? "bg-(--bg)/85" : "line border-b bg-(--surface)/90")}>
       <div className="flex h-16 items-center gap-2.5 px-4 sm:gap-3 sm:px-6">
         <BrandMark className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
         <div className="min-w-0">

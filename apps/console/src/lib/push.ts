@@ -49,7 +49,7 @@ async function endpoint(): Promise<string> {
 export async function clearNotifications() {
   if (!("serviceWorker" in navigator)) return;
   const reg = await navigator.serviceWorker.getRegistration().catch(() => undefined);
-  for (const n of (await reg?.getNotifications?.({ tag: "rms-alerts" }).catch(() => [])) ?? []) n.close();
+  for (const n of (await reg?.getNotifications?.().catch(() => [])) ?? []) n.close();
 }
 
 export function useAlerts(enabled: boolean) {

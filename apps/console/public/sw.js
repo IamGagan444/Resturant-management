@@ -79,6 +79,20 @@ self.addEventListener("fetch", (event) => {
 /* ---------- Phone alerts ---------- */
 
 // A push arrives for something still waiting; the server repeats it until someone acts.
+/** True only if a screen answers that it is in front and ringing. A frozen background page never answers, so we ring. */
+function handledOnScreen(wins) {
+  const ask = (w) =>
+    new Promise((resolve) => {
+      const ch = new MessageChannel();
+      ch.port1.onmessage = (e) => resolve(e.data?.handled === true);
+      setTimeout(() => resolve(false), 400);
+      w.postMessage({ type: "alert-check" }, [ch.port2]);
+    });
+  return Promise.all(wins.filter((w) => w.visibilityState === "visible").map((w) => ask(w).catch(() => false))).then((a) => a.some(Boolean));
+}
+
+const IOS = /iPhone|iPad|iPod/.test(self.navigator.userAgent) || (/Macintosh/.test(self.navigator.userAgent) && self.navigator.maxTouchPoints > 1);
+
 self.addEventListener("push", (event) => {
   let p = {};
   try {
@@ -87,14 +101,16 @@ self.addEventListener("push", (event) => {
     // shown with the defaults below: browsers require a notification for every push
   }
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (wins) => {
       // the open screen is already ringing by itself
-      const onScreen = wins.some((w) => w.visibilityState === "visible");
+      const onScreen = await handledOnScreen(wins);
+      // iPhone has no `renotify`: replacing an alert can be quiet, so take the old one away and post a new one
+      if (IOS) for (const n of await self.registration.getNotifications().catch(() => [])) n.close();
       return self.registration.showNotification(p.title || "Restro", {
         body: p.body || "Something is waiting for you",
         icon: "/icon-192.png",
         badge: "/icon-192.png",
-        tag: "rms-alerts", // one alert that keeps ringing, not a pile of them
+        tag: IOS ? `rms-alerts-${Date.now()}` : "rms-alerts", // one alert that keeps ringing, not a pile of them
         renotify: true,
         requireInteraction: true,
         silent: onScreen,

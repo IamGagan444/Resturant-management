@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BillView, SendBillResult, SplitBillInput } from "@rms/contracts";
 import { parcelNumber } from "@rms/domain";
 import { api, newClientId, rupees, toPaise } from "@/lib/api";
 import { useGuard } from "@/lib/auth";
 import { AlertsBar } from "@/components/AlertsBar";
-import { chime, unlockSound, useStaffSocket } from "@/lib/realtime";
-import { ArrowLeft, BarChart3, Banknote, Bell, CheckCircle2, CreditCard, MessageCircle, Printer, ReceiptText, Smartphone } from "lucide-react";
+import { SoundToggle } from "@/components/SoundToggle";
+import { chime, useStaffSocket } from "@/lib/realtime";
+import { unlockOnTap } from "@/lib/sound";
+import { ArrowLeft, BarChart3, Banknote, CheckCircle2, CreditCard, MessageCircle, Printer, ReceiptText, Smartphone } from "lucide-react";
 import { ParcelTag, Badge, Button, Card, EmptyState, ErrorText, Field, NavLink, OfflineBanner, TopBar } from "@/components/ui";
 import { QueryError } from "@/components/ui/feedback";
 import { ListSkeleton } from "@/components/ui/skeleton";
@@ -29,6 +31,7 @@ export default function CashierPage() {
     s.on("bill:requested", () => (chime("alert"), refetch()));
     for (const ev of ["bill:paid", "bill:updated", "order:placed", "item:status_changed", "order:cancelled"] as const) s.on(ev, refetch);
   });
+  useEffect(() => unlockOnTap(), []);
   if (!me) return null;
   const list = bills.data ?? [];
   const bill = list.find((b) => b.id === selected) ?? null;
@@ -45,9 +48,7 @@ export default function CashierPage() {
         <NavLink href="/reports/" icon={BarChart3}>
           Day report
         </NavLink>
-        <Button variant="ghost" className="px-0" aria-label="Turn on sound alerts" title="Turn on sound alerts" onClick={() => (unlockSound(), chime())}>
-          <Bell className="h-5 w-5" aria-hidden />
-        </Button>
+        <SoundToggle />
       </TopBar>
       <OfflineBanner online={online} />
       <AlertsBar enabled waiting={true} />

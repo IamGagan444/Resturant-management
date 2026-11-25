@@ -6,6 +6,7 @@ import type { ClientToServerEvents, ServerToClientEvents } from "@rms/contracts"
 import { refresh } from "./api";
 import { target, useNet } from "./net";
 import { proofFor } from "./devicekey";
+import { audioOut } from "./sound";
 
 export type StaffSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -83,28 +84,21 @@ export function useStaffSocket(enabled: boolean, onSync: () => void, bind: (s: S
   return { online: online && mode !== "offline" };
 }
 
-let audio: AudioContext | null = null;
-
-/** Must be called from a user gesture once (browsers block autoplay). */
-export function unlockSound() {
-  audio ??= new AudioContext();
-  void audio.resume();
-}
-
 /** Short synthesized chime — no audio assets to download or cache. */
 export function chime(kind: "order" | "alert" = "order") {
-  if (!audio || audio.state !== "running") return;
+  const audio = audioOut();
+  if (!audio) return;
   const notes = kind === "order" ? [880, 1175] : [988, 740, 988];
   notes.forEach((f, i) => {
-    const o = audio!.createOscillator();
-    const g = audio!.createGain();
+    const o = audio.createOscillator();
+    const g = audio.createGain();
     o.frequency.value = f;
     o.type = "sine";
-    const t = audio!.currentTime + i * 0.18;
+    const t = audio.currentTime + i * 0.18;
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-    o.connect(g).connect(audio!.destination);
+    o.connect(g).connect(audio.destination);
     o.start(t);
     o.stop(t + 0.17);
   });
