@@ -17,6 +17,8 @@ interface Station { id: string; name: string }
 const KIND_LABEL: Record<DeviceKind, string> = { KDS: "Kitchen screen", WAITER: "Waiter phone", POS: "Counter", MANAGER: "Manager", HUB: "Local hub" };
 const KIND_ICON: Record<DeviceKind, LucideIcon> = { KDS: ChefHat, WAITER: ConciergeBell, POS: ReceiptText, MANAGER: UserRoundCog, HUB: Router };
 const PAIRABLE = ["KDS", "WAITER", "POS", "MANAGER"] as const;
+interface StaffLite { id: string; name: string; role: string; isActive: boolean; stationId: string | null }
+const ROLE_KIND: Record<string, (typeof PAIRABLE)[number]> = { WAITER: "WAITER", COOK: "KDS", CASHIER: "POS", MANAGER: "MANAGER" };
 
 /** Pair the device you're holding. After pairing, staff sign in here with PIN only. */
 export function DevicesTab() {
@@ -29,12 +31,17 @@ export function DevicesTab() {
     schema: DevicePairInput,
     build: (v) => ({ name: v.name.trim(), kind: v.kind, stationId: v.kind === "KDS" ? orNull(v.stationId) : null }),
   });
+  const staff = useQuery({ queryKey: ["admin", "staff"], queryFn: () => api<StaffLite[]>("GET", "/v1/admin/staff") });
+  // shared ["admin","staff"] cache: anyone added on the Staff tab shows up here right away
+  const team = (staff.data ?? []).filter((s) => s.isActive && s.role !== "OWNER");
+  const [staffId, setStaffId] = useState("");
   const [code, setCode] = useState<{ code: string; expiresAt: string; name: string } | null>(null);
   // recommended: a code for another device, so the owner's password is never typed on a staff phone
   const getCode = form.submit(async (body) => {
     const r = await api<{ code: string; expiresAt: string }>("POST", "/v1/admin/devices/pair-code", body);
     setCode({ ...r, name: body.name });
     form.reset();
+    setStaffId("");
   });
   const pairHere = form.submit(async (body) => {
     await api("POST", "/v1/auth/devices/pair", body);
@@ -61,7 +68,23 @@ export function DevicesTab() {
           hint="Do this once for each kitchen tablet, waiter phone or counter. Get a code here, then type it on the new device: you never sign in on a staff device. Staff then sign in there with their PIN."
         />
         <form onSubmit={getCode} className="grid gap-4 rounded-xl bg-(--sunken) p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3 lg:items-start" noValidate>
-          <Field label="Name" required error={form.error("name")}>
+          <Field label="Staff member" hint="Pick who uses it: fills the name and type">
+            <SelectField
+              value={staffId}
+              onChange={(id) => {
+                setStaffId(id);
+                const s = team.find((x) => x.id === id);
+                if (!s) return;
+                const kind = ROLE_KIND[s.role] ?? form.values.kind;
+                form.set("name", `${s.name}'s ${kind === "KDS" ? "screen" : "phone"}`.slice(0, 40));
+                form.set("kind", kind);
+                if (kind === "KDS") form.set("stationId", s.stationId ?? "");
+              }}
+              emptyLabel="Shared device"
+              options={team.map((s) => ({ value: s.id, label: `${s.name} · ${s.role.charAt(0)}${s.role.slice(1).toLowerCase()}` }))}
+            />
+          </Field>
+          <Field label="Device name" required error={form.error("name")}>
             <input {...form.text("name")} placeholder="Tandoor tablet" maxLength={40} />
           </Field>
           <Field label="Used as" required>

@@ -150,6 +150,10 @@ export async function platformRoutes(app: FastifyInstance) {
         });
         await tx.station.create({ data: { hotelId: h.id, name: "Kitchen" } });
         await tx.floor.create({ data: { hotelId: h.id, name: "Main" } });
+        // Starter menu sections; the owner can rename or delete them.
+        await tx.menuCategory.createMany({
+          data: ["Starters", "Main Course", "Desserts", "Drinks"].map((name, i) => ({ hotelId: h.id, name, sortOrder: i + 1 })),
+        });
         return h;
       });
       reply.status(201);

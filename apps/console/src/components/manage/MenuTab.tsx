@@ -46,6 +46,17 @@ const SPICE = [
   { value: "3", label: "Hot" },
 ];
 
+/** Sections most menus start with; offered as one-tap adds when missing. */
+const DEFAULT_CATEGORIES = ["Starters", "Main Course", "Desserts", "Drinks"];
+
+/** Ready-made add-on groups the owner can load into the form and tweak. */
+const GROUP_EXAMPLES = [
+  { name: "Choose bread", minSelect: "1", maxSelect: "1", addons: "Butter Naan: 0\nGarlic Naan: 20\nTandoori Roti: 0\nLaccha Paratha: 25" },
+  { name: "Extra toppings", minSelect: "0", maxSelect: "3", addons: "Extra Cheese: 30\nMushroom: 25\nJalapeño: 20\nOlives: 20" },
+  { name: "Drink size", minSelect: "1", maxSelect: "1", addons: "Regular: 0\nLarge: 40" },
+  { name: "Add a side", minSelect: "0", maxSelect: "2", addons: "Raita: 40\nGreen Salad: 50\nPapad: 20" },
+];
+
 /** Checkbox as a tappable chip; highlighted while checked. */
 const CHIP = "line flex h-10 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm font-medium transition has-checked:border-brand/50 has-checked:bg-brand/8";
 
@@ -75,6 +86,25 @@ export function MenuTab() {
     notify.ok(`Category “${body.name}” added`);
     refresh();
   });
+
+  const [seeding, setSeeding] = useState(false);
+  const missingDefaults = DEFAULT_CATEGORIES.filter((n) => !categories.data?.some((c) => c.name.toLowerCase() === n.toLowerCase()));
+  async function addDefaults(names: string[]) {
+    setSeeding(true);
+    try {
+      const start = categories.data?.length ?? 0;
+      for (const [i, name] of names.entries()) {
+        const created = await api<Category>("POST", "/v1/admin/categories", { name, sortOrder: start + i + 1 });
+        qc.setQueryData<Category[]>(["admin", "categories"], (old) => [...(old ?? []), created]);
+      }
+      notify.ok(names.length > 1 ? `${names.length} categories added` : `Category “${names[0]}” added`);
+      refresh();
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   async function removeCategory(c: Category) {
     const count = items.data?.filter((i) => i.categoryId === c.id).length ?? 0;
@@ -133,6 +163,28 @@ export function MenuTab() {
             </div>
           )}
         </Loadable>
+        {categories.data && missingDefaults.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="muted text-xs font-medium">Quick add:</span>
+            {missingDefaults.map((n) => (
+              <button
+                key={n}
+                type="button"
+                disabled={seeding}
+                onClick={() => void addDefaults([n])}
+                className="inline-flex h-8 items-center gap-1 rounded-full border border-dashed border-brand/50 px-3 text-sm font-medium text-brand hover:bg-brand/8 disabled:opacity-50"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+                {n}
+              </button>
+            ))}
+            {missingDefaults.length > 1 && (
+              <Button type="button" variant="ghost" className="h-8 min-h-8 px-3 text-sm" disabled={seeding} onClick={() => void addDefaults(missingDefaults)}>
+                Add all
+              </Button>
+            )}
+          </div>
+        )}
         <form onSubmit={addCategory} className="flex items-start gap-2" noValidate>
           <Field label="New category" required error={cat.error("name")} className="flex-1">
             <input {...cat.text("name")} placeholder="e.g. Starters" maxLength={60} />
@@ -535,6 +587,19 @@ function AddonGroups() {
           </ul>
         )}
       </Loadable>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="muted text-xs font-medium">Start from an example:</span>
+        {GROUP_EXAMPLES.filter((ex) => !groups.data?.some((g) => g.name.toLowerCase() === ex.name.toLowerCase())).map((ex) => (
+          <button
+            key={ex.name}
+            type="button"
+            onClick={() => form.reset(ex)}
+            className="inline-flex h-8 items-center rounded-full border border-dashed border-brand/50 px-3 text-sm font-medium text-brand hover:bg-brand/8"
+          >
+            {ex.name}
+          </button>
+        ))}
+      </div>
       <form onSubmit={create} className="grid gap-3 rounded-xl bg-(--sunken) p-3 sm:grid-cols-[2fr_1fr_1fr] sm:p-4" noValidate>
         <Field label="Group name" required error={form.error("name")}>
           <input {...form.text("name")} placeholder="e.g. Choose bread" maxLength={60} />
