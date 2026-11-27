@@ -8,6 +8,7 @@ import { Badge, Button, Card, CardHeader, Field, FormError, orNull, useForm } fr
 import { Loadable, notify } from "@/components/ui/feedback";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { TwoStepCard } from "@/components/TwoStepCard";
+import { useUnsavedChanges } from "@/lib/unsaved";
 
 interface Settings {
   name: string;
@@ -93,9 +94,11 @@ function SettingsForm({ settings }: { settings: Settings }) {
     },
   });
   const v = form.values;
+  useUnsavedChanges(form.dirty);
 
   const save = form.submit(async (body) => {
     await api("PATCH", "/v1/admin/hotel", body);
+    form.reset(form.values); // saved: nothing unsaved any more (the refetch below then remounts with server values)
     notify.ok("Settings saved");
     void qc.invalidateQueries({ queryKey: ["admin", "hotel"] });
   });
@@ -178,9 +181,16 @@ function SettingsForm({ settings }: { settings: Settings }) {
           <Save className="h-4 w-4" aria-hidden />
           {form.busy ? "Saving…" : "Save settings"}
         </Button>
-        <p className="muted hidden text-xs sm:block">
-          Fields marked <span className="text-late">*</span> are required.
-        </p>
+        {form.dirty ? (
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-warn" role="status">
+            <span className="h-2 w-2 rounded-full bg-warn" aria-hidden />
+            Unsaved changes
+          </p>
+        ) : (
+          <p className="muted hidden text-xs sm:block">
+            Fields marked <span className="text-late">*</span> are required.
+          </p>
+        )}
         {form.formError && (
           <div className="w-full">
             <FormError message={form.formError} />

@@ -33,6 +33,7 @@ type Phase =
   | { kind: "paid"; receiptUrl: string | null }
   | { kind: "ended"; message: string; badQr?: boolean };
 type Tab = "menu" | "orders" | "bill";
+const REQUEST_COOLDOWN_MS = 20_000;
 
 function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: string }) {
   const qc = useQueryClient();
@@ -149,12 +150,22 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
     }
   }
 
+  // Impatient repeat taps on "Call waiter" shouldn't ring the staff phones again and stack duplicate requests.
+  const lastRequest = useRef<Partial<Record<RequestType, number>>>({});
   async function request(type: RequestType) {
+    const now = Date.now();
+    if (now - (lastRequest.current[type] ?? 0) < REQUEST_COOLDOWN_MS) {
+      setToast(t(`req${type}`)); // same reassurance, no second request
+      if (type === "BILL") setTab("bill");
+      return;
+    }
+    lastRequest.current[type] = now;
     try {
       await api("POST", "/v1/p/requests", { clientId: newClientId(), type });
       setToast(t(`req${type}`));
       if (type === "BILL") setTab("bill");
     } catch (e) {
+      lastRequest.current[type] = 0; // it didn't go through: let them try again right away
       setToast(errorText(e, t("couldNotSend")));
     }
   }
@@ -397,6 +408,9 @@ function CartSheet({
   const qc = useQueryClient();
   const { lang, t } = useI18n();
   const [busy, setBusy] = useState(false);
+  // Lines with an update in flight. Their buttons wait for the answer: the next tap's quantity is computed from the
+  // server's cart, so quick taps on + can't all send the same number (and the cart is shared with the table).
+  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   // One idempotency key per checkout attempt: retries after a timeout can't create a second order.
   const checkoutId = useRef<string>(newClientId());
@@ -407,6 +421,7 @@ function CartSheet({
   async function change(line: (typeof items)[number], patch: { quantity?: number; isParcel?: boolean }) {
     const quantity = patch.quantity ?? line.quantity;
     setError(null);
+    setPending((p) => new Set(p).add(line.id));
     try {
       const s =
         quantity <= 0
@@ -422,6 +437,12 @@ function CartSheet({
       qc.setQueryData(["session"], s);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("couldNotSend"));
+    } finally {
+      setPending((p) => {
+        const next = new Set(p);
+        next.delete(line.id);
+        return next;
+      });
     }
   }
 
@@ -451,7 +472,7 @@ function CartSheet({
     }
   }
 
-  const blocked = busy || items.some((i) => !i.isValid);
+  const blocked = busy || pending.size > 0 || items.some((i) => !i.isValid);
   return (
     <Sheet open={open} onClose={onClose} title={t("cartTitle")}>
       {items.length === 0 ? (
@@ -471,6 +492,7 @@ function CartSheet({
           <ul className="line divide-y divide-(--line)">
             {items.map((i) => {
               const m = byId.get(i.itemId);
+              const waiting = pending.has(i.id);
               return (
                 <li key={i.id} className={`py-3.5 ${i.isValid ? "" : "opacity-60"}`}>
                   <div className="flex justify-between gap-3">
@@ -490,7 +512,7 @@ function CartSheet({
                           className="h-4 w-4 accent-brand"
                           aria-label={`${t("parcel")}: ${i.name}`}
                           checked={i.isParcel}
-                          disabled={!i.isValid || busy}
+                          disabled={!i.isValid || busy || waiting}
                           onChange={(e) => change(i, { isParcel: e.target.checked })}
                         />
                         {t("parcel")}
@@ -499,12 +521,12 @@ function CartSheet({
                     </div>
                     <div className="flex shrink-0 flex-col items-end">
                       <p className="font-semibold tabular-nums">{rupees(i.lineTotal)}</p>
-                      <div className="mt-1.5 inline-flex items-center rounded-xl border border-brand/30 bg-brand/5 font-bold text-brand">
-                        <button className="h-9 w-9 text-lg" aria-label={`Fewer ${i.name}`} onClick={() => change(i, { quantity: i.quantity - 1 })}>
+                      <div className="mt-1.5 inline-flex items-center rounded-xl border border-brand/30 bg-brand/5 font-bold text-brand" aria-busy={waiting || undefined}>
+                        <button className="h-9 w-9 text-lg disabled:opacity-40" aria-label={`Fewer ${i.name}`} disabled={waiting} onClick={() => change(i, { quantity: i.quantity - 1 })}>
                           −
                         </button>
-                        <span className="w-6 text-center tabular-nums">{i.quantity}</span>
-                        <button className="h-9 w-9 text-lg disabled:opacity-40" aria-label={`More ${i.name}`} disabled={!i.isValid} onClick={() => change(i, { quantity: i.quantity + 1 })}>
+                        <span className={`w-6 text-center tabular-nums ${waiting ? "opacity-50" : ""}`}>{i.quantity}</span>
+                        <button className="h-9 w-9 text-lg disabled:opacity-40" aria-label={`More ${i.name}`} disabled={!i.isValid || waiting} onClick={() => change(i, { quantity: i.quantity + 1 })}>
                           +
                         </button>
                       </div>

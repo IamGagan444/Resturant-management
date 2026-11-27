@@ -21,11 +21,12 @@
     }
   },
   "include": [
+    ".next-build/types/**/*.ts",
     ".next-e2e/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
     "src",
-    ".next-build/types/**/*.ts"
+    ".next-audit/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

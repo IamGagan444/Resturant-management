@@ -57,8 +57,9 @@ export function AuditTab() {
       return api<AuditPage>("GET", `/v1/admin/audit?${qs}`);
     },
     getNextPageParam: (last) => last.next,
+    staleTime: 5_000, // written by everyone's actions, unlike the rest of ["admin"] (see providers.tsx)
   });
-  const rejected = useQuery({ queryKey: ["admin", "sync-rejections"], queryFn: () => api<SyncRejectionView[]>("GET", "/v1/admin/sync-rejections") });
+  const rejected = useQuery({ queryKey: ["admin", "sync-rejections"], queryFn: () => api<SyncRejectionView[]>("GET", "/v1/admin/sync-rejections"), staleTime: 5_000 });
   const entries = log.data?.pages.flatMap((p) => p.entries) ?? [];
 
   return (

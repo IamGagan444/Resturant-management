@@ -114,7 +114,9 @@ export default function CashierPage() {
 }
 
 function BillPanel({ bill, onChange }: { bill: BillView; onChange: (b?: BillView) => void }) {
-  const [amount, setAmount] = useState((bill.due / 100).toString());
+  // Follows the live due (new dishes, a guest's UPI part-payment) until the cashier types their own amount.
+  const [typedAmount, setAmount] = useState<string | null>(null);
+  const amount = typedAmount ?? (bill.due / 100).toString();
   const [discount, setDiscount] = useState(bill.discount ? (bill.discount / 100).toString() : "");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<unknown>(null);
@@ -125,6 +127,7 @@ function BillPanel({ bill, onChange }: { bill: BillView; onChange: (b?: BillView
     setError(null);
     try {
       const r = await p();
+      setAmount(null); // back to following what's due
       onChange(r && typeof r === "object" && "status" in r ? (r as BillView) : undefined);
     } catch (e) {
       setError(e);

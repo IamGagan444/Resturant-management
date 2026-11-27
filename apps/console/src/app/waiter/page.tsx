@@ -28,7 +28,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ParcelTag, Button, EmptyState, OfflineBanner, RejectionToast, TopBar } from "@/components/ui";
-import { notify } from "@/components/ui/feedback";
+import { confirm, notify } from "@/components/ui/feedback";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/Sheet";
 
@@ -250,11 +250,22 @@ export default function WaiterPage() {
                     <Button
                       variant="outline"
                       onClick={() =>
-                        act(
-                          api("POST", `/v1/s/orders/${o.id}/reject`, {
-                            reason: parcelNumber(o.tableLabel) ? "No customer at the counter" : "No guests at table",
-                          }),
-                        )
+                        void confirm({
+                          title: `Reject order #${o.orderNumber} for ${o.tableLabel}?`,
+                          description: parcelNumber(o.tableLabel)
+                            ? "The order is cancelled and the kitchen never sees it. Only do this if nobody is at the counter."
+                            : "The order is cancelled and the kitchen never sees it. Only do this if nobody is at the table.",
+                          confirmLabel: "Reject order",
+                          destructive: true,
+                        }).then((ok) => {
+                          if (!ok) return;
+                          patch((x) => ({ ...x, pendingOrders: x.pendingOrders.filter((p) => p.id !== o.id) }));
+                          act(
+                            api("POST", `/v1/s/orders/${o.id}/reject`, {
+                              reason: parcelNumber(o.tableLabel) ? "No customer at the counter" : "No guests at table",
+                            }),
+                          );
+                        })
                       }
                     >
                       Reject

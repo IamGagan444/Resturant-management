@@ -17,6 +17,9 @@ type Values = Record<string, unknown>;
  */
 export function useForm<V extends Values, S extends z.ZodType>(opts: { initial: V; schema: S; build: (v: V) => unknown }) {
   const [values, setValues] = useState<V>(opts.initial);
+  // what "unchanged" means: the starting values, or whatever `reset` last set (e.g. right after a save)
+  const [baseline, setBaseline] = useState<V>(opts.initial);
+  const dirty = Object.keys(values).some((k) => values[k] !== baseline[k]);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
@@ -84,13 +87,14 @@ export function useForm<V extends Values, S extends z.ZodType>(opts: { initial: 
 
   function reset(next: V = opts.initial) {
     setValues(next);
+    setBaseline(next);
     setTouched({});
     setSubmitted(false);
     setServerErrors({});
     setFormError(null);
   }
 
-  return { values, set, text, error, check, submit, reset, busy, formError, valid: result.success, setFormError };
+  return { values, set, text, error, check, submit, reset, busy, dirty, formError, valid: result.success, setFormError };
 }
 
 /** Label (with * when required), the control, then either the error or the hint. */

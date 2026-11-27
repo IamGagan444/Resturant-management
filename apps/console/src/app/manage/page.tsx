@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { confirmDiscard, hasUnsavedChanges } from "@/lib/unsaved";
 import { BarChart3, ChefHat, ClipboardList, ConciergeBell, LayoutGrid, Menu, MonitorSmartphone, QrCode, ReceiptText, Settings, Users, UtensilsCrossed, type LucideIcon } from "lucide-react";
 import { useGuard } from "@/lib/auth";
 import { NavLink, TopBar } from "@/components/ui";
@@ -35,13 +36,45 @@ const LINKS: { href: string; label: string; icon: LucideIcon; group: "manage" | 
   { href: "/cashier/", label: "Counter", icon: ReceiptText, group: "screens" },
 ];
 
+const isTab = (v: string): v is Tab => v in TABS;
+
 export default function ManagePage() {
   const me = useGuard(["OWNER", "MANAGER"]);
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("menu");
+  const [tab, setTabState] = useState<Tab>("menu");
+
+  // The open section lives in the URL (#staff), so a reload or the back button returns to it.
+  useEffect(() => {
+    const fromHash = () => {
+      const h = location.hash.slice(1);
+      if (isTab(h)) setTabState(h);
+    };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, []);
+
+  /** Switching sections unmounts the old one: ask before dropping unsaved edits there. */
+  async function setTab(next: Tab) {
+    if (next === tab || !(await confirmDiscard())) return;
+    setTabState(next);
+    history.replaceState(null, "", `#${next}`);
+  }
+
+  /** Same question for every in-app link on this screen (sidebar, top bar). Closing the tab is covered by beforeunload. */
+  function guardLinks(e: MouseEvent<HTMLDivElement>) {
+    const a = (e.target as HTMLElement).closest("a[href]");
+    const href = a?.getAttribute("href");
+    if (!href?.startsWith("/") || !hasUnsavedChanges() || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void confirmDiscard().then((ok) => ok && router.push(href));
+  }
+  const go = (href: string) => void confirmDiscard().then((ok) => ok && router.push(href));
+
   if (!me || me.typ !== "staff") return null;
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh" onClickCapture={guardLinks}>
       <TopBar title={me.hotel.name} subtitle="Manage">
         {/* tablets and up: every shortcut (text from lg, icons below); phones: one menu */}
         <span className="hidden items-center md:flex lg:hidden">
@@ -67,21 +100,21 @@ export default function ManagePage() {
           <DropdownMenuContent>
             <DropdownMenuLabel>Manager</DropdownMenuLabel>
             {LINKS.filter((l) => l.group === "manage").map((l) => (
-              <DropdownMenuItem key={l.href} onSelect={() => router.push(l.href)}>
+              <DropdownMenuItem key={l.href} onSelect={() => go(l.href)}>
                 <l.icon aria-hidden /> {l.label}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Staff screens</DropdownMenuLabel>
             {LINKS.filter((l) => l.group === "screens").map((l) => (
-              <DropdownMenuItem key={l.href} onSelect={() => router.push(l.href)}>
+              <DropdownMenuItem key={l.href} onSelect={() => go(l.href)}>
                 <l.icon aria-hidden /> {l.label}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </TopBar>
-      <Tabs value={tab} onValueChange={(t) => setTab(t as Tab)} className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <Tabs value={tab} onValueChange={(t) => isTab(t) && void setTab(t)} className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)]">
         {/* phones and tablets: a sticky row of pills; desktop: a sidebar */}
         <aside className="line sticky top-16 z-10 border-b bg-(--surface) lg:h-[calc(100dvh-4rem)] scroll-thin lg:overflow-y-auto lg:border-r lg:border-b-0 lg:pr-3 lg:pl-4 lg:py-6">
           <p className="muted hidden px-3 pb-2 text-xs font-medium lg:block">Restaurant</p>
