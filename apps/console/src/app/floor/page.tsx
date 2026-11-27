@@ -17,8 +17,8 @@ const STATUS_STYLE: Record<FloorTable["status"], string> = {
   FREE: "line",
   OCCUPIED: "border-brand/70",
   BILL_REQUESTED: "border-warn bg-warn/10",
-  CLEANING: "border-stone-400 bg-stone-500/10",
-  RESERVED: "border-blue-500/70",
+  CLEANING: "border-(--muted)/60 bg-(--sunken)",
+  RESERVED: "border-info/70",
 };
 
 type Pos = { x: number; y: number };
@@ -110,7 +110,7 @@ export default function FloorPage() {
       <AlertsBar enabled waiting={true} />
 
       {data && data.escalations.length > 0 && (
-        <section aria-label="Overdue pickups" className="space-y-1 bg-late px-4 py-2.5 text-white">
+        <section aria-label="Overdue pickups" className="space-y-1 bg-late px-4 py-2.5 text-late-ink">
           {data.escalations.map((e) => (
             <p key={e.orderItemId} className="flex items-center gap-2 font-semibold">
               <AlarmClock className="h-4 w-4 shrink-0" aria-hidden />

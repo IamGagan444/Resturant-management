@@ -49,7 +49,7 @@ export function Modal({
           <DrawerTitle>{title}</DrawerTitle>
           {description ? <DrawerDescription>{description}</DrawerDescription> : <DrawerDescription className="sr-only">{title}</DrawerDescription>}
         </DrawerHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4" data-vaul-no-drag>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4" data-vaul-no-drag>
           {children}
         </div>
         {footer && <DrawerFooter>{footer}</DrawerFooter>}

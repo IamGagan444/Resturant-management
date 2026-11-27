@@ -69,7 +69,7 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-semibold">
             {t("yourName")}
-            <span className="ml-0.5 text-red-600" aria-hidden>
+            <span className="ml-0.5 text-late" aria-hidden>
               *
             </span>
           </span>
@@ -95,10 +95,10 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
             onBlur={() => setPhoneError(!phoneOk(phone))}
             aria-invalid={phoneError || undefined}
             aria-describedby={phoneError ? "phone-error" : undefined}
-            className={`tap rounded-lg border bg-(--sunken) px-4 text-base ${phoneError ? "border-red-500" : "border-transparent"}`}
+            className={`tap rounded-lg border bg-(--sunken) px-4 text-base ${phoneError ? "border-late" : "border-transparent"}`}
           />
           {phoneError && (
-            <span id="phone-error" role="alert" className="text-xs font-medium text-red-600">
+            <span id="phone-error" role="alert" className="text-xs font-medium text-late">
               {t("invalidPhone")}
             </span>
           )}
@@ -107,7 +107,7 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-semibold">
               {t("joinCode")}
-              <span className="ml-0.5 text-red-600" aria-hidden>
+              <span className="ml-0.5 text-late" aria-hidden>
                 *
               </span>
             </span>
@@ -115,6 +115,8 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
               required
               inputMode="numeric"
               pattern="\d{4}"
+              autoComplete="one-time-code"
+              enterKeyHint="go"
               maxLength={4}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
@@ -127,7 +129,7 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
           </label>
         )}
         {error && (
-          <p role="alert" className="rounded-2xl bg-red-500/10 p-3 text-sm font-medium text-red-600">
+          <p role="alert" className="rounded-2xl bg-late/10 p-3 text-sm font-medium text-late">
             {error}
           </p>
         )}

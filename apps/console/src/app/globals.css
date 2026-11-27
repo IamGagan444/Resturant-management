@@ -16,15 +16,27 @@
   --font-display: var(--font-figtree), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
+/*
+ * Every colour that carries text meets WCAG AA (4.5:1) in both themes: on white, on the cream canvas and on
+ * --sunken panels. The logo's #dc5228 measured 3.7–4.0:1, so the UI uses a deeper shade of the same orange.
+ * `*-ink` is the text colour that goes on a filled `bg-*`: white in light mode, near-black in dark mode
+ * (white on the bright dark-mode fills measured 2.4–3.3:1).
+ */
 @theme {
-  --color-brand: #dc5228;
+  --color-brand: #bd421c;
   --color-brand-ink: #ffffff;
   --color-navy: #1e2a36;
   --color-cream: #fbf7f1;
-  --color-fresh: #138a4f;
-  --color-warn: #a86b00;
+  --color-fresh: #0f7a45;
+  --color-fresh-ink: #ffffff;
+  --color-warn: #92600a;
   --color-warn-ink: #ffffff;
-  --color-late: #d92d20;
+  --color-late: #c8281c;
+  --color-late-ink: #ffffff;
+  /* reserved tables: the one status that isn't about urgency */
+  --color-info: #2f5fb3;
+  /* the logo keeps the exact brand orange: graphics need 3:1, not 4.5:1 */
+  --color-logo: #dc5228;
   /* Headings scale with the screen (320px phone → desktop) instead of jumping at one breakpoint. */
   --text-xl: clamp(1.125rem, 1.06rem + 0.3vw, 1.25rem);
   --text-xl--line-height: 1.35;
@@ -119,7 +131,7 @@
   --sunken: #f4eee5;
   --field: #f4eee5;
   --ink: #1e2a36;
-  --muted: #66707c;
+  --muted: #5e6773;
   --line: #ebe3d7;
   color-scheme: light;
 }
@@ -135,11 +147,14 @@
     --muted: #9aa6b2;
     --line: #2a3542;
     --color-brand: #ec6238;
-    --color-brand-ink: #ffffff;
+    --color-brand-ink: #10161d;
     --color-fresh: #2fbf71;
+    --color-fresh-ink: #10161d;
     --color-warn: #f5b638;
     --color-warn-ink: #1e2a36;
     --color-late: #ff5d4d;
+    --color-late-ink: #10161d;
+    --color-info: #7aa7ff;
     --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.03);
     --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.7);
     color-scheme: dark;
@@ -154,11 +169,14 @@
   --muted: #9aa6b2;
   --line: #2a3542;
   --color-brand: #ec6238;
-  --color-brand-ink: #ffffff;
+  --color-brand-ink: #10161d;
   --color-fresh: #2fbf71;
+  --color-fresh-ink: #10161d;
   --color-warn: #f5b638;
   --color-warn-ink: #1e2a36;
   --color-late: #ff5d4d;
+  --color-late-ink: #10161d;
+  --color-info: #7aa7ff;
   --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.03);
   --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.7);
   color-scheme: dark;
@@ -169,12 +187,20 @@
   --field: var(--surface);
 }
 
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%; /* no font inflation when a phone turns landscape */
+  /* Staff screens are apps, not documents: a pull-to-refresh mid-shift would reload the kitchen or the board.
+     They refresh themselves (sockets + intervals). */
+  overscroll-behavior: none;
+}
 body {
   background: var(--bg);
   color: var(--ink);
   font-feature-settings: "cv11", "ss01";
   letter-spacing: -0.006em;
-  -webkit-tap-highlight-color: transparent;
+  /* viewport-fit=cover (layout.tsx) paints under a landscape notch: keep content beside it */
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
 }
 ::selection {
   background: color-mix(in oklab, var(--color-brand) 24%, transparent);
@@ -280,6 +306,23 @@ h3 {
   button:not(:disabled),
   summary {
     cursor: pointer;
+  }
+  /* Controls fire on tap with no double-tap-zoom wait, and a long press doesn't select their label
+     (kitchen items, table cards and chips are hand-styled buttons, not <Button>). Content text stays selectable. */
+  button,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="radio"] {
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* One keyboard focus ring for every control, including the many hand-styled buttons and links.
+     Keyboard only (:focus-visible), so taps and clicks never show it. Inputs keep their own ring above. */
+  :where(a, button, summary, [role="tab"], [role="radio"], [role="menuitem"], [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
   }
 }
 

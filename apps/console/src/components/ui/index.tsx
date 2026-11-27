@@ -17,8 +17,8 @@ const BUTTON_BASE =
 const BUTTON_VARIANT: Record<Variant, string> = {
   // orange pill = the main action; white pill with a hairline = secondary; tinted pill = tertiary
   primary: "bg-brand text-brand-ink shadow-[0_6px_16px_-8px_var(--color-brand)] hover:brightness-110 hover:shadow-[0_10px_22px_-8px_var(--color-brand)]",
-  success: "bg-fresh text-white hover:opacity-90",
-  danger: "bg-late text-white hover:opacity-90",
+  success: "bg-fresh text-fresh-ink hover:opacity-90",
+  danger: "bg-late text-late-ink hover:opacity-90",
   outline: "bg-(--surface) text-(--ink) ring-1 ring-(--line) ring-inset hover:bg-(--sunken)",
   subtle: "bg-(--sunken) text-(--ink) hover:bg-(--line)",
   ghost: "text-(--ink) hover:bg-(--sunken)",
@@ -79,7 +79,7 @@ export function NavLink({
 /** `plain` = no panel or hairline behind the bar: it blends into the page. */
 export function TopBar({ title, subtitle, online = true, plain = false, children }: { title: string; subtitle?: string; online?: boolean; plain?: boolean; children?: ReactNode }) {
   return (
-    <header className={cn("no-print sticky top-0 z-20 backdrop-blur-lg", plain ? "bg-(--bg)/85" : "line border-b bg-(--surface)/90")}>
+    <header className={cn("no-print sticky top-0 z-20 pt-[env(safe-area-inset-top,0px)] backdrop-blur-lg", plain ? "bg-(--bg)/85" : "line border-b bg-(--surface)/90")}>
       <div className="flex h-16 items-center gap-2.5 px-4 sm:gap-3 sm:px-6">
         <BrandMark className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
         <div className="min-w-0">
@@ -126,7 +126,7 @@ export function OfflineBanner({ online }: { online: boolean }) {
   }
   if (mode === "offline") {
     return (
-      <div role="status" className={`${bar} bg-late text-white`}>
+      <div role="status" className={`${bar} bg-late text-late-ink`}>
         <CloudOff className="h-4 w-4 shrink-0" aria-hidden />
         <span>Offline — your taps are saved on this device and will sync automatically.{waiting}</span>
       </div>
@@ -134,7 +134,7 @@ export function OfflineBanner({ online }: { online: boolean }) {
   }
   if (!online) {
     return (
-      <div role="status" className={`${bar} bg-late text-white`}>
+      <div role="status" className={`${bar} bg-late text-late-ink`}>
         <RefreshCw className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
         <span>Reconnecting… screen refreshes automatically.{waiting}</span>
       </div>
@@ -245,7 +245,7 @@ export function RejectionToast() {
     <button
       role="alert"
       onClick={() => setMsg(null)}
-      className="fixed inset-x-0 bottom-5 z-50 mx-auto w-fit max-w-[90vw] animate-fade-in rounded-full bg-late px-5 py-2.5 text-sm font-semibold text-white shadow-lift"
+      className="fixed inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom,0px))] z-50 mx-auto w-fit max-w-[90vw] animate-fade-in rounded-full bg-late px-5 py-2.5 text-sm font-semibold text-late-ink shadow-lift"
     >
       {msg}
     </button>

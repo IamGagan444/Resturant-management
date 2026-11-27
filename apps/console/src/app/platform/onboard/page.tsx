@@ -109,7 +109,7 @@ export default function OnboardPage() {
                 i === step ? "bg-(--surface) text-brand shadow-soft ring-1 ring-(--line)" : i < step ? "text-(--ink) hover:bg-(--sunken)" : "text-(--muted)",
               )}
             >
-              <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", i < step ? "bg-fresh text-white" : i === step ? "bg-brand text-brand-ink" : "bg-(--sunken)")}>
+              <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", i < step ? "bg-fresh text-fresh-ink" : i === step ? "bg-brand text-brand-ink" : "bg-(--sunken)")}>
                 {i < step ? <Check className="h-4 w-4" aria-hidden /> : <s.icon className="h-4 w-4" aria-hidden />}
               </span>
               {s.title}

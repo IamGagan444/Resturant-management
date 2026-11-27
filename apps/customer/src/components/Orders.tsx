@@ -41,9 +41,9 @@ export function Orders({ orders, actions }: { orders: OrderView[]; actions: Orde
             <h3 className="text-lg font-bold">{t("orderNo", { n: o.orderNumber })}</h3>
             <OrderBadge order={o} />
           </header>
-          {o.status === "PENDING_CONFIRMATION" && <p className="mb-4 rounded-2xl bg-amber-500/12 p-3 text-sm font-medium">{t("waiterWillConfirm")}</p>}
+          {o.status === "PENDING_CONFIRMATION" && <p className="mb-4 rounded-2xl bg-warn/12 p-3 text-sm font-medium">{t("waiterWillConfirm")}</p>}
           {o.status === "AWAITING_PAYMENT" && (
-            <div className="mb-4 space-y-3 rounded-2xl bg-amber-500/12 p-3 text-sm font-medium">
+            <div className="mb-4 space-y-3 rounded-2xl bg-warn/12 p-3 text-sm font-medium">
               <p>{t("awaitingPayment")}</p>
               <div className="flex gap-2">
                 <Button className="flex-1" disabled={actions.busy} onClick={() => actions.onPay(o)}>
@@ -94,7 +94,7 @@ function ItemRow({ item, held, actions }: { item: OrderItemView; held: boolean; 
         <span className="muted text-sm tabular-nums">{rupees(item.unitPrice * item.quantity)}</span>
       </div>
       {step === "OUT_OF_STOCK" ? (
-        <div className="mt-2 space-y-2 rounded-2xl bg-red-500/10 p-3 text-sm font-medium">
+        <div className="mt-2 space-y-2 rounded-2xl bg-late/10 p-3 text-sm font-medium">
           <p>{t("ranOut")}</p>
           <div className="flex gap-2">
             <Button className="flex-1 text-sm" disabled={actions.busy} onClick={() => actions.onSwap(item)}>

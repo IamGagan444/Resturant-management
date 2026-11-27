@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BillView, OrderItemView, OrderView, PublicMenu, RequestType, SessionView, TableLookup } from "@rms/contracts";
 import { ApiError, api, deviceId, newClientId } from "@/lib/api";
 import { LangProvider, useI18n } from "@/lib/i18n";
 import { useSessionSocket } from "@/lib/realtime";
+import { FlyContext, flyTo, useCountUp, type FlySource } from "@/lib/motion";
 import { PaymentCancelled, isBusyPaying, payByUpi } from "@/lib/upi";
 import { Join, type Joined } from "./Join";
 import { AllParcel, Menu, SwapSheet, tName, type AddLine } from "./Menu";
@@ -191,6 +192,20 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
       if (receiptUrl) setPhase({ kind: "paid", receiptUrl }); // walk-in parcel: paid is done, the food follows
     }, t("payFailed"));
 
+  // ── Fly to cart: the cart button may only appear with this very add, so wait two frames for it to mount ──
+  const cartButton = useRef<HTMLSpanElement>(null);
+  const bottomBar = useRef<HTMLDivElement>(null);
+  const fly = useCallback((from: FlySource | null) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => flyTo(from, cartButton.current ?? bottomBar.current)));
+  }, []);
+  const cartItems = sessionQ.data?.cart.items;
+  const inCart = useMemo(() => {
+    const byItem = new Map<string, number>();
+    for (const l of cartItems ?? []) byItem.set(l.itemId, (byItem.get(l.itemId) ?? 0) + l.quantity);
+    return byItem;
+  }, [cartItems]);
+  const shownSubtotal = useCountUp(sessionQ.data?.cart.subtotal ?? 0, 450, 100);
+
   // ── Screens ──
   if (phase.kind === "boot") return <Skeleton />;
   if (phase.kind === "join") return <Join lookup={phase.lookup} qrToken={qrToken} onJoined={enter} />;
@@ -251,7 +266,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
     <div className="mx-auto max-w-md px-4 md:max-w-3xl md:px-6">
       <Toast message={toast} onDone={clearToast} />
       {!online && (
-        <div role="status" className="sticky top-0 z-30 -mx-4 flex items-center justify-center gap-2 bg-amber-500 px-4 py-1.5 text-center text-sm font-medium text-black md:-mx-6">
+        <div role="status" className="sticky top-0 z-30 -mx-4 flex items-center justify-center gap-2 bg-warn px-4 py-1.5 text-center text-sm font-medium text-warn-ink md:-mx-6">
           <WifiOff className="h-4 w-4" aria-hidden />
           {t("reconnecting")}
         </div>
@@ -259,7 +274,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
 
       <header className="flex items-start justify-between gap-3 pt-5 md:pt-8">
         <div className="min-w-0">
-          <h1 className="font-display truncate text-[26px] leading-tight font-bold md:text-4xl">{menu.hotel.name}</h1>
+          <h1 className="font-display line-clamp-2 text-[28px] leading-[1.1] font-bold tracking-tight text-balance md:text-4xl">{menu.hotel.name}</h1>
           <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm">
             <Pill className="bg-brand/10 text-brand">{session ? place(session.tableLabel) : "…"}</Pill>
             {session?.joinCode && (
@@ -272,22 +287,32 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
         <LangPicker />
       </header>
 
-      <nav className="mt-4 mb-2 grid grid-cols-3 gap-1 rounded-2xl bg-(--sunken) p-1" aria-label="Sections">
+      <nav className="relative mt-4 mb-1 grid grid-cols-3 gap-1 rounded-2xl bg-(--sunken) p-1" aria-label="Sections">
+        {/* one pill that slides to the chosen tab (transform only: cheap on any phone) */}
+        <span
+          aria-hidden
+          className="surface absolute inset-y-1 left-1 w-[calc((100%-1rem)/3)] rounded-xl shadow-soft transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
+          style={{ transform: `translateX(calc(${["menu", "orders", "bill"].indexOf(tab)} * (100% + 0.25rem)))` }}
+        />
         {(["menu", "orders", "bill"] as const).map((k) => (
           <button
             key={k}
             onClick={() => setTab(k)}
             aria-current={tab === k}
-            className={`h-10 rounded-xl text-sm font-semibold transition ${tab === k ? "surface text-(--ink) shadow-soft" : "muted"}`}
+            className={`relative h-10 rounded-xl text-sm font-semibold transition-colors duration-200 ${tab === k ? "text-(--ink)" : "muted"}`}
           >
-            {k === "menu" ? t("tabMenu") : k === "orders" ? `${t("tabOrders")}${orders.length ? ` (${orders.length})` : ""}` : t("tabBill")}
+            <span className="relative">
+              {k === "menu" ? t("tabMenu") : k === "orders" ? `${t("tabOrders")}${orders.length ? ` (${orders.length})` : ""}` : t("tabBill")}
+            </span>
           </button>
         ))}
       </nav>
 
       {tab === "menu" && (
         <AllParcel.Provider value={session?.isParcel ?? false}>
-          <Menu menu={menu} onAdd={addToCart} />
+          <FlyContext.Provider value={fly}>
+            <Menu menu={menu} onAdd={addToCart} inCart={inCart} />
+          </FlyContext.Provider>
         </AllParcel.Provider>
       )}
       {tab === "orders" && (
@@ -321,23 +346,33 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
       )}
 
       {/* Bottom bar: cart + always-available actions */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 bg-linear-to-t from-(--bg) from-60% to-transparent pt-8">
+      {/* Glass: the menu stays visible underneath. Colour (the cart) sits on a solid layer so its text stays legible. */}
+      <div ref={bottomBar} className="pointer-events-none fixed inset-x-0 bottom-0 z-30 pt-6">
         <div className="pointer-events-auto mx-auto max-w-md space-y-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:max-w-3xl md:px-6">
           {cart && cart.items.length > 0 && (
-            <Button className="h-14 w-full justify-between! pr-6 pl-3 text-base" onClick={() => setCartOpen(true)}>
-              <span className="flex items-center gap-3">
-                <span className="grid h-9 min-w-9 place-items-center rounded-xl bg-white/20 px-2" aria-hidden>
-                  <ShoppingBag className="h-5 w-5" />
+            <div className="animate-rise">
+              <Button className="h-14 w-full justify-between! pr-6 pl-2.5 text-base shadow-[0_12px_28px_-10px_var(--color-brand)]" onClick={() => setCartOpen(true)}>
+                <span className="flex items-center gap-3">
+                  <span ref={cartButton} className="grid h-10 min-w-10 place-items-center rounded-xl bg-white/20 px-2" aria-hidden>
+                    <ShoppingBag className="h-5 w-5" />
+                  </span>
+                  <span className="text-left leading-tight">
+                    <span className="block text-xs font-medium opacity-85">
+                      {(() => {
+                        const n = cart.items.reduce((sum, i) => sum + i.quantity, 0);
+                        return n === 1 ? t("oneItem") : t("items", { n });
+                      })()}
+                    </span>
+                    <span className="block font-bold tabular-nums">{rupees(shownSubtotal)}</span>
+                  </span>
                 </span>
-                <span className="text-left leading-tight">
-                  <span className="block text-xs font-medium opacity-85">{t("items", { n: cart.items.reduce((n, i) => n + i.quantity, 0) })}</span>
-                  <span className="block font-bold">{rupees(cart.subtotal)}</span>
-                </span>
-              </span>
-              <span>{t("viewCart")}</span>
-            </Button>
+                <span>{t("viewCart")}</span>
+              </Button>
+            </div>
           )}
-          <div className={`surface line grid ${session?.isParcel ? "grid-cols-2" : "grid-cols-3"} gap-1 rounded-2xl border p-1 shadow-lift`}>
+          <div
+            className={`line grid ${session?.isParcel ? "grid-cols-2" : "grid-cols-3"} gap-1 rounded-2xl border bg-(--surface)/75 p-1 shadow-lift backdrop-blur-lg backdrop-saturate-150`}
+          >
             <Button variant="ghost" className="px-1 text-sm" onClick={() => request("CALL_WAITER")}>
               {t("btnWaiter")}
             </Button>
@@ -517,7 +552,7 @@ function CartSheet({
                         />
                         {t("parcel")}
                       </label>
-                      {!i.isValid && <p className="mt-1 text-xs font-medium text-red-600">{t("noLongerAvailable")}</p>}
+                      {!i.isValid && <p className="mt-1 text-xs font-medium text-late">{t("noLongerAvailable")}</p>}
                     </div>
                     <div className="flex shrink-0 flex-col items-end">
                       <p className="font-semibold tabular-nums">{rupees(i.lineTotal)}</p>
@@ -540,7 +575,7 @@ function CartSheet({
             {session.isParcel ? t("parcelHint") + "." : t("sharedCart")} {menu.hotel.pricesIncludeTax ? t("pricesInclTax") : t("taxesAdded")}
           </p>
           {error && (
-            <p role="alert" className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm font-medium text-red-600">
+            <p role="alert" className="mt-3 rounded-xl bg-late/10 px-3 py-2 text-sm font-medium text-late">
               {error}
             </p>
           )}

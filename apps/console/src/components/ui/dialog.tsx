@@ -45,7 +45,7 @@ export function DialogDescription({ className, ...props }: ComponentProps<typeof
 }
 
 export function DialogBody({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6", className)} {...props} />;
+  return <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6", className)} {...props} />;
 }
 
 export function DialogFooter({ className, ...props }: ComponentProps<"div">) {

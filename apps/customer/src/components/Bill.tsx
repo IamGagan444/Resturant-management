@@ -105,12 +105,12 @@ export function Bill({
       ) : (
         <div className="mt-6 space-y-3">
           {bill.paymentInFlight && !busy && (
-            <p role="status" className="rounded-2xl bg-amber-500/12 p-3 text-sm font-medium">
+            <p role="status" className="rounded-2xl bg-warn/12 p-3 text-sm font-medium">
               {t("someonePaying")}
             </p>
           )}
           {error && (
-            <p role="alert" className="rounded-2xl bg-red-500/10 p-3 text-sm font-medium text-red-600">
+            <p role="alert" className="rounded-2xl bg-late/10 p-3 text-sm font-medium text-late">
               {error}
             </p>
           )}

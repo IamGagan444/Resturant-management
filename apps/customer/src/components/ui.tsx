@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { Languages, Package, X } from "lucide-react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { Check, ChevronDown, Languages, Package, X } from "lucide-react";
 import type { FoodType } from "@rms/contracts";
 import { formatPaise, parcelNumber } from "@rms/domain";
 import { LANGS, useI18n, type Lang } from "@/lib/i18n";
@@ -62,7 +62,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
             <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
-        <div className="overflow-y-auto px-5 pt-2 pb-[max(1.75rem,env(safe-area-inset-bottom))]">{children}</div>
+        <div className="overflow-y-auto overscroll-contain px-5 pt-2 pb-[max(1.75rem,env(safe-area-inset-bottom))]">{children}</div>
       </div>
     </div>
   );
@@ -85,24 +85,87 @@ export function Toast({ message, onDone }: { message: string | null; onDone: () 
   );
 }
 
+/**
+ * Language menu. A styled popover instead of a native <select>: the OS list rendered as a grey box on Android
+ * and Windows and didn't follow the theme. Menu-button pattern: arrows move, Escape / outside tap closes.
+ */
 export function LangPicker() {
   const { lang, setLang } = useI18n();
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const items = useRef<(HTMLButtonElement | null)[]>([]);
+  const current = LANGS.find((l) => l.code === lang) ?? LANGS[0];
+
+  useEffect(() => {
+    if (!open) return;
+    items.current[LANGS.findIndex((l) => l.code === lang)]?.focus();
+    const outside = (e: PointerEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [open, lang]);
+
+  function choose(l: Lang) {
+    setLang(l);
+    setOpen(false);
+    button.current?.focus();
+  }
+
+  function onKey(e: React.KeyboardEvent) {
+    const i = items.current.findIndex((el) => el === document.activeElement);
+    const move = (to: number) => {
+      e.preventDefault();
+      items.current[(to + LANGS.length) % LANGS.length]?.focus();
+    };
+    if (e.key === "Escape") {
+      setOpen(false);
+      button.current?.focus();
+    } else if (e.key === "ArrowDown") move(i + 1);
+    else if (e.key === "ArrowUp") move(i - 1);
+    else if (e.key === "Home") move(0);
+    else if (e.key === "End") move(LANGS.length - 1);
+    else if (e.key === "Tab") setOpen(false);
+  }
+
   return (
-    <label className="relative flex h-10 shrink-0 items-center rounded-full bg-(--sunken)">
-      <Languages className="muted pointer-events-none absolute left-3 h-4 w-4" aria-hidden />
-      <select
-        aria-label="Language"
-        value={lang}
-        onChange={(e) => setLang(e.target.value as Lang)}
-        className="h-full appearance-none rounded-full border-0 bg-transparent pr-3.5 pl-9 text-sm font-medium focus:shadow-none"
+    <div ref={root} className="relative shrink-0" onKeyDown={onKey}>
+      <button
+        ref={button}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Language: ${current.label}`}
+        onClick={() => setOpen((o) => !o)}
+        className={`flex h-10 items-center gap-2 rounded-full pr-3 pl-3.5 text-sm font-semibold transition-colors duration-150 ${open ? "bg-(--line)" : "bg-(--sunken) active:bg-(--line)"}`}
       >
-        {LANGS.map((l) => (
-          <option key={l.code} value={l.code}>
-            {l.label}
-          </option>
-        ))}
-      </select>
-    </label>
+        <Languages className="muted h-4 w-4" aria-hidden />
+        {current.label}
+        <ChevronDown className={`muted h-4 w-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`} aria-hidden />
+      </button>
+      {open && (
+        <div role="menu" aria-label="Language" className="menu-in surface line absolute top-12 right-0 z-50 w-44 rounded-2xl border p-1.5 shadow-lift">
+          {LANGS.map((l, i) => {
+            const on = l.code === lang;
+            return (
+              <button
+                key={l.code}
+                ref={(el) => {
+                  items.current[i] = el;
+                }}
+                role="menuitemradio"
+                aria-checked={on}
+                lang={l.code}
+                onClick={() => choose(l.code)}
+                className={`flex h-11 w-full items-center justify-between gap-2 rounded-xl px-3 text-left text-[15px] transition-colors duration-150 focus-visible:bg-(--sunken) focus-visible:outline-none active:bg-(--sunken) ${on ? "font-semibold text-brand" : "font-medium"}`}
+              >
+                {l.label}
+                {on && <Check className="h-4 w-4" aria-hidden />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

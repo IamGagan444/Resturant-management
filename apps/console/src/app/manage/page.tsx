@@ -116,7 +116,7 @@ export default function ManagePage() {
       </TopBar>
       <Tabs value={tab} onValueChange={(t) => isTab(t) && void setTab(t)} className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)]">
         {/* phones and tablets: a sticky row of pills; desktop: a sidebar */}
-        <aside className="line sticky top-16 z-10 border-b bg-(--surface) lg:h-[calc(100dvh-4rem)] scroll-thin lg:overflow-y-auto lg:border-r lg:border-b-0 lg:pr-3 lg:pl-4 lg:py-6">
+        <aside className="line sticky top-[calc(4rem+env(safe-area-inset-top,0px))] z-10 border-b bg-(--surface) lg:h-[calc(100dvh-4rem)] scroll-thin lg:overflow-y-auto lg:border-r lg:border-b-0 lg:pr-3 lg:pl-4 lg:py-6">
           <p className="muted hidden px-3 pb-2 text-xs font-medium lg:block">Restaurant</p>
           <TabsList className="px-4 py-2.5 sm:px-6 lg:flex-col lg:gap-0.5 lg:p-0" aria-label="Manage sections">
             {(Object.keys(TABS) as Tab[]).map((t) => {

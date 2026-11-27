@@ -21,13 +21,13 @@ export function RestroMark({ className = "h-9 w-9", animated = false }: { classN
         <path className="mark-trend" pathLength={1} d="M40 74l12.4-7.5M58 65h9l11-10" strokeWidth="2.6" />
       </g>
       <path d="M35 47.5h34l-3 5.2a3 3 0 0 1-2.6 1.6H40.6a3 3 0 0 1-2.6-1.6z" fill="currentColor" />
-      <g className="mark-lid" fill="var(--color-brand)">
+      <g className="mark-lid" fill="var(--color-logo)">
         <path d="M33 42.5a19 17.5 0 0 1 38 0z" />
         <rect x="48.5" y="20.5" width="7" height="3.6" rx="1.8" />
         <rect x="51" y="23" width="2" height="2.5" />
         <path d="M39.5 37.5q2.5-6 8-8" fill="none" stroke="#fff" strokeWidth="1.5" opacity=".85" />
       </g>
-      <circle className="mark-dot" cx="86" cy="54" r="4.2" fill="var(--color-brand)" />
+      <circle className="mark-dot" cx="86" cy="54" r="4.2" fill="var(--color-logo)" />
       <circle cx="40" cy="74" r="4" fill="currentColor" />
       <circle cx="55" cy="65" r="3" stroke="currentColor" strokeWidth="2.4" />
       <g fill="currentColor">

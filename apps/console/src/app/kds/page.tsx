@@ -41,10 +41,16 @@ export default function KdsPage() {
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
+    // The kitchen is always dark, but the status-bar colour follows the OS: swap it too, or a light-mode tablet
+    // shows a white bar over a dark screen. The plain TopBar sits on --bg.
+    const metas = [...document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')];
+    const before = metas.map((m) => m.content);
+    metas.forEach((m) => (m.content = "#0f151c"));
     const t = setInterval(() => setNow(Date.now()), 15_000);
     return () => {
       clearInterval(t);
       document.documentElement.classList.remove("dark");
+      metas.forEach((m, i) => (m.content = before[i] ?? m.content));
     };
   }, []);
 
@@ -237,7 +243,7 @@ function TicketCard({
         ))}
       </ul>
       <div className="p-4 pt-3">
-        <Button variant="success" className="h-14 w-full text-lg text-(--bg)" onClick={() => void onBump(t)}>
+        <Button variant="success" className="h-14 w-full text-lg" onClick={() => void onBump(t)}>
           <CheckCheck aria-hidden />
           All ready
         </Button>

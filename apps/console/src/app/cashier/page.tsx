@@ -385,7 +385,7 @@ function SettledPanel({ bill, onDone }: { bill: BillView; onDone: () => void }) 
         </Field>
         {links ? (
           <div className="grid grid-cols-2 gap-2">
-            <a className="tap flex items-center justify-center gap-2 rounded-full bg-fresh px-5 font-medium text-white hover:opacity-90" href={links.whatsappUrl} target="_blank" rel="noreferrer">
+            <a className="tap flex items-center justify-center gap-2 rounded-full bg-fresh px-5 font-medium text-fresh-ink hover:opacity-90" href={links.whatsappUrl} target="_blank" rel="noreferrer">
               <MessageCircle className="h-4 w-4" aria-hidden />
               WhatsApp
             </a>

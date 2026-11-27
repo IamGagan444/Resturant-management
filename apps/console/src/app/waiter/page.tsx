@@ -45,8 +45,8 @@ const TABLE_STYLE: Record<string, string> = {
   FREE: "line",
   OCCUPIED: "border-brand/60 bg-brand/5",
   BILL_REQUESTED: "border-warn bg-warn/10",
-  CLEANING: "border-stone-400 bg-stone-500/10",
-  RESERVED: "border-blue-500/60 bg-blue-500/5",
+  CLEANING: "border-(--muted)/60 bg-(--sunken)",
+  RESERVED: "border-info/60 bg-info/5",
 };
 
 /** Waiter phone: everything needing action, top to bottom by urgency. Every action is one tap. */
@@ -134,7 +134,7 @@ export default function WaiterPage() {
       <RingBanner ringing={ringer.ringing} label={ringLabel} onSnooze={() => ringer.snooze()} />
       <RejectionToast />
       {escalation && (
-        <button className="flex w-full items-center gap-2 bg-late px-4 py-3 text-left font-semibold text-white" onClick={() => setEscalation(null)}>
+        <button className="flex w-full items-center gap-2 bg-late px-4 py-3 text-left font-semibold text-late-ink" onClick={() => setEscalation(null)}>
           <AlarmClock className="h-5 w-5 shrink-0" aria-hidden />
           {escalation} — tap to dismiss
         </button>
@@ -294,7 +294,7 @@ export default function WaiterPage() {
                   )}
                   {t.status === "CLEANING" ? (
                     <button
-                      className="mt-2.5 flex h-10 items-center justify-center rounded-xl bg-fresh text-sm font-semibold text-white hover:brightness-110"
+                      className="mt-2.5 flex h-10 items-center justify-center rounded-xl bg-fresh text-sm font-semibold text-fresh-ink hover:brightness-110"
                       onClick={() =>
                         act(
                           api("POST", `/v1/s/tables/${t.id}/status`, {
@@ -412,7 +412,7 @@ function SwapItem({ item, onClose, onDone }: { item: OrderItemView; onClose: () 
   return (
     <Sheet open onClose={onClose} title={`${item.quantity} × ${item.name} → ?`}>
       <SearchBox value={q} onChange={setQ} />
-      <ul className="max-h-[50dvh] divide-y divide-(--line) overflow-y-auto">
+      <ul className="max-h-[50dvh] divide-y divide-(--line) overflow-y-auto overscroll-contain">
         {items.map((i) => (
           <li key={i.id} className="flex flex-wrap items-center gap-2 py-2.5">
             <span className="min-w-0 flex-1 font-medium">{i.name}</span>
@@ -519,7 +519,7 @@ function TakeOrder({ table, onClose, onPlaced }: { table: BoardTable; onClose: (
         ))}
       </div>
       <SearchBox value={q} onChange={setQ} />
-      <ul className="max-h-[40dvh] divide-y divide-(--line) overflow-y-auto">
+      <ul className="max-h-[40dvh] divide-y divide-(--line) overflow-y-auto overscroll-contain">
         {items.map((i) => (
           <li key={i.id} className="flex flex-wrap items-center gap-2 py-2.5">
             <span className="min-w-0 flex-1 font-medium">{i.name}</span>

@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicMenu, PublicMenuItem } from "@rms/contracts";
 import { isWithinWindow, priceLine, type PricingAddonGroup } from "@rms/domain";
 import { useI18n, type Lang } from "@/lib/i18n";
+import { prefersReducedMotion, useFly, type FlySource } from "@/lib/motion";
 import { Flame, Minus, Package, Plus, Search } from "lucide-react";
 import { Button, FoodMark, Sheet, rupees } from "./ui";
 
@@ -45,17 +46,118 @@ function useSections(menu: PublicMenu, q: string, vegOnly: boolean, bestOnly: bo
   }, [menu, q, vegOnly, bestOnly, lang]);
 }
 
-export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) => Promise<void> }) {
+export function Menu({ menu, onAdd, inCart }: { menu: PublicMenu; onAdd: (l: AddLine) => Promise<void>; inCart: ReadonlyMap<string, number> }) {
   const { lang, t } = useI18n();
+  const fly = useFly();
   const [q, setQ] = useState("");
   const [vegOnly, setVegOnly] = useState(false);
   const [bestOnly, setBestOnly] = useState(false);
   const [open, setOpen] = useState<PublicMenuItem | null>(null);
+  const origin = useRef<FlySource | null>(null);
   const sections = useSections(menu, q, vegOnly, bestOnly, lang);
+  const filtering = q.trim() !== "" || vegOnly || bestOnly;
+  const featured = useMemo(() => menu.items.filter((i) => i.isBestseller && i.isAvailable && i.imageUrl), [menu]);
+
+  // Which category is on screen: its chip lights up and scrolls into view, so the bar doubles as "you are here".
+  const [active, setActive] = useState<string | null>(null);
+  const chips = useRef(new Map<string, HTMLAnchorElement>());
+  useEffect(() => {
+    // the last section whose heading has reached the upper part of the screen is the one being read
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const line = Math.max(190, window.innerHeight * 0.4); // never above the sticky bar (about 180px tall)
+      let current: string | null = sections[0]?.category.id ?? null;
+      for (const s of sections) {
+        const el = document.getElementById(`c-${s.category.id}`);
+        if (el && el.getBoundingClientRect().top <= line) current = s.category.id;
+      }
+      setActive(current);
+    };
+    const onScroll = () => (raf ||= requestAnimationFrame(update));
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, [sections]);
+  useEffect(() => {
+    const chip = active ? chips.current.get(active) : null;
+    chip?.parentElement?.scrollTo({ left: chip.offsetLeft - 16, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  }, [active]);
+
+  // The bar only casts its edge shadow once content is scrolling under it.
+  const sentinel = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setStuck(!e?.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  function openItem(item: PublicMenuItem, from: HTMLElement) {
+    const img = from.closest("li")?.querySelector("img") ?? from;
+    origin.current = { src: item.imageUrl, rect: img.getBoundingClientRect() };
+    setOpen(item);
+  }
+  async function add(l: AddLine) {
+    await onAdd(l);
+    fly(origin.current);
+  }
+  function jump(e: React.MouseEvent, categoryId: string) {
+    e.preventDefault();
+    document.getElementById(`c-${categoryId}`)?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    setActive(categoryId);
+  }
 
   return (
-    <div className="pb-44">
-      <div className="sticky top-0 z-20 -mx-4 space-y-2.5 bg-(--bg)/90 px-4 pt-3 pb-3 backdrop-blur-xl md:-mx-6 md:px-6">
+    <div className="pb-48">
+      {!filtering && featured.length >= 2 && (
+        <section aria-label={t("bestsellers")} className="mt-4">
+          <h2 className="mb-3 font-display text-[22px] font-bold">{t("bestsellers")}</h2>
+          <ul className="scroll-x -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 px-4 pb-3 md:-mx-6 md:scroll-px-6 md:px-6">
+            {featured.map((item) => {
+              const qty = inCart.get(item.id);
+              return (
+                <li key={item.id} className="w-60 shrink-0 snap-start">
+                  <button
+                    onClick={(e) => openItem(item, e.currentTarget)}
+                    className="group relative block w-full overflow-hidden rounded-3xl text-left shadow-lift transition-transform duration-150 active:scale-[0.98]"
+                    aria-label={`${tName(item, lang)}, ${rupees(fromPrice(item))}`}
+                  >
+                    <img src={item.imageUrl ?? ""} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full bg-(--sunken) object-cover transition-transform duration-500 ease-out group-hover:scale-105" />
+                    {/* the text sits on a dark scrim, never directly on the photo */}
+                    <span className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" aria-hidden />
+                    <span className="absolute top-3 left-3">
+                      <FoodMark type={item.foodType} />
+                    </span>
+                    {qty ? <InCartBadge qty={qty} className="top-2.5 right-2.5" /> : null}
+                    <span className="absolute inset-x-3.5 bottom-3 flex items-end justify-between gap-2 text-white">
+                      <span className="min-w-0">
+                        <span className="block truncate text-[17px] leading-snug font-semibold">{tName(item, lang)}</span>
+                        <span className="text-sm font-semibold text-white/85 tabular-nums">{rupees(fromPrice(item))}</span>
+                      </span>
+                      <span className="grid h-9 shrink-0 place-items-center rounded-full bg-white/90 px-3.5 text-xs font-bold tracking-wide text-[#bd421c] uppercase shadow-[0_2px_8px_rgb(0_0_0/0.25)] backdrop-blur-md">
+                        {t("add")}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      <div ref={sentinel} aria-hidden />
+      <div
+        className={`sticky top-0 z-20 -mx-4 space-y-2.5 bg-(--bg)/75 px-4 pt-3 pb-3 backdrop-blur-lg backdrop-saturate-150 transition-shadow duration-200 md:-mx-6 md:px-6 ${
+          stuck ? "shadow-[0_10px_20px_-16px_rgb(0_0_0/0.45)]" : ""
+        }`}
+      >
         <div className="relative">
           <Search className="muted pointer-events-none absolute top-1/2 left-4 h-4.5 w-4.5 -translate-y-1/2" aria-hidden />
           <input
@@ -64,6 +166,7 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
             aria-label={t("search")}
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            enterKeyHint="search"
             className="tap w-full rounded-full border border-transparent bg-(--sunken) pr-4 pl-11"
           />
         </div>
@@ -75,15 +178,26 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
             {t("bestsellers")}
           </Chip>
           <span className="line my-1.5 shrink-0 border-l" aria-hidden />
-          {sections.map((s) => (
-            <a
-              key={s.category.id}
-              href={`#c-${s.category.id}`}
-              className="line surface flex h-9 shrink-0 items-center rounded-full border px-3.5 text-sm font-medium whitespace-nowrap"
-            >
-              {tName({ name: s.category.name, translations: s.category.translations }, lang)}
-            </a>
-          ))}
+          {sections.map((s) => {
+            const on = active === s.category.id;
+            return (
+              <a
+                key={s.category.id}
+                ref={(el) => {
+                  if (el) chips.current.set(s.category.id, el);
+                  else chips.current.delete(s.category.id);
+                }}
+                href={`#c-${s.category.id}`}
+                onClick={(e) => jump(e, s.category.id)}
+                aria-current={on ? "location" : undefined}
+                className={`flex h-9 shrink-0 items-center rounded-full border px-3.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
+                  on ? "border-transparent bg-(--ink) text-(--bg)" : "line surface"
+                }`}
+              >
+                {tName({ name: s.category.name, translations: s.category.translations }, lang)}
+              </a>
+            );
+          })}
         </div>
       </div>
 
@@ -108,8 +222,8 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
           <ul className="stagger divide-y divide-(--line) md:grid md:grid-cols-2 md:gap-4 md:divide-y-0">
             {s.items.map((item) => {
               const available = item.isAvailable && s.isOpen;
-              const from = item.variants.length ? Math.min(...item.variants.map((v) => v.price)) : item.price;
               const desc = tDesc(item, lang);
+              const qty = inCart.get(item.id);
               return (
                 <li
                   key={item.id}
@@ -119,16 +233,14 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
                     <div className="flex items-center gap-2">
                       <FoodMark type={item.foodType} />
                       {item.isBestseller && (
-                        <span className="inline-flex items-center rounded-full bg-brand/12 px-2 py-0.5 text-[11px] font-semibold text-brand">
-                          {t("bestseller")}
-                        </span>
+                        <span className="inline-flex items-center rounded-full bg-brand/12 px-2 py-0.5 text-[11px] font-semibold text-brand">{t("bestseller")}</span>
                       )}
                     </div>
                     <h3 className="mt-1.5 text-[17px] leading-snug font-semibold">{tName(item, lang)}</h3>
-                    <p className="mt-0.5 flex items-center gap-2 text-[15px] font-semibold">
-                      {item.variants.length ? t("fromPrice", { amount: rupees(from) }) : rupees(from)}
+                    <p className="mt-0.5 flex items-center gap-2 text-[15px] font-semibold tabular-nums">
+                      {item.variants.length ? t("fromPrice", { amount: rupees(fromPrice(item)) }) : rupees(fromPrice(item))}
                       {item.spiceLevel ? (
-                        <span className="flex text-red-500" role="img" aria-label={`Spice level ${item.spiceLevel}`}>
+                        <span className="flex text-late" role="img" aria-label={`Spice level ${item.spiceLevel}`}>
                           {Array.from({ length: item.spiceLevel }, (_, n) => (
                             <Flame key={n} className="h-3.5 w-3.5 fill-current" aria-hidden />
                           ))}
@@ -140,14 +252,17 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
                   <div className={`relative flex w-32 shrink-0 flex-col items-center ${item.imageUrl ? "pb-4" : "justify-center"}`}>
                     {item.imageUrl && (
                       // plain lazy <img>: no next/image runtime, keeps JS small on 4G
-                      <img src={item.imageUrl} alt="" loading="lazy" decoding="async" className="h-28 w-32 rounded-2xl bg-(--sunken) object-cover" />
+                      <img src={item.imageUrl} alt="" loading="lazy" decoding="async" className="h-28 w-32 rounded-3xl bg-(--sunken) object-cover shadow-soft" />
                     )}
+                    {qty ? <InCartBadge qty={qty} className="-top-2 -right-2" /> : null}
                     <Button
                       variant="outline"
-                      // Uber's floating white pill: reads on a photo and on the plain list alike
-                      className={`h-10 min-h-10 w-26 bg-(--surface)! px-1 font-semibold whitespace-nowrap text-(--ink) shadow-[0_2px_8px_rgb(0_0_0/0.16)] ring-1 ring-(--line) ${available ? "text-sm font-bold tracking-wide text-brand! uppercase" : "text-xs"} ${item.imageUrl ? "absolute bottom-0" : ""}`}
+                      // glass pill over the photo; a fixed deep orange on near-white keeps 5:1 in both themes
+                      className={`h-10 min-h-10 w-26 px-1 font-semibold whitespace-nowrap shadow-[0_4px_14px_-4px_rgb(0_0_0/0.3)] ring-1 ring-black/5 ${
+                        item.imageUrl ? "absolute bottom-0 bg-white/90! backdrop-blur-md" : "bg-(--surface)! ring-(--line)"
+                      } ${available ? `text-sm font-bold tracking-wide uppercase ${item.imageUrl ? "text-[#bd421c]!" : "text-brand!"}` : "text-xs text-[#5e6773]!"}`}
                       disabled={!available}
-                      onClick={() => setOpen(item)}
+                      onClick={(e) => openItem(item, e.currentTarget)}
                     >
                       {available ? t("add") : t("soldOut")}
                     </Button>
@@ -159,8 +274,19 @@ export function Menu({ menu, onAdd }: { menu: PublicMenu; onAdd: (l: AddLine) =>
         </section>
       ))}
 
-      {open && <ItemSheet item={open} menu={menu} onClose={() => setOpen(null)} onAdd={onAdd} />}
+      {open && <ItemSheet item={open} menu={menu} onClose={() => setOpen(null)} onAdd={add} />}
     </div>
+  );
+}
+
+const fromPrice = (item: PublicMenuItem) => (item.variants.length ? Math.min(...item.variants.map((v) => v.price)) : item.price);
+
+/** "2×" on a dish that's already in the table's cart. */
+function InCartBadge({ qty, className }: { qty: number; className: string }) {
+  return (
+    <span key={qty} className={`absolute z-10 grid h-7 min-w-7 animate-pop place-items-center rounded-full bg-brand px-1.5 text-sm font-bold text-brand-ink tabular-nums ring-2 ring-(--bg) ${className}`}>
+      {qty}×
+    </span>
   );
 }
 

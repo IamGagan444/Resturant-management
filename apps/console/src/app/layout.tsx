@@ -16,9 +16,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover", // paint edge to edge; headers and bars pad themselves with env(safe-area-inset-*)
+  interactiveWidget: "resizes-content", // Android keyboard shrinks the layout, so sheets and pinned inputs stay visible
+  // Status bar = the header it sits above (TopBar is --surface). The kitchen screen swaps it for dark (kds/page.tsx).
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbf7f1" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f151c" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#17202a" },
   ],
 };
 
