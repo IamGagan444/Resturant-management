@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { Check, ChevronDown, Languages, Moon, Package, Sun, X } from "lucide-react";
+import { BellRing, Check, ChevronDown, CircleCheck, CircleX, Languages, Moon, Package, Sun, TriangleAlert, X } from "lucide-react";
 import type { FoodType } from "@rms/contracts";
 import { formatPaise, parcelNumber } from "@rms/domain";
 import { LANGS, useI18n, type Lang } from "@/lib/i18n";
@@ -69,19 +69,44 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   );
 }
 
-export function Toast({ message, onDone }: { message: string | null; onDone: () => void }) {
+export type ToastTone = "ok" | "error" | "warn" | "info";
+export interface ToastMsg {
+  id: number;
+  text: string;
+  tone: ToastTone;
+}
+
+const TOAST_ICON: Record<ToastTone, { icon: typeof Check; color: string }> = {
+  ok: { icon: CircleCheck, color: "text-(--toast-ok)" },
+  error: { icon: CircleX, color: "text-(--toast-bad)" },
+  warn: { icon: TriangleAlert, color: "text-(--toast-warn)" },
+  info: { icon: BellRing, color: "text-(--toast-brand)" },
+};
+
+/**
+ * One toast at a time, top-center (clear of the cart and action bar): a compact inverted capsule with a small
+ * coloured icon, matching the staff console. Tap to dismiss; errors stay a little longer.
+ */
+export function Toast({ message, onDone }: { message: ToastMsg | null; onDone: () => void }) {
   useEffect(() => {
     if (!message) return;
-    const t = setTimeout(onDone, 3500);
+    const t = setTimeout(onDone, message.tone === "error" ? 5000 : 3200);
     return () => clearTimeout(t);
   }, [message, onDone]);
   if (!message) return null;
+  const { icon: Icon, color } = TOAST_ICON[message.tone];
   return (
-    <div
-      role="status"
-      className="fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-50 mx-auto w-fit max-w-[90vw] animate-pop rounded-full bg-brand px-5 py-3 text-sm font-medium text-brand-ink shadow-lift"
-    >
-      {message}
+    <div className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-50 flex justify-center px-4">
+      <button
+        key={message.id}
+        type="button"
+        role={message.tone === "error" ? "alert" : "status"}
+        onClick={onDone}
+        className="pointer-events-auto flex max-w-[min(92vw,420px)] animate-pop items-center gap-2.5 rounded-full bg-(--toast-bg) py-2.5 pr-4.5 pl-3.5 text-left text-[14px] leading-5 font-medium text-(--toast-ink) shadow-(--toast-shadow) ring-1 ring-(--toast-ring)"
+      >
+        <Icon className={`h-[18px] w-[18px] shrink-0 ${color}`} strokeWidth={2.25} aria-hidden />
+        <span className="min-w-0">{message.text}</span>
+      </button>
     </div>
   );
 }

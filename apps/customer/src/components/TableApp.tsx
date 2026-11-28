@@ -14,7 +14,7 @@ import { Orders } from "./Orders";
 import { ParcelStatus, forgetPaid, recallPaid, rememberPaid, waitingParcels } from "./ParcelStatus";
 import { Bill } from "./Bill";
 import { Check, CheckCircle2, ClipboardList, ConciergeBell, GlassWater, MessageCircle, ReceiptText, RotateCcw, ShoppingBag, UtensilsCrossed, WifiOff, type LucideIcon } from "lucide-react";
-import { Button, FoodMark, HeaderTools, Pill, Sheet, Toast, rupees, usePlace } from "./ui";
+import { Button, FoodMark, HeaderTools, Pill, Sheet, Toast, rupees, usePlace, type ToastMsg, type ToastTone } from "./ui";
 
 export function TableApp(props: { initialMenu: PublicMenu; qrToken: string }) {
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } }));
@@ -47,8 +47,10 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
   const [cartOpen, setCartOpen] = useState(false);
   const [swapping, setSwapping] = useState<OrderItemView | null>(null);
   const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const clearToast = useCallback(() => setToast(null), []);
+  const [toast, setToastState] = useState<ToastMsg | null>(null);
+  /** a new id each time, so the same message twice in a row still shows again */
+  const setToast = useCallback((text: string, tone: ToastTone = "ok") => setToastState({ id: Date.now(), text, tone }), []);
+  const clearToast = useCallback(() => setToastState(null), []);
   const inSession = phase.kind === "in";
   const place = usePlace();
 
@@ -130,13 +132,13 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
     s.on("bill:updated", () => void qc.invalidateQueries({ queryKey: ["bill"] }));
     s.on("item:out_of_stock", () => {
       refreshOrders();
-      setToast(t("itemRanOut"));
+      setToast(t("itemRanOut"), "warn");
       setTab("orders");
     });
     s.on("menu:item_availability", (e) =>
       qc.setQueryData<PublicMenu>(["menu"], (m) => (m ? { ...m, items: m.items.map((i) => (i.id === e.menuItemId ? { ...i, isAvailable: e.isAvailable } : i)) } : m)),
     );
-    s.on("request:acknowledged", () => setToast(t("waiterComing")));
+    s.on("request:acknowledged", () => setToast(t("waiterComing"), "info"));
     s.on("bill:paid", (e) => setPhase({ kind: "paid", receiptUrl: e.receiptUrl }));
   });
 
@@ -149,7 +151,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
       qc.setQueryData(["session"], s);
       setToast(t("addedToCart"));
     } catch (e) {
-      setToast(errorText(e, t("couldNotAdd")));
+      setToast(errorText(e, t("couldNotAdd")), "error");
       throw e;
     }
   }
@@ -181,7 +183,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
             });
       qc.setQueryData(["session"], s);
     } catch (e) {
-      if (line) setToast(errorText(e, t("couldNotSend"))); // addToCart already said why
+      if (line) setToast(errorText(e, t("couldNotSend")), "error"); // addToCart already said why
     }
   }
 
@@ -197,7 +199,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
   async function request(type: RequestType) {
     const now = Date.now();
     if (now - (lastRequest.current[type] ?? 0) < REQUEST_COOLDOWN_MS) {
-      setToast(t(`req${type}`)); // same reassurance, no second request
+      setToast(t(`req${type}`), "info"); // same reassurance, no second request
       if (type === "BILL") setTab("bill");
       return;
     }
@@ -205,11 +207,11 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
     try {
       await api("POST", "/v1/p/requests", { clientId: newClientId(), type });
       setSent(type);
-      setToast(t(`req${type}`));
+      setToast(t(`req${type}`), "info");
       if (type === "BILL") setTab("bill");
     } catch (e) {
       lastRequest.current[type] = 0; // it didn't go through: let them try again right away
-      setToast(errorText(e, t("couldNotSend")));
+      setToast(errorText(e, t("couldNotSend")), "error");
     }
   }
 
@@ -219,8 +221,8 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
     try {
       await fn();
     } catch (e) {
-      if (!(e instanceof PaymentCancelled)) setToast(errorText(e, fallback));
-      else setToast(t("paymentCancelled"));
+      if (!(e instanceof PaymentCancelled)) setToast(errorText(e, fallback), "error");
+      else setToast(t("paymentCancelled"), "warn");
     } finally {
       setBusy(false);
       refreshOrders();
@@ -463,7 +465,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
               setToast(t("orderSent"));
               refreshOrders();
             } catch (e) {
-              setToast(errorText(e, t("couldNotSend")));
+              setToast(errorText(e, t("couldNotSend")), "error");
               throw e;
             }
           }}
