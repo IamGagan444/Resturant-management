@@ -1,10 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Figtree, Inter } from "next/font/google";
 import { THEME_SCRIPT } from "@/lib/theme-script";
+import { fontVariables } from "./fonts";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const figtree = Figtree({ subsets: ["latin"], variable: "--font-figtree", display: "swap", weight: ["600", "700", "800"] });
 
 export const metadata: Metadata = {
   title: "Order at your table",
@@ -26,7 +23,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     // THEME_SCRIPT puts .dark / .light on <html> before React loads, so its class differs from the server's on purpose
-    <html lang="en" className={`${inter.variable} ${figtree.variable}`} suppressHydrationWarning>
+    <html lang="en" className={fontVariables} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>

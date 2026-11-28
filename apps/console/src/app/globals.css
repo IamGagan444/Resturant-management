@@ -9,11 +9,11 @@
  * Status colours (fresh / warn / late) stay separate so a kitchen sees "late" at a glance.
  * Motion is CSS-only and animates transform/opacity only (cheap on low-end phones); it switches
  * off for people who ask for reduced motion.
- * Fonts come from next/font (layout.tsx); Indian scripts fall back to the system's Noto fonts.
+ * Fonts are self-hosted with next/font/local (app/fonts.ts); Indian scripts fall back to the system's Noto fonts.
  */
 @theme inline {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", "Noto Sans Oriya", "Noto Sans Telugu", sans-serif;
-  --font-display: var(--font-figtree), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter-ext), var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", "Noto Sans Oriya", "Noto Sans Telugu", sans-serif;
+  --font-display: var(--font-figtree-ext), var(--font-figtree), var(--font-inter-ext), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 /*
