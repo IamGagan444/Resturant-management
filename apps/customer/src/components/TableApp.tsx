@@ -13,8 +13,8 @@ import { AllParcel, Menu, SwapSheet, tName, type AddLine } from "./Menu";
 import { Orders } from "./Orders";
 import { ParcelStatus, forgetPaid, recallPaid, rememberPaid, waitingParcels } from "./ParcelStatus";
 import { Bill } from "./Bill";
-import { CheckCircle2, MessageCircle, RotateCcw, ShoppingBag, WifiOff } from "lucide-react";
-import { Button, FoodMark, LangPicker, Pill, Sheet, Toast, rupees, usePlace } from "./ui";
+import { Check, CheckCircle2, ClipboardList, ConciergeBell, GlassWater, MessageCircle, ReceiptText, RotateCcw, ShoppingBag, UtensilsCrossed, WifiOff, type LucideIcon } from "lucide-react";
+import { Button, FoodMark, HeaderTools, Pill, Sheet, Toast, rupees, usePlace } from "./ui";
 
 export function TableApp(props: { initialMenu: PublicMenu; qrToken: string }) {
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } }));
@@ -35,6 +35,9 @@ type Phase =
   | { kind: "ended"; message: string; badQr?: boolean };
 type Tab = "menu" | "orders" | "bill";
 const REQUEST_COOLDOWN_MS = 20_000;
+const TAB_ICON: Record<Tab, LucideIcon> = { menu: UtensilsCrossed, orders: ClipboardList, bill: ReceiptText };
+/** Same width for the page, its sticky bars and the bottom bar: phone column, wider on tablets and desktops. */
+const COLUMN = "mx-auto max-w-md px-4 md:max-w-3xl md:px-6 lg:max-w-5xl xl:max-w-6xl";
 
 function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: string }) {
   const qc = useQueryClient();
@@ -151,8 +154,46 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
     }
   }
 
+  /**
+   * − / + on a dish card (dishes without sizes or add-ons). Changes the newest plain line of that dish in the shared
+   * cart, or adds one; the quantity is taken from the server's cart, like the cart sheet does.
+   */
+  async function stepItem(itemId: string, delta: 1 | -1) {
+    const lines = (sessionQ.data?.cart.items ?? []).filter((l) => l.itemId === itemId && l.isValid);
+    const plain = lines.filter((l) => !l.addonIds.length && !l.note && !l.variantId);
+    const line = delta > 0 ? plain.at(-1) : (plain.at(-1) ?? lines.at(-1));
+    try {
+      if (!line) {
+        if (delta > 0) await addToCart({ itemId, variantId: null, addonIds: [], quantity: 1, note: null, isParcel: sessionQ.data?.isParcel ?? false });
+        return;
+      }
+      const quantity = line.quantity + delta;
+      const s =
+        quantity <= 0
+          ? await api<SessionView>("DELETE", `/v1/p/cart/items/${line.id}`)
+          : await api<SessionView>("PUT", `/v1/p/cart/items/${line.id}`, {
+              itemId: line.itemId,
+              variantId: line.variantId,
+              addonIds: line.addonIds,
+              quantity,
+              note: line.note,
+              isParcel: line.isParcel,
+            });
+      qc.setQueryData(["session"], s);
+    } catch (e) {
+      if (line) setToast(errorText(e, t("couldNotSend"))); // addToCart already said why
+    }
+  }
+
   // Impatient repeat taps on "Call waiter" shouldn't ring the staff phones again and stack duplicate requests.
   const lastRequest = useRef<Partial<Record<RequestType, number>>>({});
+  // the button that was just used shows a tick for a moment, besides the toast
+  const [sent, setSent] = useState<RequestType | null>(null);
+  useEffect(() => {
+    if (!sent) return;
+    const id = setTimeout(() => setSent(null), 2500);
+    return () => clearTimeout(id);
+  }, [sent]);
   async function request(type: RequestType) {
     const now = Date.now();
     if (now - (lastRequest.current[type] ?? 0) < REQUEST_COOLDOWN_MS) {
@@ -163,6 +204,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
     lastRequest.current[type] = now;
     try {
       await api("POST", "/v1/p/requests", { clientId: newClientId(), type });
+      setSent(type);
       setToast(t(`req${type}`));
       if (type === "BILL") setTab("bill");
     } catch (e) {
@@ -263,7 +305,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
   const orders = ordersQ.data ?? [];
 
   return (
-    <div className="mx-auto max-w-md px-4 md:max-w-3xl md:px-6">
+    <div className={COLUMN}>
       <Toast message={toast} onDone={clearToast} />
       {!online && (
         <div role="status" className="sticky top-0 z-30 -mx-4 flex items-center justify-center gap-2 bg-warn px-4 py-1.5 text-center text-sm font-medium text-warn-ink md:-mx-6">
@@ -274,8 +316,8 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
 
       <header className="flex items-start justify-between gap-3 pt-5 md:pt-8">
         <div className="min-w-0">
-          <h1 className="font-display line-clamp-2 text-[28px] leading-[1.1] font-bold tracking-tight text-balance md:text-4xl">{menu.hotel.name}</h1>
-          <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm">
+          <h1 className="font-display line-clamp-2 text-[28px] leading-[1.1] font-bold tracking-tight text-balance md:text-4xl lg:text-[44px]">{menu.hotel.name}</h1>
+          <p className="mt-2 flex flex-wrap items-center gap-1.5 text-sm">
             <Pill className="bg-brand/10 text-brand">{session ? place(session.tableLabel) : "…"}</Pill>
             {session?.joinCode && (
               <Pill>
@@ -284,34 +326,38 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
             )}
           </p>
         </div>
-        <LangPicker />
+        <HeaderTools />
       </header>
 
-      <nav className="relative mt-4 mb-1 grid grid-cols-3 gap-1 rounded-2xl bg-(--sunken) p-1" aria-label="Sections">
+      <nav className="relative mt-5 mb-1 grid grid-cols-3 gap-1 rounded-2xl bg-(--sunken) p-1 md:max-w-md" aria-label="Sections">
         {/* one pill that slides to the chosen tab (transform only: cheap on any phone) */}
         <span
           aria-hidden
           className="surface absolute inset-y-1 left-1 w-[calc((100%-1rem)/3)] rounded-xl shadow-soft transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
           style={{ transform: `translateX(calc(${["menu", "orders", "bill"].indexOf(tab)} * (100% + 0.25rem)))` }}
         />
-        {(["menu", "orders", "bill"] as const).map((k) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            aria-current={tab === k}
-            className={`relative h-10 rounded-xl text-sm font-semibold transition-colors duration-200 ${tab === k ? "text-(--ink)" : "muted"}`}
-          >
-            <span className="relative">
-              {k === "menu" ? t("tabMenu") : k === "orders" ? `${t("tabOrders")}${orders.length ? ` (${orders.length})` : ""}` : t("tabBill")}
-            </span>
-          </button>
-        ))}
+        {(["menu", "orders", "bill"] as const).map((k) => {
+          const Icon = TAB_ICON[k];
+          return (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              aria-current={tab === k}
+              className={`relative flex h-11 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition-colors duration-200 ${tab === k ? "text-(--ink)" : "muted"}`}
+            >
+              <Icon className={`h-4 w-4 shrink-0 transition-colors duration-200 ${tab === k ? "text-brand" : ""}`} aria-hidden />
+              <span className="relative truncate">
+                {k === "menu" ? t("tabMenu") : k === "orders" ? `${t("tabOrders")}${orders.length ? ` (${orders.length})` : ""}` : t("tabBill")}
+              </span>
+            </button>
+          );
+        })}
       </nav>
 
       {tab === "menu" && (
         <AllParcel.Provider value={session?.isParcel ?? false}>
           <FlyContext.Provider value={fly}>
-            <Menu menu={menu} onAdd={addToCart} inCart={inCart} />
+            <Menu menu={menu} onAdd={addToCart} onStep={stepItem} inCart={inCart} />
           </FlyContext.Provider>
         </AllParcel.Provider>
       )}
@@ -348,7 +394,7 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
       {/* Bottom bar: cart + always-available actions */}
       {/* Glass: the menu stays visible underneath. Colour (the cart) sits on a solid layer so its text stays legible. */}
       <div ref={bottomBar} className="pointer-events-none fixed inset-x-0 bottom-0 z-30 pt-6">
-        <div className="pointer-events-auto mx-auto max-w-md space-y-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:max-w-3xl md:px-6">
+        <div className="pointer-events-auto mx-auto max-w-md space-y-2 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:max-w-xl md:px-6">
           {cart && cart.items.length > 0 && (
             <div className="animate-rise">
               <Button className="h-14 w-full justify-between! pr-6 pl-2.5 text-base shadow-[0_12px_28px_-10px_var(--color-brand)]" onClick={() => setCartOpen(true)}>
@@ -373,17 +419,17 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
           <div
             className={`line grid ${session?.isParcel ? "grid-cols-2" : "grid-cols-3"} gap-1 rounded-2xl border bg-(--surface)/75 p-1 shadow-lift backdrop-blur-lg backdrop-saturate-150`}
           >
-            <Button variant="ghost" className="px-1 text-sm" onClick={() => request("CALL_WAITER")}>
+            <ActionButton icon={ConciergeBell} done={sent === "CALL_WAITER"} onClick={() => request("CALL_WAITER")}>
               {t("btnWaiter")}
-            </Button>
+            </ActionButton>
             {!session?.isParcel && (
-              <Button variant="ghost" className="px-1 text-sm" onClick={() => request("WATER")}>
+              <ActionButton icon={GlassWater} done={sent === "WATER"} onClick={() => request("WATER")}>
                 {t("btnWater")}
-              </Button>
+              </ActionButton>
             )}
-            <Button variant="ghost" className="px-1 text-sm" onClick={() => request("BILL")}>
+            <ActionButton icon={ReceiptText} done={sent === "BILL"} onClick={() => request("BILL")}>
               {t("btnBill")}
-            </Button>
+            </ActionButton>
           </div>
         </div>
       </div>
@@ -603,7 +649,7 @@ function CartSheet({
 
 function Skeleton() {
   return (
-    <div className="mx-auto max-w-md animate-pulse space-y-4 p-4 pt-6 md:max-w-3xl" aria-busy="true" aria-label="Loading">
+    <div className="mx-auto max-w-md animate-pulse space-y-4 p-4 pt-6 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl" aria-busy="true" aria-label="Loading">
       <div className="h-8 w-2/3 rounded-lg bg-(--sunken)" />
       <div className="h-5 w-1/3 rounded-full bg-(--sunken)" />
       <div className="h-12 rounded-2xl bg-(--sunken)" />
@@ -618,5 +664,21 @@ function Skeleton() {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Waiter / water / bill: icon over label, a tick for a moment after the request went through. */
+function ActionButton({ icon: Icon, done, onClick, children }: { icon: LucideIcon; done: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[13px] font-semibold transition duration-150 select-none active:scale-[0.97] active:bg-(--sunken) ${
+        done ? "text-veg" : ""
+      }`}
+    >
+      {done ? <Check key="done" className="h-5 w-5 animate-pop" aria-hidden /> : <Icon key="icon" className="h-5 w-5" aria-hidden />}
+      <span className="max-w-full truncate">{children}</span>
+    </button>
   );
 }

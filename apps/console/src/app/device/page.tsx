@@ -12,6 +12,7 @@ import { ChefHat, ConciergeBell, CreditCard, Crown, MonitorSmartphone, UserRound
 import { AuthAside } from "@/components/AuthAside";
 import { PinPad } from "@/components/PinPad";
 import { BrandMark, Button, Spinner } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface DeviceInfo {
   device: { id: string; name: string; kind: string; stationId: string | null };
@@ -60,9 +61,10 @@ export default function DevicePage() {
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col px-5 py-8 sm:px-8 sm:py-12">
       <div className="flex items-center gap-3">
         <BrandMark />
-        <p className="muted min-w-0 truncate text-sm font-medium">
+        <p className="muted min-w-0 flex-1 truncate text-sm font-medium">
           {info.data.hotel.name} · {info.data.device.name}
         </p>
+        <ThemeToggle />
       </div>
       {!picked ? (
         <>
@@ -141,7 +143,8 @@ function NotPaired({ onPaired }: { onPaired: () => void }) {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       <AuthAside />
-      <main className="flex flex-col justify-center px-6 py-12 sm:px-12">
+      <main className="relative flex flex-col justify-center px-6 py-12 sm:px-12">
+        <ThemeToggle className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 sm:right-6" />
         <div className="stagger mx-auto w-full max-w-sm">
           <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand/12 text-brand">
             <MonitorSmartphone className="h-7 w-7" aria-hidden />

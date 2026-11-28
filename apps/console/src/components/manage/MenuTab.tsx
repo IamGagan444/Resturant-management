@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AddonGroupInput, CategoryInput, MenuItemInput, type FoodType } from "@rms/contracts";
-import { Camera, ImageIcon, Loader2, Plus, Trash2, X } from "lucide-react";
+import { Camera, GripVertical, ImageIcon, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api, rupees, toPaise } from "@/lib/api";
 import { shrinkImage } from "@/lib/image";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, FormError, SelectField, orNull, useForm } from "@/components/ui";
@@ -11,7 +11,7 @@ import { Loadable, confirm, notify } from "@/components/ui/feedback";
 import { Modal } from "@/components/ui/modal";
 import { CardSkeleton, ListSkeleton, Skeleton } from "@/components/ui/skeleton";
 
-interface Category { id: string; name: string; availableFrom: string | null; availableTo: string | null; isActive: boolean }
+interface Category { id: string; name: string; sortOrder: number; availableFrom: string | null; availableTo: string | null; isActive: boolean }
 interface Station { id: string; name: string }
 interface Tax { id: string; name: string; rateBps: number }
 interface AddonGroup { id: string; name: string; minSelect: number; maxSelect: number; addons: { id: string; name: string; price: number }[] }
@@ -106,6 +106,44 @@ export function MenuTab() {
     }
   }
 
+  // Drag to reorder: `draft` is the order on screen while dragging; dropping saves it in one request.
+  const [draft, setDraft] = useState<Category[] | null>(null);
+  const dragId = useRef<string | null>(null);
+  async function saveOrder(next: Category[]) {
+    setDraft(null);
+    const before = categories.data;
+    if (!before || next.every((c, i) => c.id === before[i]?.id)) return;
+    qc.setQueryData<Category[]>(["admin", "categories"], next.map((c, i) => ({ ...c, sortOrder: i })));
+    try {
+      await api("PUT", "/v1/admin/categories/order", { ids: next.map((c) => c.id) });
+      notify.ok("Menu order saved");
+    } catch (e) {
+      qc.setQueryData(["admin", "categories"], before);
+      notify.error(e);
+    }
+    refresh();
+  }
+
+  // In stock / sold out straight from the list; the guest menu and kitchen update live (the API broadcasts it).
+  const [toggling, setToggling] = useState<ReadonlySet<string>>(() => new Set());
+  async function setAvailable(item: Item, isAvailable: boolean) {
+    setToggling((t) => new Set(t).add(item.id));
+    qc.setQueryData<Item[]>(["admin", "items"], (old) => old?.map((i) => (i.id === item.id ? { ...i, isAvailable } : i)));
+    try {
+      await api("PATCH", `/v1/admin/items/${item.id}`, { isAvailable });
+      notify.ok(isAvailable ? `“${item.name}” is back on the menu` : `“${item.name}” marked sold out`);
+    } catch (e) {
+      qc.setQueryData<Item[]>(["admin", "items"], (old) => old?.map((i) => (i.id === item.id ? { ...i, isAvailable: !isAvailable } : i)));
+      notify.error(e);
+    } finally {
+      setToggling((t) => {
+        const n = new Set(t);
+        n.delete(item.id);
+        return n;
+      });
+    }
+  }
+
   async function removeCategory(c: Category) {
     const count = items.data?.filter((i) => i.categoryId === c.id).length ?? 0;
     const ok = await confirm({
@@ -129,7 +167,7 @@ export function MenuTab() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader title="Categories" hint="Sections of your menu, in the order guests see them." />
+        <CardHeader title="Categories" hint="Sections of your menu, in the order guests see them. Drag a category (or use the arrow keys on its handle) to reorder." />
         <Loadable
           query={categories}
           skeleton={
@@ -141,26 +179,75 @@ export function MenuTab() {
           }
         >
           {(list) => (
-            <div className="mb-4 flex flex-wrap gap-2">
-              {list.length === 0 && <p className="muted text-sm">No categories yet. Start with one like “Starters”.</p>}
-              {list.map((c) => (
-                <span key={c.id} className="line inline-flex h-9 items-center gap-2 rounded-full border bg-(--sunken) pr-1.5 pl-3.5 text-sm font-medium">
-                  {c.name}
-                  {c.availableFrom && (
-                    <span className="muted text-xs">
-                      {c.availableFrom}–{c.availableTo}
-                    </span>
-                  )}
-                  <button
-                    aria-label={`Delete ${c.name}`}
-                    className="muted grid h-6 w-6 place-items-center rounded-full hover:bg-late/15 hover:text-late"
-                    onClick={() => void removeCategory(c)}
+            <ul className="mb-4 flex flex-wrap gap-2" aria-label="Categories, in menu order">
+              {list.length === 0 && <li className="muted text-sm">No categories yet. Start with one like “Starters”.</li>}
+              {(draft ?? list).map((c, idx, all) => {
+                const count = items.data?.filter((i) => i.categoryId === c.id).length ?? 0;
+                return (
+                  <li
+                    key={c.id}
+                    draggable={list.length > 1}
+                    onDragStart={(e) => {
+                      dragId.current = c.id;
+                      setDraft(list);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragOver={(e) => {
+                      if (!dragId.current) return;
+                      e.preventDefault();
+                      if (dragId.current !== c.id) setDraft((d) => moveTo(d ?? list, dragId.current!, idx));
+                    }}
+                    onDrop={(e) => e.preventDefault()}
+                    onDragEnd={() => {
+                      dragId.current = null;
+                      if (draft) void saveOrder(draft);
+                    }}
+                    className={`line group inline-flex h-10 items-center gap-1.5 rounded-full border bg-(--surface) pr-1.5 pl-1 text-sm font-medium shadow-soft transition-[box-shadow,opacity,border-color] hover:border-brand/40 ${
+                      dragId.current === c.id ? "opacity-50" : ""
+                    }`}
                   >
-                    <X className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                </span>
-              ))}
-            </div>
+                    {list.length > 1 ? (
+                      <button
+                        type="button"
+                        aria-label={`Reorder ${c.name}: arrow keys move it, it is number ${idx + 1} of ${all.length}`}
+                        title="Drag to reorder"
+                        onKeyDown={(e) => {
+                          const dir = e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : 0;
+                          if (!dir) return;
+                          e.preventDefault();
+                          const to = idx + dir;
+                          if (to < 0 || to >= all.length) return;
+                          void saveOrder(moveTo(all, c.id, to));
+                        }}
+                        className="muted grid h-8 w-6 cursor-grab place-items-center rounded-full hover:text-(--ink) active:cursor-grabbing"
+                      >
+                        <GripVertical className="h-3.5 w-3.5" aria-hidden />
+                      </button>
+                    ) : (
+                      <span className="w-2" aria-hidden />
+                    )}
+                    <span className="max-w-48 truncate">{c.name}</span>
+                    <span className="muted rounded-full bg-(--sunken) px-1.5 text-xs tabular-nums" aria-label={`${count} dishes`}>
+                      {count}
+                    </span>
+                    {c.availableFrom && (
+                      <span className="muted text-xs">
+                        {c.availableFrom}–{c.availableTo}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`Delete ${c.name}`}
+                      title={`Delete ${c.name}`}
+                      className="muted grid h-7 w-7 place-items-center rounded-full transition hover:bg-late/12 hover:text-late"
+                      onClick={() => void removeCategory(c)}
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </Loadable>
         {categories.data && missingDefaults.length > 0 && (
@@ -200,7 +287,7 @@ export function MenuTab() {
       <Card>
         <CardHeader
           title="Items"
-          hint="Tap a dish to edit its price, photo, sizes or stock."
+          hint="Tap a dish to edit its price, photo or sizes. The switch marks it sold out for guests right away."
           action={
             <Button onClick={() => setEditing("new")} disabled={!categories.data?.length}>
               <Plus className="h-4 w-4" aria-hidden />
@@ -219,30 +306,62 @@ export function MenuTab() {
                   if (!inCat.length) return null;
                   return (
                     <div key={c.id} className="mb-6 last:mb-0">
-                      <h3 className="muted mb-2 text-xs font-bold tracking-wider uppercase">{c.name}</h3>
-                      <ul className="grid gap-2 sm:grid-cols-2">
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-bold">
+                        {c.name}
+                        <span className="muted text-xs font-medium tabular-nums">{inCat.length}</span>
+                        <span className="line ml-1 flex-1 border-t" aria-hidden />
+                      </h3>
+                      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         {inCat.map((i) => (
-                          <li key={i.id}>
-                            <button
-                              className="line flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition hover:border-brand/40 hover:bg-(--sunken)"
-                              onClick={() => setEditing(i)}
-                            >
-                              {i.imageUrl ? (
-                                <img src={i.imageUrl} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
-                              ) : (
-                                <span className="muted grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-(--sunken)">
-                                  <ImageIcon className="h-5 w-5" aria-hidden />
-                                </span>
-                              )}
+                          <li
+                            key={i.id}
+                            className={`line group relative flex flex-col overflow-hidden rounded-2xl border bg-(--surface) transition hover:border-brand/40 hover:shadow-soft ${
+                              i.isAvailable ? "" : "bg-(--sunken)/60"
+                            }`}
+                          >
+                            <button type="button" className="flex w-full items-start gap-3 p-3 text-left" onClick={() => setEditing(i)} aria-label={`Edit ${i.name}`}>
+                              <span className="relative h-18 w-18 shrink-0 overflow-hidden rounded-xl bg-(--sunken)">
+                                {i.imageUrl ? (
+                                  <img
+                                    src={i.imageUrl}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${i.isAvailable ? "" : "opacity-50 grayscale"}`}
+                                  />
+                                ) : (
+                                  <span className="muted grid h-full w-full place-items-center">
+                                    <ImageIcon className="h-5 w-5" aria-hidden />
+                                  </span>
+                                )}
+                              </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate font-semibold">{i.name}</span>
-                                <span className="muted block truncate text-sm">
+                                <span className="flex items-center gap-1.5">
+                                  <FoodDot type={i.foodType} />
+                                  <span className="truncate font-semibold">{i.name}</span>
+                                </span>
+                                <span className="mt-0.5 block truncate text-[15px] font-semibold tabular-nums">
                                   {i.variants.length ? i.variants.map((v) => rupees(v.price)).join(" / ") : rupees(i.price)}
                                 </span>
+                                <span className="mt-1.5 flex flex-wrap gap-1">
+                                  {i.isBestseller && <Badge tone="brand">Bestseller</Badge>}
+                                  {i.variants.length > 0 && <Badge>{i.variants.length} sizes</Badge>}
+                                </span>
                               </span>
-                              {!i.isAvailable && <Badge tone="late">out of stock</Badge>}
-                              {i.isBestseller && i.isAvailable && <Badge tone="brand">bestseller</Badge>}
+                              <Pencil className="muted mt-1 h-4 w-4 shrink-0 opacity-0 transition group-hover:opacity-100" aria-hidden />
                             </button>
+                            <div className="line mt-auto flex items-center justify-between gap-2 border-t px-3 py-2">
+                              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${i.isAvailable ? "text-fresh" : "text-late"}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${i.isAvailable ? "bg-fresh" : "bg-late"}`} aria-hidden />
+                                {i.isAvailable ? "In stock" : "Out of stock"}
+                              </span>
+                              <Switch
+                                checked={i.isAvailable}
+                                disabled={toggling.has(i.id)}
+                                label={`${i.name} in stock`}
+                                onChange={(on) => void setAvailable(i, on)}
+                              />
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -622,5 +741,43 @@ function AddonGroups() {
         </div>
       </form>
     </Card>
+  );
+}
+
+/** Move one entry of a list to index `to`. */
+function moveTo<T extends { id: string }>(list: T[], id: string, to: number): T[] {
+  const from = list.findIndex((x) => x.id === id);
+  if (from < 0 || from === to) return list;
+  const next = list.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved!);
+  return next;
+}
+
+/** Indian food mark in miniature: green for veg / vegan, red for non-veg, amber for egg. */
+function FoodDot({ type }: { type: FoodType }) {
+  const tone = type === "NON_VEG" ? "border-late text-late" : type === "EGG" ? "border-warn text-warn" : "border-fresh text-fresh";
+  const label = FOOD_TYPES.find((f) => f.value === type)?.label ?? type;
+  return (
+    <span role="img" aria-label={label} title={label} className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[3px] border-[1.5px] ${tone}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+    </span>
+  );
+}
+
+/** A small on/off switch (role="switch"), keyboard and screen-reader friendly. */
+function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (on: boolean) => void; label: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 disabled:opacity-50 ${checked ? "bg-fresh" : "bg-(--line)"}`}
+    >
+      <span className={`block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${checked ? "translate-x-4" : ""}`} />
+    </button>
   );
 }

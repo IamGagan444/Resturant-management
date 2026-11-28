@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
  * Design: "Restro" — colours from the logo. Tomato orange for actions, navy ink, warm cream canvas,
  * white cards. Figtree headings, Inter text. Food marks (veg / non-veg / egg) keep their legal colours.
@@ -56,36 +58,64 @@
   }
 }
 
-/* Cream canvas, navy ink, warm fills */
+/*
+ * Theme tokens, shared with the staff console so both feel like one product.
+ * Light: soft off-white canvas, white cards, warm-neutral hairlines. Dark: a charcoal scale (never pure black),
+ * canvas < card < sunken, with the orange brightened for dark surfaces.
+ * lib/theme-script.ts puts `.light` / `.dark` on <html> before first paint (the guest's choice or the phone's);
+ * without JS the media query follows the OS.
+ */
 :root {
-  --bg: #fbf7f1;
+  --bg: #f7f6f3;
   --surface: #ffffff;
-  --sunken: #f4eee5;
-  --ink: #1e2a36;
-  --muted: #5e6773;
-  --line: #ebe3d7;
+  --sunken: #f2f0ec;
+  --ink: #1c2430;
+  --muted: #5f6670;
+  --line: #e7e4de;
   color-scheme: light;
 }
-
+.dark {
+  --bg: #111113;
+  --surface: #19191c;
+  --sunken: #232327;
+  --ink: #f3f1ee;
+  --muted: #a3a3ab;
+  --line: #2e2e33;
+  --color-brand: #ec6238;
+  --color-brand-ink: #131315;
+  --color-warn: #f5b638;
+  --color-warn-ink: #1c1c1f;
+  --color-late: #ff5d4d;
+  --color-veg: #2fbf71;
+  --color-nonveg: #ff5d4d;
+  --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.035), 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-lift: 0 0 0 1px rgb(255 255 255 / 0.05), 0 18px 40px -12px rgb(0 0 0 / 0.75);
+  color-scheme: dark;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f151c;
-    --surface: #17202a;
-    --sunken: #212c38;
-    --ink: #f6f1ea;
-    --muted: #9aa6b2;
-    --line: #2a3542;
+  :root:not(.light) {
+    --bg: #111113;
+    --surface: #19191c;
+    --sunken: #232327;
+    --ink: #f3f1ee;
+    --muted: #a3a3ab;
+    --line: #2e2e33;
     --color-brand: #ec6238;
-    --color-brand-ink: #10161d;
+    --color-brand-ink: #131315;
     --color-warn: #f5b638;
-    --color-warn-ink: #1e2a36;
+    --color-warn-ink: #1c1c1f;
     --color-late: #ff5d4d;
     --color-veg: #2fbf71;
     --color-nonveg: #ff5d4d;
-    --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.03);
-    --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.7);
+    --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.035), 0 1px 2px rgb(0 0 0 / 0.35);
+    --shadow-lift: 0 0 0 1px rgb(255 255 255 / 0.05), 0 18px 40px -12px rgb(0 0 0 / 0.75);
     color-scheme: dark;
-  }
+}
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.22s;
 }
 
 /* No overscroll-behavior here: the guest menu is a scrolling document, and pull-to-refresh is harmless

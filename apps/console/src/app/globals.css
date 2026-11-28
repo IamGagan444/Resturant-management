@@ -124,62 +124,73 @@
   }
 }
 
-/* Tokens are plain variables so `bg-(--sunken)` etc. work everywhere. --field is the input fill. */
+/*
+ * Theme tokens. Plain variables, so `bg-(--sunken)` etc. work everywhere. --field is the input fill.
+ * Light: soft off-white canvas, white cards, warm-neutral hairlines, navy-ink text.
+ * Dark: its own charcoal scale (not an inversion, never pure black): canvas < card < sunken panel, each step a little
+ * lighter, so depth reads without heavy shadows. The orange is brightened for dark surfaces (AA on all three).
+ * Which applies: lib/theme-script.ts puts `.light` or `.dark` on <html> before first paint (saved choice or the OS).
+ * Without JS, the media query below still follows the OS. The kitchen screen pins `.dark` (lib/theme.ts).
+ */
 :root {
-  --bg: #fbf7f1;
+  --bg: #f7f6f3;
   --surface: #ffffff;
-  --sunken: #f4eee5;
-  --field: #f4eee5;
-  --ink: #1e2a36;
-  --muted: #5e6773;
-  --line: #ebe3d7;
+  --sunken: #f2f0ec;
+  --field: #f2f0ec;
+  --ink: #1c2430;
+  --muted: #5f6670;
+  --line: #e7e4de;
   color-scheme: light;
 }
-
-/* System dark mode, plus forced dark on the kitchen screen (`.dark` on <html>) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f151c;
-    --surface: #17202a;
-    --sunken: #212c38;
-    --field: #212c38;
-    --ink: #f6f1ea;
-    --muted: #9aa6b2;
-    --line: #2a3542;
-    --color-brand: #ec6238;
-    --color-brand-ink: #10161d;
-    --color-fresh: #2fbf71;
-    --color-fresh-ink: #10161d;
-    --color-warn: #f5b638;
-    --color-warn-ink: #1e2a36;
-    --color-late: #ff5d4d;
-    --color-late-ink: #10161d;
-    --color-info: #7aa7ff;
-    --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.03);
-    --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.7);
-    color-scheme: dark;
-  }
-}
 .dark {
-  --bg: #0f151c;
-  --surface: #17202a;
-  --sunken: #212c38;
-  --field: #212c38;
-  --ink: #f6f1ea;
-  --muted: #9aa6b2;
-  --line: #2a3542;
+  --bg: #111113;
+  --surface: #19191c;
+  --sunken: #232327;
+  --field: #232327;
+  --ink: #f3f1ee;
+  --muted: #a3a3ab;
+  --line: #2e2e33;
   --color-brand: #ec6238;
-  --color-brand-ink: #10161d;
+  --color-brand-ink: #131315;
   --color-fresh: #2fbf71;
-  --color-fresh-ink: #10161d;
+  --color-fresh-ink: #131315;
   --color-warn: #f5b638;
-  --color-warn-ink: #1e2a36;
+  --color-warn-ink: #1c1c1f;
   --color-late: #ff5d4d;
-  --color-late-ink: #10161d;
+  --color-late-ink: #131315;
   --color-info: #7aa7ff;
-  --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.03);
-  --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.7);
+  --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.035), 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-lift: 0 0 0 1px rgb(255 255 255 / 0.05), 0 18px 40px -12px rgb(0 0 0 / 0.75);
   color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --bg: #111113;
+    --surface: #19191c;
+    --sunken: #232327;
+    --field: #232327;
+    --ink: #f3f1ee;
+    --muted: #a3a3ab;
+    --line: #2e2e33;
+    --color-brand: #ec6238;
+    --color-brand-ink: #131315;
+    --color-fresh: #2fbf71;
+    --color-fresh-ink: #131315;
+    --color-warn: #f5b638;
+    --color-warn-ink: #1c1c1f;
+    --color-late: #ff5d4d;
+    --color-late-ink: #131315;
+    --color-info: #7aa7ff;
+    --shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.035), 0 1px 2px rgb(0 0 0 / 0.35);
+    --shadow-lift: 0 0 0 1px rgb(255 255 255 / 0.05), 0 18px 40px -12px rgb(0 0 0 / 0.75);
+    color-scheme: dark;
+}
+}
+
+/* Theme switch: a quick cross-fade (lib/theme.ts uses the View Transitions API where it exists). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.22s;
 }
 
 /* Inputs on a tinted panel turn white, so they never blend into it. */

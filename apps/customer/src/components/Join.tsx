@@ -5,7 +5,7 @@ import type { SessionView, TableLookup } from "@rms/contracts";
 import { ApiError, api, deviceId } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { UtensilsCrossed } from "lucide-react";
-import { Button, LangPicker } from "./ui";
+import { Button, HeaderTools } from "./ui";
 
 export interface Joined {
   session: SessionView;
@@ -56,7 +56,7 @@ export function Join({ lookup, qrToken, onJoined }: { lookup: TableLookup; qrTok
   return (
     <main className="relative mx-auto flex min-h-dvh max-w-md flex-col px-6 pt-5 pb-8">
       <div className="flex justify-end">
-        <LangPicker />
+        <HeaderTools />
       </div>
       <div className="my-auto py-8">
         <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand text-brand-ink">

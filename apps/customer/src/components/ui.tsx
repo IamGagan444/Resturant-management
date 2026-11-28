@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { Check, ChevronDown, Languages, Package, X } from "lucide-react";
+import { Check, ChevronDown, Languages, Moon, Package, Sun, X } from "lucide-react";
 import type { FoodType } from "@rms/contracts";
 import { formatPaise, parcelNumber } from "@rms/domain";
 import { LANGS, useI18n, type Lang } from "@/lib/i18n";
+import { useTheme } from "@/lib/theme";
 
 export const rupees = (paise: number) => formatPaise(paise).replace(/\.00$/, "");
 
@@ -192,4 +193,36 @@ export function ParcelTag() {
 /** Small rounded label (table number, join code…). */
 export function Pill({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <span className={`inline-flex items-center gap-1 rounded-full bg-(--sunken) px-3 py-1 text-xs font-medium ${className}`}>{children}</span>;
+}
+
+/**
+ * Light / dark switch for guests: one tap flips it. Until they tap, the menu follows the phone's own setting
+ * (lib/theme.ts "system"); the choice is then remembered on this phone. Rendered as a switch for screen readers.
+ */
+export function ThemeButton() {
+  const { resolved, setTheme } = useTheme();
+  const dark = resolved === "dark";
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={dark}
+      aria-label="Dark mode"
+      title={dark ? "Switch to light" : "Switch to dark"}
+      onClick={() => setTheme(dark ? "light" : "dark")}
+      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-(--sunken) transition-colors duration-150 active:bg-(--line)"
+    >
+      {dark ? <Moon key="m" className="h-4.5 w-4.5 animate-pop" aria-hidden /> : <Sun key="s" className="h-4.5 w-4.5 animate-pop" aria-hidden />}
+    </button>
+  );
+}
+
+/** Theme + language, top right of every guest screen. */
+export function HeaderTools() {
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      <ThemeButton />
+      <LangPicker />
+    </div>
+  );
 }

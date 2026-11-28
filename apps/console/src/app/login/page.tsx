@@ -13,6 +13,7 @@ import { AuthAside } from "@/components/AuthAside";
 import { Button, Field, FormError, useForm } from "@/components/ui";
 import { RestroLogo } from "@/components/RestroMark";
 import { RecoveryCodes, ScanAndConfirm } from "@/components/Authenticator";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 type Stage =
   | { step: "password" }
@@ -85,7 +86,8 @@ export default function LoginPage() {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       <AuthAside />
-      <main className="flex flex-col justify-center px-6 py-12 sm:px-12">
+      <main className="relative flex flex-col justify-center px-6 py-12 sm:px-12">
+        <ThemeToggle className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 sm:right-6" />
         <div className={`stagger mx-auto w-full ${stage.step === "enroll" || stage.step === "codes" ? "max-w-xl" : "max-w-sm"}`}>
           <RestroLogo className="mb-8 lg:hidden" markClass="h-12 w-12" animated />
           <h1 className="text-3xl font-bold tracking-tight">{title}</h1>

@@ -46,13 +46,38 @@ function useSections(menu: PublicMenu, q: string, vegOnly: boolean, bestOnly: bo
   }, [menu, q, vegOnly, bestOnly, lang]);
 }
 
-export function Menu({ menu, onAdd, inCart }: { menu: PublicMenu; onAdd: (l: AddLine) => Promise<void>; inCart: ReadonlyMap<string, number> }) {
+export function Menu({
+  menu,
+  onAdd,
+  onStep,
+  inCart,
+}: {
+  menu: PublicMenu;
+  onAdd: (l: AddLine) => Promise<void>;
+  /** − / + on a card already in the cart (dishes without sizes or add-ons) */
+  onStep: (itemId: string, delta: 1 | -1) => Promise<void>;
+  inCart: ReadonlyMap<string, number>;
+}) {
   const { lang, t } = useI18n();
   const fly = useFly();
   const [q, setQ] = useState("");
   const [vegOnly, setVegOnly] = useState(false);
   const [bestOnly, setBestOnly] = useState(false);
   const [open, setOpen] = useState<PublicMenuItem | null>(null);
+  // one change at a time per dish: the next tap's quantity comes from the server's answer
+  const [stepping, setStepping] = useState<ReadonlySet<string>>(() => new Set());
+  async function step(itemId: string, delta: 1 | -1) {
+    setStepping((x) => new Set(x).add(itemId));
+    try {
+      await onStep(itemId, delta);
+    } finally {
+      setStepping((x) => {
+        const n = new Set(x);
+        n.delete(itemId);
+        return n;
+      });
+    }
+  }
   const origin = useRef<FlySource | null>(null);
   const sections = useSections(menu, q, vegOnly, bestOnly, lang);
   const filtering = q.trim() !== "" || vegOnly || bestOnly;
@@ -219,7 +244,7 @@ export function Menu({ menu, onAdd, inCart }: { menu: PublicMenu; onAdd: (l: Add
               </span>
             )}
           </h2>
-          <ul className="stagger divide-y divide-(--line) md:grid md:grid-cols-2 md:gap-4 md:divide-y-0">
+          <ul className="stagger divide-y divide-(--line) md:grid md:grid-cols-2 md:gap-4 md:divide-y-0 xl:grid-cols-3">
             {s.items.map((item) => {
               const available = item.isAvailable && s.isOpen;
               const desc = tDesc(item, lang);
@@ -227,7 +252,7 @@ export function Menu({ menu, onAdd, inCart }: { menu: PublicMenu; onAdd: (l: Add
               return (
                 <li
                   key={item.id}
-                  className={`line flex gap-4 py-5 md:rounded-3xl md:border md:bg-(--surface) md:p-4 md:shadow-soft ${available ? "" : "opacity-55 grayscale-[40%]"}`}
+                  className={`line flex gap-4 py-5 md:rounded-3xl md:border md:bg-(--surface) md:p-4 md:shadow-soft md:transition-[border-color,box-shadow] md:duration-200 md:hover:border-brand/30 md:hover:shadow-lift ${available ? "" : "opacity-55 grayscale-[40%]"}`}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -252,20 +277,32 @@ export function Menu({ menu, onAdd, inCart }: { menu: PublicMenu; onAdd: (l: Add
                   <div className={`relative flex w-32 shrink-0 flex-col items-center ${item.imageUrl ? "pb-4" : "justify-center"}`}>
                     {item.imageUrl && (
                       // plain lazy <img>: no next/image runtime, keeps JS small on 4G
-                      <img src={item.imageUrl} alt="" loading="lazy" decoding="async" className="h-28 w-32 rounded-3xl bg-(--sunken) object-cover shadow-soft" />
+                      <img src={item.imageUrl} alt="" loading="lazy" decoding="async" width={128} height={112} className="h-28 w-32 rounded-3xl bg-(--sunken) object-cover shadow-soft" />
                     )}
-                    {qty ? <InCartBadge qty={qty} className="-top-2 -right-2" /> : null}
-                    <Button
-                      variant="outline"
-                      // glass pill over the photo; a fixed deep orange on near-white keeps 5:1 in both themes
-                      className={`h-10 min-h-10 w-26 px-1 font-semibold whitespace-nowrap shadow-[0_4px_14px_-4px_rgb(0_0_0/0.3)] ring-1 ring-black/5 ${
-                        item.imageUrl ? "absolute bottom-0 bg-white/90! backdrop-blur-md" : "bg-(--surface)! ring-(--line)"
-                      } ${available ? `text-sm font-bold tracking-wide uppercase ${item.imageUrl ? "text-[#bd421c]!" : "text-brand!"}` : "text-xs text-[#5e6773]!"}`}
-                      disabled={!available}
-                      onClick={(e) => openItem(item, e.currentTarget)}
-                    >
-                      {available ? t("add") : t("soldOut")}
-                    </Button>
+                    {qty && available && !item.variants.length && !item.addonGroupIds.length ? (
+                      <Stepper
+                        qty={qty}
+                        name={tName(item, lang)}
+                        busy={stepping.has(item.id)}
+                        onPhoto={Boolean(item.imageUrl)}
+                        onStep={(d) => void step(item.id, d)}
+                      />
+                    ) : (
+                      <>
+                        {qty ? <InCartBadge qty={qty} className="-top-2 -right-2" /> : null}
+                        <Button
+                          variant="outline"
+                          // glass pill over the photo; a fixed deep orange on near-white keeps 5:1 in both themes
+                          className={`h-10 min-h-10 w-26 px-1 font-semibold whitespace-nowrap shadow-[0_4px_14px_-4px_rgb(0_0_0/0.3)] ring-1 ring-black/5 ${
+                            item.imageUrl ? "absolute bottom-0 bg-white/90! backdrop-blur-md" : "bg-(--surface)! ring-(--line)"
+                          } ${available ? `text-sm font-bold tracking-wide uppercase ${item.imageUrl ? "text-[#bd421c]!" : "text-brand!"}` : "text-xs text-[#5e6773]!"}`}
+                          disabled={!available}
+                          onClick={(e) => openItem(item, e.currentTarget)}
+                        >
+                          {available ? t("add") : t("soldOut")}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </li>
               );
@@ -280,6 +317,29 @@ export function Menu({ menu, onAdd, inCart }: { menu: PublicMenu; onAdd: (l: Add
 }
 
 const fromPrice = (item: PublicMenuItem) => (item.variants.length ? Math.min(...item.variants.map((v) => v.price)) : item.price);
+
+/** − qty + where the ADD button was. Same pill and colours as ADD, so the card doesn't jump. */
+function Stepper({ qty, name, busy, onPhoto, onStep }: { qty: number; name: string; busy: boolean; onPhoto: boolean; onStep: (delta: 1 | -1) => void }) {
+  const btn = "grid h-10 w-9 shrink-0 place-items-center rounded-full transition active:scale-90 disabled:opacity-40";
+  return (
+    <div
+      className={`flex h-10 w-26 items-center justify-between rounded-full font-bold shadow-[0_4px_14px_-4px_rgb(0_0_0/0.3)] ring-1 ${
+        onPhoto ? "absolute bottom-0 bg-white/90 text-[#bd421c] ring-black/5 backdrop-blur-md" : "bg-(--surface) text-brand ring-(--line)"
+      }`}
+      aria-busy={busy || undefined}
+    >
+      <button type="button" className={btn} aria-label={`One less ${name}`} disabled={busy} onClick={() => onStep(-1)}>
+        <Minus className="h-4 w-4" aria-hidden />
+      </button>
+      <span key={qty} className={`animate-pop text-[15px] tabular-nums ${busy ? "opacity-50" : ""}`} aria-live="polite" aria-label={`${qty} in cart`}>
+        {qty}
+      </span>
+      <button type="button" className={btn} aria-label={`One more ${name}`} disabled={busy} onClick={() => onStep(1)}>
+        <Plus className="h-4 w-4" aria-hidden />
+      </button>
+    </div>
+  );
+}
 
 /** "2×" on a dish that's already in the table's cart. */
 function InCartBadge({ qty, className }: { qty: number; className: string }) {

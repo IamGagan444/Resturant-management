@@ -7,7 +7,7 @@ import { TABLE_CODE_LENGTH, normalizeTableCode, tableCodeProblem } from "@rms/do
 import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
 import { ApiError, api } from "@/lib/api";
 import { LangProvider, useI18n } from "@/lib/i18n";
-import { Button, LangPicker } from "./ui";
+import { Button, HeaderTools } from "./ui";
 
 /** No QR scanned yet: scan it, or type the code printed under it. */
 export function Home() {
@@ -86,7 +86,7 @@ function Inner() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[30rem] bg-[radial-gradient(60%_55%_at_50%_30%,color-mix(in_oklab,var(--color-brand)_18%,transparent),transparent_75%)]"
       />
       <div className="flex justify-end">
-        <LangPicker />
+        <HeaderTools />
       </div>
 
       <div className="my-auto flex flex-col items-center py-6 text-center">

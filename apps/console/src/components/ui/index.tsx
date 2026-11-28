@@ -9,6 +9,7 @@ import { onRejected } from "@/lib/outbox";
 import { describeError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { RestroMark } from "../RestroMark";
+import { ThemeToggle } from "../ThemeToggle";
 
 type Variant = "primary" | "outline" | "subtle" | "ghost" | "danger" | "success";
 
@@ -95,6 +96,7 @@ export function TopBar({ title, subtitle, online = true, plain = false, children
           {subtitle && <p className="muted truncate text-xs">{subtitle}</p>}
         </div>
         <div className="scroll-x ml-auto flex min-w-0 items-center gap-1 sm:gap-2">{children}</div>
+        <ThemeToggle />
         <button
           onClick={() => void signOut()}
           aria-label="Switch user"
@@ -154,7 +156,7 @@ export function OfflineBanner({ online }: { online: boolean }) {
 export { Field, FormError, SelectField, orNull, useForm } from "./form";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`surface rounded-2xl p-4 shadow-soft min-[380px]:p-5 sm:p-6 ${className}`}>{children}</section>;
+  return <section className={`surface line rounded-2xl border p-4 shadow-soft min-[380px]:p-5 sm:p-6 ${className}`}>{children}</section>;
 }
 
 /** Card title row: heading, optional one-line explanation, optional action on the right. */
@@ -186,7 +188,7 @@ export function Badge({ tone = "neutral", children, className = "" }: { tone?: T
 /** Big number tile for reports and the platform dashboard. */
 export function Stat({ label, value, hint, bad = false, icon: Icon }: { label: string; value: ReactNode; hint?: string; bad?: boolean; icon?: LucideIcon }) {
   return (
-    <div className={`surface lift min-w-0 rounded-2xl p-4 shadow-soft sm:p-5 ${bad ? "ring-1 ring-late/50" : ""}`}>
+    <div className={`surface lift line min-w-0 rounded-2xl border p-4 shadow-soft sm:p-5 ${bad ? "ring-1 ring-late/50" : ""}`}>
       <div className="flex items-center justify-between gap-2">
         <p className="muted min-w-0 text-[13px] leading-tight font-medium sm:text-sm">{label}</p>
         {Icon && (

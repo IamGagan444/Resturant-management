@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NetworkError } from "@/lib/api";
 import { onModeChange, startNet } from "@/lib/net";
 import { onFlushed, startOutbox } from "@/lib/outbox";
+import { startWheelScrollX } from "@/lib/scrollx";
 import { ConfirmHost, Toaster } from "@/components/ui/feedback";
 
 function makeClient() {
@@ -32,6 +33,7 @@ export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
     startNet();
     startOutbox();
+    startWheelScrollX();
     // switching cloud ↔ hub ↔ offline, or queued actions landing: every screen reloads its data
     const offMode = onModeChange(() => void client.invalidateQueries());
     const offFlush = onFlushed(() => void client.invalidateQueries());

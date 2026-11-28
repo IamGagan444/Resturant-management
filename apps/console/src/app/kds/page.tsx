@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { pinTheme } from "@/lib/theme";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ItemStatus, KdsTicket, OrderItemView } from "@rms/contracts";
 import { ageLevel, aggregatePending, type AgeLevel } from "@rms/domain";
@@ -40,17 +41,12 @@ export default function KdsPage() {
   const station = me?.typ === "staff" && me.stationId ? me.stationId : "all";
 
   useEffect(() => {
-    document.documentElement.classList.add("dark");
-    // The kitchen is always dark, but the status-bar colour follows the OS: swap it too, or a light-mode tablet
-    // shows a white bar over a dark screen. The plain TopBar sits on --bg.
-    const metas = [...document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')];
-    const before = metas.map((m) => m.content);
-    metas.forEach((m) => (m.content = "#0f151c"));
+    // The kitchen is always dark, whatever the device's theme; leaving hands the chosen theme (and status bar) back.
+    const unpin = pinTheme("dark");
     const t = setInterval(() => setNow(Date.now()), 15_000);
     return () => {
       clearInterval(t);
-      document.documentElement.classList.remove("dark");
-      metas.forEach((m, i) => (m.content = before[i] ?? m.content));
+      unpin();
     };
   }, []);
 
