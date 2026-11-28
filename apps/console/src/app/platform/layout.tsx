@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, KeySquare, LayoutDashboard, Rocket, type LucideIcon } from "lucide-react";
+import { Building2, CreditCard, KeySquare, LayoutDashboard, Rocket, type LucideIcon } from "lucide-react";
 import { useGuard } from "@/lib/auth";
 import { TopBar } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ const NAV: { href: string; label: string; icon: LucideIcon; hint: string }[] = [
   { href: "/platform/restaurants/", label: "Restaurants", icon: Building2, hint: "Edit, suspend, delete" },
   { href: "/platform/onboard/", label: "Onboarding", icon: Rocket, hint: "Add a new restaurant" },
   { href: "/platform/sessions/", label: "Sessions", icon: KeySquare, hint: "Who is signed in" },
+  { href: "/platform/plans/", label: "Plans", icon: CreditCard, hint: "Monthly, quarterly, yearly prices" },
 ];
 
 /**

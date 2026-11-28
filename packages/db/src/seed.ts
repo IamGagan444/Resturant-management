@@ -197,7 +197,7 @@ async function main() {
         foodType: it.foodType ?? "VEG",
         spiceLevel: it.spiceLevel,
         prepTimeMin: it.prepTimeMin ?? 15,
-        isBestseller: it.isBestseller ?? false,
+        tags: it.isBestseller ? ["BESTSELLER"] : [],
         sortOrder: sort++,
         taxes: { connect: gst },
         addonGroups: { connect: (it.addonGroupIds ?? []).map((id) => ({ id })) },

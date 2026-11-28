@@ -36,7 +36,7 @@ import { badRequest, conflict, forbidden, notFound, parse } from "../lib/errors"
 import { businessDay, getHotel, invalidateHotel } from "../lib/hotel";
 import { assertOwned } from "../lib/owned";
 import { MANAGERS, staff } from "../lib/route";
-import { saveImage, toWebp } from "../lib/storage";
+import { isGlb, saveImage, saveModel, toWebp } from "../lib/storage";
 import { invalidateMenu } from "../services/menu";
 import { resetMfa } from "./login";
 
@@ -49,6 +49,8 @@ const freshQr = () => ({
 });
 
 export const qrUrl = (slug: string, qrToken: string) => `${env.CUSTOMER_URL}/h/${slug}/t/${qrToken}`;
+/** What the Google review NFC card / QR holds: our own address, which redirects to the current review link. */
+export const reviewCardUrl = (slug: string) => `${env.CUSTOMER_URL}/h/${slug}/review`;
 
 export async function adminRoutes(app: FastifyInstance) {
   // Any menu / settings write changes what guests see: drop cached menus before the response goes out.
@@ -62,7 +64,7 @@ export async function adminRoutes(app: FastifyInstance) {
     staff(MANAGERS, async (_req, _reply, ctx) => {
       const h = await getHotel(ctx.hid);
       const { razorpayKeySecretEnc, razorpayWebhookSecretEnc, ...safe } = h;
-      return { ...safe, razorpayConfigured: Boolean(h.razorpayKeyId && razorpayKeySecretEnc && razorpayWebhookSecretEnc) };
+      return { ...safe, reviewCardUrl: reviewCardUrl(h.slug), razorpayConfigured: Boolean(h.razorpayKeyId && razorpayKeySecretEnc && razorpayWebhookSecretEnc) };
     }),
   );
 
@@ -242,6 +244,17 @@ export async function adminRoutes(app: FastifyInstance) {
       });
       const pdf = await qrSheet(hotel.name, tables.map((t) => ({ label: t.label, code: t.code, isParcelCounter: t.isParcelCounter, url: qrUrl(hotel.slug, t.qrToken) })));
       return reply.header("content-type", "application/pdf").header("content-disposition", 'inline; filename="table-qr.pdf"').send(pdf);
+    }),
+  );
+
+  /** Printable "Review us on Google" card: QR + tap-here mark, for the bill folder or the counter. */
+  app.get(
+    "/v1/admin/review-card.pdf",
+    staff(MANAGERS, async (_req, reply, ctx) => {
+      const hotel = await getHotel(ctx.hid);
+      if (!hotel.googleReviewUrl) throw badRequest("NO_REVIEW_LINK", "Add your Google review link in Settings first");
+      const pdf = await reviewCard(hotel.name, reviewCardUrl(hotel.slug));
+      return reply.header("content-type", "application/pdf").header("content-disposition", 'inline; filename="review-card.pdf"').send(pdf);
     }),
   );
 
@@ -468,7 +481,24 @@ export async function adminRoutes(app: FastifyInstance) {
       return { url: await saveImage(ctx.hid, image) };
     }),
   );
+
+  // ── 3D model upload (.glb) for the guest's 3D / AR dish view: stored as-is after a signature check ──
+  app.post(
+    "/v1/admin/uploads/model",
+    staff(MANAGERS, async (req, reply, ctx) => {
+      const file = await req.file({ limits: { fileSize: MODEL_MAX_BYTES, files: 1 } });
+      if (!file) throw badRequest("NO_FILE", "Attach a .glb file");
+      const buf = await file.toBuffer();
+      if (file.file.truncated) throw conflict("TOO_LARGE", `3D model must be under ${MODEL_MAX_BYTES / 1024 / 1024} MB`);
+      if (!isGlb(buf)) throw badRequest("BAD_MODEL", "Use a .glb (binary glTF 2.0) file");
+      reply.status(201);
+      return { url: await saveModel(ctx.hid, buf) };
+    }),
+  );
 }
+
+/** Phone-friendly 3D models are 1–5 MB; past this they load too slowly on 4G at the table. */
+const MODEL_MAX_BYTES = 15 * 1024 * 1024;
 
 async function qrSheet(hotelName: string, cards: { label: string; code: string; isParcelCounter: boolean; url: string }[]): Promise<Buffer> {
   const doc = new PDFDocument({ size: "A4", margin: 36 });
@@ -500,11 +530,40 @@ async function qrSheet(hotelName: string, cards: { label: string; code: string; 
     const size = 124;
     doc.image(png, x + (cellW - size) / 2, y + 34, { width: size, height: size });
     line(card.label, 162, 19, { bold: true });
-    line(card.isParcelCounter ? "Scan to order a parcel" : "Scan to see the menu and order", 184, 9, { color: "#555555" });
+    line(card.isParcelCounter ? "Tap your phone here or scan to order a parcel" : "Tap your phone here or scan to see the menu", 184, 9, { color: "#555555" });
     line(`${card.isParcelCounter ? "Code" : "Table code"}: ${formatTableCode(card.code)}`, 202, 15, { bold: true });
     line(`Can't scan? Go to ${new URL(card.url).host} and type the code`, 223, 8, { color: "#555555" });
   }
   if (cards.length === 0) doc.fontSize(14).text("No tables yet.");
+  doc.end();
+  return done;
+}
+
+/** Four review cards per A4 page (cut along the lines): the same QR on each, for tables or the counter. */
+async function reviewCard(hotelName: string, url: string): Promise<Buffer> {
+  const doc = new PDFDocument({ size: "A4", margin: 36 });
+  const chunks: Buffer[] = [];
+  doc.on("data", (c: Buffer) => chunks.push(c));
+  const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
+  const png = await QRCode.toBuffer(url, { margin: 1, width: 360, errorCorrectionLevel: "M" });
+  const cellW = (doc.page.width - 72) / 2;
+  const cellH = (doc.page.height - 72) / 2;
+  for (let i = 0; i < 4; i++) {
+    const x = 36 + (i % 2) * cellW;
+    const y = 36 + Math.floor(i / 2) * cellH;
+    doc.roundedRect(x + 6, y + 6, cellW - 12, cellH - 12, 12).lineWidth(1).stroke("#cccccc");
+    const line = (text: string, top: number, size: number, opts: { bold?: boolean; color?: string } = {}) =>
+      doc
+        .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
+        .fontSize(size)
+        .fillColor(opts.color ?? "#111111")
+        .text(text, x + 16, y + top, { width: cellW - 32, height: size + 4, ellipsis: true, align: "center" });
+    line("Enjoyed your meal?", 30, 18, { bold: true });
+    line(`Rate ${hotelName} on Google`, 56, 12, { color: "#444444" });
+    const size = 150;
+    doc.image(png, x + (cellW - size) / 2, y + 112, { width: size, height: size });
+    line("Tap your phone on this card or scan the code", 274, 9, { color: "#555555" });
+  }
   doc.end();
   return done;
 }

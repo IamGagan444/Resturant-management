@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Same tokens as the guest app and console, so the site looks like the product it sells. */
+@theme inline {
+  --font-sans: var(--font-inter-ext), var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-figtree-ext), var(--font-figtree), var(--font-inter-ext), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+}
+
+@theme {
+  --color-fresh: #138a4f;
+  --color-warn: #c48a00;
+  --color-late: #c8281c;
+  --shadow-soft: 0 1px 2px rgb(30 42 54 / 0.05), 0 6px 18px -10px rgb(30 42 54 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(30 42 54 / 0.05), 0 24px 48px -18px rgb(30 42 54 / 0.3);
+  --animate-rise: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+:root {
+  --bg: #f7f6f3;
+  --surface: #ffffff;
+  --sunken: #f2f0ec;
+  --ink: #1c2430;
+  --muted: #5f6670;
+  --line: #e7e4de;
+  --brand: #bd421c;
+  --brand-ink: #ffffff;
+  --brand-soft: #fbe9e2;
+  color-scheme: light;
+}
+.dark {
+  --bg: #111113;
+  --surface: #19191c;
+  --sunken: #232327;
+  --ink: #f3f1ee;
+  --muted: #a3a3ab;
+  --line: #2e2e33;
+  --brand: #ec6238;
+  --brand-ink: #131315;
+  --brand-soft: #2c1b15;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --bg: #111113;
+    --surface: #19191c;
+    --sunken: #232327;
+    --ink: #f3f1ee;
+    --muted: #a3a3ab;
+    --line: #2e2e33;
+    --brand: #ec6238;
+    --brand-ink: #131315;
+    --brand-soft: #2c1b15;
+    color-scheme: dark;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db, unscopedDb, withTenant } from "@rms/db";
-import { CreateRequestInput, Id, JoinSessionInput, PlaceOrderInput, ReplaceItemInput, TableCodeInput, UpsertCartItemInput, rooms, type ReceiptView } from "@rms/contracts";
+import { CreateRequestInput, GoogleReviewUrl, Id, JoinSessionInput, PlaceOrderInput, ReplaceItemInput, TableCodeInput, UpsertCartItemInput, rooms, type ReceiptView } from "@rms/contracts";
 import { AppError, conflict, isUniqueViolation, notFound, parse } from "../lib/errors";
 import { setGuestCookie } from "../lib/auth";
 import { assertHotelOperational, getHotel } from "../lib/hotel";
@@ -46,6 +46,19 @@ export async function publicRoutes(app: FastifyInstance) {
     reply.header("etag", etag).header("cache-control", "no-cache");
     if (req.headers["if-none-match"] === etag) return reply.status(304).send();
     return menu;
+  });
+
+  /**
+   * The restaurant's Google review link, for the review NFC card / QR (/h/{slug}/review on the guest app).
+   * Checked again on the way out, so a link stored before the allowlist (or edited in the database) can't
+   * turn the card into a redirect to an arbitrary site.
+   */
+  app.get("/v1/p/h/:slug/review", async (req) => {
+    const { slug } = parse(z.object({ slug: z.string().min(1).max(48) }), req.params);
+    const h = await unscopedDb.hotel.findUnique({ where: { slug }, select: { googleReviewUrl: true, status: true } });
+    if (!h || h.status === "CANCELLED") throw notFound("Restaurant");
+    const ok = h.googleReviewUrl ? GoogleReviewUrl.safeParse(h.googleReviewUrl) : null;
+    return { url: ok?.success ? ok.data : null };
   });
 
   app.post("/v1/p/sessions/join", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {

@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CreateHotelInput, type PlatformHotel } from "@rms/contracts";
+import { CreateHotelInput, cyclePrice, type BillingCycle, type PlanView, type PlatformHotel } from "@rms/contracts";
 import { ArrowLeft, ArrowRight, Building2, Check, CheckCircle2, ClipboardCopy, CreditCard, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button, Card, Field, FormError, LinkButton, SelectField, orNull, useForm } from "@/components/ui";
 import { notify } from "@/components/ui/feedback";
-import { PageTitle, makePassword } from "@/components/platform/common";
+import { PageTitle, cycleOptions, makePassword, planLabel } from "@/components/platform/common";
 import { cn } from "@/lib/utils";
 
-interface Plan { id: string; name: string; priceMonthly: number; maxTables: number; maxStaff: number }
+type Plan = PlanView;
 
 const STEPS = [
   { title: "Restaurant", icon: Building2, fields: ["name", "slug", "phone", "address", "gstin"] },
@@ -43,6 +43,7 @@ export default function OnboardPage() {
       address: "",
       gstin: "",
       planId: "",
+      billingCycle: "MONTHLY" as BillingCycle,
       startAs: "TRIAL",
       trialDays: "14",
       "owner.name": "",
@@ -59,6 +60,7 @@ export default function OnboardPage() {
       address: orNull(v.address),
       gstin: orNull(v.gstin.toUpperCase()),
       planId: orNull(v.planId),
+      billingCycle: v.billingCycle,
       status: v.startAs,
       trialEndsAt: v.startAs === "TRIAL" ? new Date(Date.now() + Number(v.trialDays) * 86_400_000).toISOString() : null,
       owner: {
@@ -193,7 +195,19 @@ export default function OnboardPage() {
           {step === 2 && (
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Plan" hint={plan ? `Up to ${plan.maxTables} tables and ${plan.maxStaff} staff` : "Can be chosen later"} className="sm:col-span-2">
-                <SelectField value={v.planId} onChange={(p) => form.set("planId", p)} emptyLabel="No plan yet" options={(plans.data ?? []).map((p) => ({ value: p.id, label: `${p.name} · ₹${p.priceMonthly / 100}/month` }))} />
+                <SelectField
+                  value={v.planId}
+                  onChange={(p) => {
+                    form.set("planId", p);
+                    const next = plans.data?.find((x) => x.id === p);
+                    if (next && cyclePrice(next, v.billingCycle) === null) form.set("billingCycle", "MONTHLY");
+                  }}
+                  emptyLabel="No plan yet"
+                  options={(plans.data ?? []).map((p) => ({ value: p.id, label: planLabel(p, v.billingCycle) }))}
+                />
+              </Field>
+              <Field label="Billing cycle" required hint="Monthly, quarterly or yearly; longer cycles cost less per month.">
+                <SelectField value={v.billingCycle} onChange={(c) => form.set("billingCycle", c as BillingCycle)} options={cycleOptions(plan)} />
               </Field>
               <Field label="Start as" required>
                 <SelectField
@@ -225,7 +239,7 @@ export default function OnboardPage() {
               <Review label="GSTIN" value={v.gstin || "—"} />
               <Review label="Owner" value={`${v["owner.name"]}${v["owner.phone"] ? ` · ${v["owner.phone"]}` : ""}`} />
               <Review label="Login email" value={v["owner.email"]} />
-              <Review label="Plan" value={plan?.name ?? "No plan yet"} />
+              <Review label="Plan" value={plan ? planLabel(plan, v.billingCycle) : "No plan yet"} />
               <Review label="Starts as" value={v.startAs === "TRIAL" ? `Free trial, ${v.trialDays} days` : "Active"} />
             </dl>
           )}

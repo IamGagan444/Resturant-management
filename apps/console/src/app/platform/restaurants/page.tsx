@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { HotelStatus, ResetPasswordInput, UpdateHotelInput, type PlatformHotel } from "@rms/contracts";
+import { HotelStatus, ResetPasswordInput, UpdateHotelInput, cyclePrice, type BillingCycle, type PlanView, type PlatformHotel } from "@rms/contracts";
 import { Building2, CalendarClock, KeyRound, KeySquare, LogOut, Mail, Pencil, Rocket, Search, Settings2, Trash2, ShieldOff } from "lucide-react";
 import { api } from "@/lib/api";
 import { Badge, Button, EmptyState, Field, FormError, LinkButton, SelectField, orNull, useForm } from "@/components/ui";
@@ -11,9 +11,9 @@ import { DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, RowActions 
 import { Loadable, confirm, notify } from "@/components/ui/feedback";
 import { Modal } from "@/components/ui/modal";
 import { ListSkeleton } from "@/components/ui/skeleton";
-import { PageTitle, STATUS_LABEL, STATUS_TONE, makePassword, shortDate } from "@/components/platform/common";
+import { PageTitle, STATUS_LABEL, STATUS_TONE, cycleOptions, makePassword, planLabel, shortDate } from "@/components/platform/common";
 
-interface Plan { id: string; name: string; priceMonthly: number }
+type Plan = PlanView;
 type Dialog = { kind: "details" | "plan" | "password"; hotel: PlatformHotel } | null;
 
 /** Super admin: every restaurant on the platform; edit, change plan/status, help owners, delete. */
@@ -282,11 +282,12 @@ function DetailsForm({ hotel, onClose, onSaved }: { hotel: PlatformHotel; onClos
 
 function PlanForm({ hotel, plans, onClose, onSaved }: { hotel: PlatformHotel; plans: Plan[]; onClose: () => void; onSaved: () => void }) {
   const form = useForm({
-    initial: { status: hotel.status, planId: hotel.plan?.id ?? "", trialEndsAt: hotel.trialEndsAt?.slice(0, 10) ?? "" },
+    initial: { status: hotel.status, planId: hotel.plan?.id ?? "", billingCycle: hotel.billingCycle, trialEndsAt: hotel.trialEndsAt?.slice(0, 10) ?? "" },
     schema: UpdateHotelInput,
     build: (v) => ({
       status: v.status,
       planId: orNull(v.planId),
+      billingCycle: v.billingCycle,
       trialEndsAt: v.trialEndsAt ? new Date(`${v.trialEndsAt}T23:59:59+05:30`).toISOString() : null,
     }),
   });
@@ -320,7 +321,19 @@ function PlanForm({ hotel, plans, onClose, onSaved }: { hotel: PlatformHotel; pl
           <SelectField value={v.status} onChange={(s) => form.set("status", s as HotelStatus)} options={HotelStatus.options.map((s) => ({ value: s, label: STATUS_LABEL[s] }))} />
         </Field>
         <Field label="Plan">
-          <SelectField value={v.planId} onChange={(p) => form.set("planId", p)} emptyLabel="No plan" options={plans.map((p) => ({ value: p.id, label: `${p.name} · ₹${p.priceMonthly / 100}/month` }))} />
+          <SelectField
+            value={v.planId}
+            onChange={(p) => {
+              form.set("planId", p);
+              const next = plans.find((x) => x.id === p);
+              if (next && cyclePrice(next, v.billingCycle) === null) form.set("billingCycle", "MONTHLY");
+            }}
+            emptyLabel="No plan"
+            options={plans.map((p) => ({ value: p.id, label: planLabel(p, v.billingCycle) }))}
+          />
+        </Field>
+        <Field label="Billing cycle" required>
+          <SelectField value={v.billingCycle} onChange={(c) => form.set("billingCycle", c as BillingCycle)} options={cycleOptions(plans.find((p) => p.id === v.planId))} />
         </Field>
         <Field label="Trial ends on" required={v.status === "TRIAL"} error={form.error("trialEndsAt")}>
           <input type="date" value={v.trialEndsAt} onChange={(e) => form.set("trialEndsAt", e.target.value)} />

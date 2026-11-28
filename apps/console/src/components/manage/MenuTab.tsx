@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AddonGroupInput, CategoryInput, MenuItemInput, type FoodType } from "@rms/contracts";
-import { Camera, GripVertical, ImageIcon, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AddonGroupInput, CategoryInput, DISH_TAGS, DISH_TAG_LABELS, MenuItemInput, type DishTag, type FoodType } from "@rms/contracts";
+import { Box, Camera, GripVertical, ImageIcon, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api, rupees, toPaise } from "@/lib/api";
 import { shrinkImage } from "@/lib/image";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, FormError, SelectField, orNull, useForm } from "@/components/ui";
@@ -26,7 +26,8 @@ interface Item {
   foodType: FoodType;
   spiceLevel: number | null;
   prepTimeMin: number;
-  isBestseller: boolean;
+  tags: DishTag[];
+  modelUrl: string | null;
   isAvailable: boolean;
   variants: { id: string; name: string; price: number }[];
   taxIds: string[];
@@ -346,7 +347,13 @@ export function MenuTab() {
                                   {i.variants.length ? i.variants.map((v) => rupees(v.price)).join(" / ") : rupees(i.price)}
                                 </span>
                                 <span className="mt-1 flex flex-wrap gap-1 empty:hidden">
-                                  {i.isBestseller && <Badge tone="brand">Bestseller</Badge>}
+                                  {i.tags.slice(0, 2).map((t) => (
+                                    <Badge key={t} tone="brand">
+                                      {DISH_TAG_LABELS[t]}
+                                    </Badge>
+                                  ))}
+                                  {i.tags.length > 2 && <Badge>+{i.tags.length - 2}</Badge>}
+                                  {i.modelUrl && <Badge>3D</Badge>}
                                   {i.variants.length > 1 && <Badge>{i.variants.length} sizes</Badge>}
                                 </span>
                               </span>
@@ -415,6 +422,8 @@ function ItemForm({
   const groups = useAdmin<AddonGroup[]>("addon-groups");
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadingModel, setUploadingModel] = useState(false);
+  const modelRef = useRef<HTMLInputElement>(null);
 
   const form = useForm({
     initial: {
@@ -427,7 +436,8 @@ function ItemForm({
       prepTimeMin: String(item?.prepTimeMin ?? 15),
       description: item?.description ?? "",
       imageUrl: item?.imageUrl ?? "",
-      isBestseller: item?.isBestseller ?? false,
+      tags: item?.tags ?? ([] as DishTag[]),
+      modelUrl: item?.modelUrl ?? "",
       isAvailable: item?.isAvailable ?? true,
       taxIds: item?.taxIds ?? ([] as string[]),
       addonGroupIds: item?.addonGroupIds ?? ([] as string[]),
@@ -445,7 +455,8 @@ function ItemForm({
       prepTimeMin: f.prepTimeMin.trim() === "" ? undefined : Number(f.prepTimeMin),
       description: orNull(f.description),
       imageUrl: orNull(f.imageUrl),
-      isBestseller: f.isBestseller,
+      tags: f.tags,
+      modelUrl: orNull(f.modelUrl),
       isAvailable: f.isAvailable,
       taxIds: f.taxIds,
       addonGroupIds: f.addonGroupIds,
@@ -486,6 +497,25 @@ function ItemForm({
       if (fileRef.current) fileRef.current.value = "";
     }
   }
+
+  async function uploadModel(file: File) {
+    if (!/\.glb$/i.test(file.name)) return notify.error(new Error("Choose a .glb 3D model file."));
+    if (file.size > 15 * 1024 * 1024) return notify.error(new Error("3D model must be under 15 MB. Ask your 3D maker for a phone-sized (1–5 MB) version."));
+    setUploadingModel(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file, "model.glb");
+      const r = await api<{ url: string }>("POST", "/v1/admin/uploads/model", fd);
+      form.set("modelUrl", r.url);
+      notify.ok("3D model uploaded. Save the dish to keep it.");
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setUploadingModel(false);
+      if (modelRef.current) modelRef.current.value = "";
+    }
+  }
+  const toggleTag = (t: DishTag) => form.set("tags", f.tags.includes(t) ? f.tags.filter((x) => x !== t) : DISH_TAGS.filter((x) => x === t || f.tags.includes(x)));
 
   const save = form.submit(async (body) => {
     const saved = await (item ? api<Item>("PATCH", `/v1/admin/items/${item.id}`, body) : api<Item>("POST", "/v1/admin/items", body));
@@ -558,6 +588,27 @@ function ItemForm({
             </div>
           </div>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
+        </div>
+
+        <div className="line flex items-center gap-3 rounded-2xl border p-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand">
+            {uploadingModel ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Box className="h-5 w-5" aria-hidden />}
+          </span>
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="font-semibold">3D &amp; AR view {f.modelUrl && <Badge tone="fresh">added</Badge>}</p>
+            <p className="muted text-xs">Optional .glb model (1–5 MB is ideal). Guests spin the dish in 3D or place it on their table in AR.</p>
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <Button type="button" variant="outline" className="h-9 min-h-9 px-3 text-xs" disabled={uploadingModel} onClick={() => modelRef.current?.click()}>
+              {uploadingModel ? "Uploading…" : f.modelUrl ? "Change" : "Upload"}
+            </Button>
+            {f.modelUrl && !uploadingModel && (
+              <Button type="button" variant="ghost" className="h-9 min-h-9 px-3 text-xs" onClick={() => form.set("modelUrl", "")}>
+                Remove
+              </Button>
+            )}
+          </div>
+          <input ref={modelRef} type="file" accept=".glb,model/gltf-binary" className="hidden" onChange={(e) => e.target.files?.[0] && void uploadModel(e.target.files[0])} />
         </div>
 
         <Field label="Dish name" required error={form.error("name")}>
@@ -643,10 +694,18 @@ function ItemForm({
             </div>
           </div>
         )}
+        <div>
+          <p className="mb-1.5 text-sm font-medium">Smart tags</p>
+          <p className="muted mb-2 text-xs">Shown as badges on the guest menu. Tag your high-margin dishes so more guests order them.</p>
+          <div className="flex flex-wrap gap-2">
+            {DISH_TAGS.map((t) => (
+              <label key={t} className={CHIP}>
+                <input type="checkbox" checked={f.tags.includes(t)} onChange={() => toggleTag(t)} /> {DISH_TAG_LABELS[t]}
+              </label>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
-          <label className={CHIP}>
-            <input type="checkbox" checked={f.isBestseller} onChange={(e) => form.set("isBestseller", e.target.checked)} /> Bestseller
-          </label>
           <label className={CHIP}>
             <input type="checkbox" checked={f.isAvailable} onChange={(e) => form.set("isAvailable", e.target.checked)} /> In stock
           </label>

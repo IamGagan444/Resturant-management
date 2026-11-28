@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Bps, HHMM, Id, LeadPin, Phone, Pin, Slug, StaffPin, isLeadRole, patchOf } from "./common";
-import { DeviceKind, HotelStatus, Language, StaffRole, TableStatus } from "./enums";
+import { BillingCycle, DeviceKind, HotelStatus, Language, StaffRole, TableStatus } from "./enums";
 
 // ── Auth ────────────────────────────────────────
 
@@ -78,6 +78,18 @@ export type Me = z.infer<typeof Me>;
 /** Indian GST number, e.g. 21ABCDE1234F1Z5. */
 export const Gstin = z.string().regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/, "Enter a valid 15-character GSTIN, e.g. 21ABCDE1234F1Z5");
 
+/**
+ * Where the review card sends guests. Only Google's own review / maps / short-link hosts, so the restaurant's
+ * redirect (/h/{slug}/review) can never be pointed at an arbitrary site.
+ */
+export const GOOGLE_REVIEW_HOSTS = ["g.page", "search.google.com", "www.google.com", "google.com", "maps.google.com", "www.google.co.in", "google.co.in", "maps.app.goo.gl", "g.co", "business.google.com"] as const;
+export const GoogleReviewUrl = z
+  .url({ protocol: /^https$/, message: "Paste the full link starting with https://" })
+  .max(500)
+  .refine((u) => (GOOGLE_REVIEW_HOSTS as readonly string[]).includes(new URL(u).hostname.toLowerCase()), {
+    message: "Use the review link from your Google Business Profile (g.page/r/… or search.google.com/local/writereview?placeid=…)",
+  });
+
 export const HotelSettingsInput = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -94,6 +106,7 @@ export const HotelSettingsInput = z
     readyPickupAlertSec: z.number().int().min(30).max(1800),
     sessionIdleMin: z.number().int().min(15).max(24 * 60),
     dayStartsAt: HHMM,
+    googleReviewUrl: GoogleReviewUrl.nullable(),
     razorpay: z.object({
       keyId: z.string().min(1).max(64),
       keySecret: z.string().min(1).max(128),
@@ -167,6 +180,7 @@ export const CreateHotelInput = z.object({
   address: z.string().trim().max(300).nullish(),
   gstin: Gstin.nullish(),
   planId: Id.nullish(),
+  billingCycle: BillingCycle.default("MONTHLY"),
   status: HotelStatus.default("TRIAL"),
   trialEndsAt: z.iso.datetime().nullish(),
   owner: z.object({
@@ -187,6 +201,7 @@ export const UpdateHotelInput = z
     gstin: Gstin.nullable(),
     status: HotelStatus,
     planId: Id.nullable(),
+    billingCycle: BillingCycle,
     trialEndsAt: z.iso.datetime().nullable(),
     featureOverrides: z.record(z.string(), z.boolean()).nullable(),
   })
@@ -213,6 +228,7 @@ export interface PlatformHotel {
   name: string;
   slug: string;
   status: HotelStatus;
+  billingCycle: BillingCycle;
   phone: string | null;
   address: string | null;
   gstin: string | null;
@@ -237,11 +253,42 @@ export interface PlatformOverview {
 export const PlanInput = z.object({
   name: z.string().trim().min(1).max(40),
   priceMonthly: z.number().int().nonnegative(),
+  /** price for 3 months / 12 months, in paise; null = cycle not offered */
+  priceQuarterly: z.number().int().nonnegative().nullish(),
+  priceYearly: z.number().int().nonnegative().nullish(),
   maxTables: z.number().int().positive(),
   maxStaff: z.number().int().positive(),
   features: z.record(z.string(), z.boolean()),
 });
 export type PlanInput = z.infer<typeof PlanInput>;
+export const PlanPatch = patchOf(PlanInput);
+
+export const BILLING_CYCLE_MONTHS: Record<BillingCycle, number> = { MONTHLY: 1, QUARTERLY: 3, YEARLY: 12 };
+export const BILLING_CYCLE_LABEL: Record<BillingCycle, string> = { MONTHLY: "Monthly", QUARTERLY: "Quarterly", YEARLY: "Yearly" };
+
+export interface PlanView {
+  id: string;
+  name: string;
+  priceMonthly: number;
+  priceQuarterly: number | null;
+  priceYearly: number | null;
+  maxTables: number;
+  maxStaff: number;
+  features: Record<string, boolean>;
+}
+
+/** Price of one billing period in paise, or null when the plan doesn't offer that cycle. */
+export function cyclePrice(plan: Pick<PlanView, "priceMonthly" | "priceQuarterly" | "priceYearly">, cycle: BillingCycle): number | null {
+  return cycle === "MONTHLY" ? plan.priceMonthly : cycle === "QUARTERLY" ? plan.priceQuarterly : plan.priceYearly;
+}
+
+/** Saving vs paying monthly for the same months, in whole percent (0 when none). */
+export function cycleSavingPct(plan: Pick<PlanView, "priceMonthly" | "priceQuarterly" | "priceYearly">, cycle: BillingCycle): number {
+  const price = cyclePrice(plan, cycle);
+  const full = plan.priceMonthly * BILLING_CYCLE_MONTHS[cycle];
+  if (price === null || full <= 0 || price >= full) return 0;
+  return Math.round(((full - price) / full) * 100);
+}
 
 // ── Waiter board ───────────────────────────────
 

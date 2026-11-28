@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { unscopedDb, type HotelStatus, type Prisma } from "@rms/db";
-import { CreateHotelInput, Id, PlanInput, ResetPasswordInput, UpdateHotelInput, type PlatformHotel, type PlatformOverview, type PlatformSession } from "@rms/contracts";
+import { CreateHotelInput, Id, PlanInput, PlanPatch, ResetPasswordInput, UpdateHotelInput, type PlatformHotel, type PlatformOverview, type PlatformSession } from "@rms/contracts";
 import { conflict, notFound, parse } from "../lib/errors";
 import { hashSecret } from "../lib/crypto";
 import { endSession, forceSignOut } from "../lib/auth";
@@ -102,6 +102,7 @@ export async function platformRoutes(app: FastifyInstance) {
         name: h.name,
         slug: h.slug,
         status: h.status,
+        billingCycle: h.billingCycle,
         phone: h.phone,
         address: h.address,
         gstin: h.gstin,
@@ -135,6 +136,7 @@ export async function platformRoutes(app: FastifyInstance) {
             address: input.address ?? null,
             gstin: input.gstin ?? null,
             planId: input.planId ?? null,
+            billingCycle: input.billingCycle,
             status: input.status,
             trialEndsAt: input.trialEndsAt ? new Date(input.trialEndsAt) : null,
           },
@@ -173,6 +175,7 @@ export async function platformRoutes(app: FastifyInstance) {
         ...(input.gstin !== undefined && { gstin: input.gstin }),
         ...(input.status !== undefined && { status: input.status }),
         ...(input.planId !== undefined && { planId: input.planId }),
+        ...(input.billingCycle !== undefined && { billingCycle: input.billingCycle }),
         ...(input.trialEndsAt !== undefined && { trialEndsAt: input.trialEndsAt ? new Date(input.trialEndsAt) : null }),
         ...(input.featureOverrides !== undefined && { featureOverrides: input.featureOverrides ?? undefined }),
       };
@@ -209,6 +212,17 @@ export async function platformRoutes(app: FastifyInstance) {
       const input = parse(PlanInput, req.body);
       reply.status(201);
       return unscopedDb.plan.create({ data: input });
+    }),
+  );
+
+  /** Change a plan's prices (per billing cycle), limits or features. Restaurants on it pay the new price from their next period. */
+  app.patch(
+    "/v1/platform/plans/:id",
+    platform(async (req) => {
+      const { id } = parse(IdParam, req.params);
+      const input = parse(PlanPatch, req.body);
+      if (!(await unscopedDb.plan.findUnique({ where: { id }, select: { id: true } }))) throw notFound("Plan");
+      return unscopedDb.plan.update({ where: { id }, data: input });
     }),
   );
 

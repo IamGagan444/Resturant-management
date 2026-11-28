@@ -58,3 +58,9 @@ export type DeviceKind = z.infer<typeof DeviceKind>;
 
 export const Language = z.enum(["en", "hi", "or", "te"]);
 export type Language = z.infer<typeof Language>;
+
+export const BillingCycle = z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]);
+export type BillingCycle = z.infer<typeof BillingCycle>;
+
+export const AttendanceMarkKind = z.enum(["PRESENT", "ABSENT", "LEAVE", "WEEK_OFF"]);
+export type AttendanceMarkKind = z.infer<typeof AttendanceMarkKind>;

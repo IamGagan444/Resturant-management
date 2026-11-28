@@ -13,7 +13,7 @@ import { AllParcel, Menu, SwapSheet, tName, type AddLine } from "./Menu";
 import { Orders } from "./Orders";
 import { ParcelStatus, forgetPaid, recallPaid, rememberPaid, waitingParcels } from "./ParcelStatus";
 import { Bill } from "./Bill";
-import { Check, CheckCircle2, ClipboardList, ConciergeBell, GlassWater, MessageCircle, ReceiptText, RotateCcw, ShoppingBag, UtensilsCrossed, WifiOff, type LucideIcon } from "lucide-react";
+import { Check, CheckCircle2, ClipboardList, ConciergeBell, GlassWater, MessageCircle, ReceiptText, RotateCcw, ShoppingBag, Star, UtensilsCrossed, WifiOff, type LucideIcon } from "lucide-react";
 import { Button, FoodMark, HeaderTools, Pill, Sheet, Toast, rupees, usePlace, type ToastMsg, type ToastTone } from "./ui";
 
 export function TableApp(props: { initialMenu: PublicMenu; qrToken: string }) {
@@ -281,6 +281,22 @@ function Inner({ initialMenu, qrToken }: { initialMenu: PublicMenu; qrToken: str
         <h1 className="font-display text-3xl font-bold">{t("thankYou")}</h1>
         <p className="muted max-w-xs">{t("paidThanks", { name: initialMenu.hotel.name })}</p>
         <ParcelStatus onOrderAgain={() => (forgetPaid(), location.reload())} />
+        {initialMenu.hotel.reviewEnabled && (
+          <a
+            href={`/h/${initialMenu.hotel.slug}/review`}
+            target="_blank"
+            rel="noreferrer"
+            className="line mt-2 flex w-full items-center gap-3 rounded-2xl border bg-(--surface) p-4 text-left shadow-soft transition active:scale-[0.98]"
+          >
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-warn/15 text-warn">
+              <Star className="h-5 w-5 fill-current" aria-hidden />
+            </span>
+            <span className="min-w-0">
+              <span className="block font-semibold">{t("rateUs")}</span>
+              <span className="muted block text-sm">{t("rateUsHint")}</span>
+            </span>
+          </a>
+        )}
         {phase.receiptUrl && (
           <div className="mt-4 flex w-full flex-col gap-2.5">
             <a

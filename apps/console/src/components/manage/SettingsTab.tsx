@@ -2,8 +2,9 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HotelSettingsInput } from "@rms/contracts";
-import { Save } from "lucide-react";
-import { api } from "@/lib/api";
+import { Download, ExternalLink, Save, Star } from "lucide-react";
+import { API_URL, api } from "@/lib/api";
+import { NfcWriteButton } from "./NfcWrite";
 import { Badge, Button, Card, CardHeader, Field, FormError, orNull, useForm } from "@/components/ui";
 import { Loadable, notify } from "@/components/ui/feedback";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -24,6 +25,9 @@ interface Settings {
   dayStartsAt: string;
   razorpayConfigured: boolean;
   razorpayKeyId: string | null;
+  googleReviewUrl: string | null;
+  /** the address printed / written on the review card; redirects to googleReviewUrl */
+  reviewCardUrl: string;
 }
 
 interface Tax { id: string; name: string; rateBps: number }
@@ -68,6 +72,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
       requireWaiterConfirm: settings.requireWaiterConfirm,
       allowPayLater: settings.allowPayLater,
       pricesIncludeTax: settings.pricesIncludeTax,
+      googleReviewUrl: settings.googleReviewUrl ?? "",
       "razorpay.keyId": "",
       "razorpay.keySecret": "",
       "razorpay.webhookSecret": "",
@@ -88,6 +93,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
         requireWaiterConfirm: v.requireWaiterConfirm,
         allowPayLater: v.allowPayLater,
         pricesIncludeTax: v.pricesIncludeTax,
+        googleReviewUrl: orNull(v.googleReviewUrl),
         // keys are all-or-nothing: typing one asks for the other two
         ...(rzp.keyId || rzp.keySecret || rzp.webhookSecret ? { razorpay: rzp } : {}),
       };
@@ -154,6 +160,55 @@ function SettingsForm({ settings }: { settings: Settings }) {
             </Field>
           </div>
           <p className="muted text-sm">Taxes: {taxes.data?.map((t) => `${t.name} ${t.rateBps / 100}%`).join(" + ") ?? "…"}</p>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Google reviews"
+          hint="Guests tap the review card (or scan it) when they pay and land straight on your Google review page. More 5-star reviews, more walk-ins."
+          action={settings.googleReviewUrl ? <Badge tone="fresh">On</Badge> : <Badge>Off</Badge>}
+        />
+        <div className="space-y-4">
+          <Field
+            label="Your Google review link"
+            error={form.error("googleReviewUrl")}
+            hint={
+              <>
+                Google Business Profile → <strong>Ask for reviews</strong> → copy the link (g.page/r/…). Guests also see “Rate us on Google” after paying.
+              </>
+            }
+          >
+            <input {...form.text("googleReviewUrl")} type="url" inputMode="url" placeholder="https://g.page/r/…/review" maxLength={500} />
+          </Field>
+          {settings.googleReviewUrl ? (
+            <div className="flex flex-wrap gap-2">
+              <NfcWriteButton url={settings.reviewCardUrl} what="Google reviews" />
+              <a
+                href={`${API_URL}/v1/admin/review-card.pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="tap inline-flex h-11 items-center gap-2 rounded-full bg-(--surface) px-5 text-sm font-semibold ring-1 ring-(--line) ring-inset transition hover:bg-(--sunken)"
+              >
+                <Download className="h-4 w-4" aria-hidden /> Printable review card (PDF)
+              </a>
+              <a
+                href={settings.reviewCardUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="tap inline-flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold transition hover:bg-(--sunken)"
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden /> Test the link
+              </a>
+            </div>
+          ) : (
+            <p className="muted flex items-center gap-2 text-sm">
+              <Star className="h-4 w-4 text-brand" aria-hidden /> Save a review link to get the NFC card and printable card.
+            </p>
+          )}
+          <p className="muted text-xs">
+            The card holds {settings.reviewCardUrl}, which sends guests to whatever link is saved here, so you never need to rewrite a card.
+          </p>
         </div>
       </Card>
 

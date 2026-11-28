@@ -19,7 +19,7 @@ async function staffDevice(browser: Browser, kind: "Kitchen screen" | "Waiter ph
   const owner = await ownerCtx.newPage();
   await owner.goto(`${CONSOLE}/manage/`);
   await owner.getByRole("tab", { name: "Devices" }).click();
-  await owner.getByLabel("Name").fill(`${kind} (e2e)`);
+  await owner.getByRole("textbox", { name: /Device name/ }).fill(`${kind} (e2e)`);
   await owner.getByRole("combobox", { name: /Used as/ }).click();
   await owner.getByRole("option", { name: kind }).click();
   await owner.getByRole("button", { name: "Get a pairing code" }).click();
@@ -147,7 +147,8 @@ test("pay now → order goes to the kitchen → leave → digital bill (in Hindi
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const phone = await ctx.newPage();
   await phone.goto(`${CUSTOMER}/h/spice-garden/t/${qr}`);
-  await phone.getByLabel("Language").selectOption("hi");
+  await phone.getByRole("button", { name: /^Language:/ }).click();
+  await phone.getByRole("menuitemradio", { name: /हिन्दी/ }).click();
   await phone.getByLabel("आपका नाम").fill("Asha");
   await phone.getByRole("button", { name: "ऑर्डर शुरू करें" }).click();
   await expect(phone.getByText(/टेबल T2/)).toBeVisible();

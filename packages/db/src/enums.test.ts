@@ -19,6 +19,8 @@ const pairs = [
   ["PaymentMethod", $Enums.PaymentMethod, C.PaymentMethod],
   ["PaymentStatus", $Enums.PaymentStatus, C.PaymentStatus],
   ["DeviceKind", $Enums.DeviceKind, C.DeviceKind],
+  ["BillingCycle", $Enums.BillingCycle, C.BillingCycle],
+  ["AttendanceMarkKind", $Enums.AttendanceMarkKind, C.AttendanceMarkKind],
 ] as const;
 
 describe("contracts enums match Prisma", () => {

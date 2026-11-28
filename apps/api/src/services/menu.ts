@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { db, type Hotel, type Prisma } from "@rms/db";
-import type { PublicMenu } from "@rms/contracts";
+import { DISH_TAGS, type DishTag, type PublicMenu } from "@rms/contracts";
 import { isWithinWindow, priceLine, type PricedLine, type PricingAddonGroup, type PricingError, type PricingItem, type TaxRate } from "@rms/domain";
 import { gatewayFor } from "../payments/gateway";
 
@@ -83,6 +83,7 @@ async function buildPublicMenu(hotel: Hotel): Promise<PublicMenu> {
       allowPayLater: hotel.allowPayLater,
       allowPayNow: hotel.allowPayNow && upiEnabled,
       upiEnabled,
+      reviewEnabled: Boolean(hotel.googleReviewUrl),
     },
     categories: categories.map((c) => ({
       id: c.id,
@@ -98,11 +99,13 @@ async function buildPublicMenu(hotel: Hotel): Promise<PublicMenu> {
       description: i.description,
       translations: asTranslations(i.translations),
       imageUrl: i.imageUrl,
+      modelUrl: i.modelUrl,
       price: i.price,
       foodType: i.foodType,
       spiceLevel: i.spiceLevel,
       prepTimeMin: i.prepTimeMin,
-      isBestseller: i.isBestseller,
+      tags: i.tags.filter((t): t is DishTag => (DISH_TAGS as readonly string[]).includes(t)),
+      isBestseller: i.tags.includes("BESTSELLER"),
       isAvailable: i.isAvailable,
       variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: v.price })),
       addonGroupIds: i.addonGroups.map((g) => g.id),

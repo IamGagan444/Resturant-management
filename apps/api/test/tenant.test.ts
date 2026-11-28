@@ -33,7 +33,9 @@ describe("tenant isolation", () => {
 
   it("API: lists only own rows", async () => {
     const cats = await a.owner.ok<{ name: string }[]>("GET", "/v1/admin/categories");
-    expect(cats.map((c) => c.name)).toEqual(["A menu"]);
+    // every hotel starts with default categories (Starters, Main Course…); B's own one must never show up
+    expect(cats.map((c) => c.name)).toContain("A menu");
+    expect(cats.map((c) => c.name)).not.toContain("B secret menu");
     expect(await a.owner.ok<unknown[]>("GET", "/v1/admin/items")).toEqual([]);
     expect(await a.owner.ok<unknown[]>("GET", "/v1/admin/tables")).toEqual([]);
     const taxes = await a.owner.ok<{ hotelId: string }[]>("GET", "/v1/admin/taxes");
@@ -81,13 +83,15 @@ describe("tenant isolation", () => {
       expect(await db.menuItem.findUnique({ where: { id: bItemId } })).toBeNull();
       expect(await db.menuItem.findFirst({ where: { name: "B Biryani" } })).toBeNull();
       expect((await db.menuItem.updateMany({ where: { id: bItemId }, data: { price: 1 } })).count).toBe(0);
-      expect((await db.menuCategory.deleteMany({})).count).toBe(1); // only A's own category
+      const own = await db.menuCategory.count(); // A's defaults + "A menu"
+      expect((await db.menuCategory.deleteMany({})).count).toBe(own); // only A's own categories
       await expect(db.menuItem.create({ data: { hotelId: b.hotelId, categoryId: bCategoryId, name: "x", price: 1 } })).rejects.toThrow(
         /does not match/,
       );
     });
     await withTenant(b.hotelId, async () => {
       expect((await db.menuItem.findUniqueOrThrow({ where: { id: bItemId } })).price).toBe(30000);
+      expect(await db.menuCategory.findUnique({ where: { id: bCategoryId } })).not.toBeNull(); // A's delete didn't reach B
     });
   });
 

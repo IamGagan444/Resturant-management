@@ -5,8 +5,10 @@ import type { PublicMenu, PublicMenuItem } from "@rms/contracts";
 import { isWithinWindow, priceLine, type PricingAddonGroup } from "@rms/domain";
 import { useI18n, type Lang } from "@/lib/i18n";
 import { prefersReducedMotion, useFly, type FlySource } from "@/lib/motion";
-import { Flame, Minus, Package, Plus, Search } from "lucide-react";
+import { Box, Flame, Minus, Package, Plus, Search } from "lucide-react";
 import { Button, FoodMark, Sheet, rupees } from "./ui";
+import { Dish3D } from "./Dish3D";
+import type { MsgKey } from "@/lib/i18n";
 
 export const tName = (item: { name: string; translations: PublicMenuItem["translations"] }, lang: Lang) =>
   (lang !== "en" && item.translations?.[lang]?.name) || item.name;
@@ -257,8 +259,11 @@ export function Menu({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <FoodMark type={item.foodType} />
-                      {item.isBestseller && (
-                        <span className="inline-flex items-center rounded-full bg-brand/12 px-2 py-0.5 text-xs font-semibold text-brand">{t("bestseller")}</span>
+                      <DishTags item={item} max={2} />
+                      {item.modelUrl && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-(--sunken) px-2 py-0.5 text-xs font-semibold" title="3D / AR">
+                          <Box className="h-3 w-3" aria-hidden /> 3D
+                        </span>
                       )}
                     </div>
                     <h3 className="mt-1.5 text-[17px] leading-snug font-semibold">{tName(item, lang)}</h3>
@@ -453,6 +458,7 @@ function ItemSheet({
   const allParcel = useContext(AllParcel);
   const [isParcel, setIsParcel] = useState(allParcel);
   const [busy, setBusy] = useState(false);
+  const [show3d, setShow3d] = useState(false);
   const desc = tDesc(item, lang);
 
   const priced = priceLine({ ...item, addonGroupIds: item.addonGroupIds }, groups, { variantId, addonIds, quantity: qty });
@@ -469,10 +475,25 @@ function ItemSheet({
 
   return (
     <Sheet open onClose={onClose} title={tName(item, lang)}>
-      {item.imageUrl && <img src={item.imageUrl} alt="" className="mb-4 aspect-[16/10] w-full rounded-2xl object-cover" />}
-      <div className="mb-4 flex items-center gap-2">
+      {show3d && item.modelUrl ? (
+        <Dish3D src={item.modelUrl} alt={tName(item, lang)} />
+      ) : (
+        item.imageUrl && <img src={item.imageUrl} alt="" className="mb-4 aspect-[16/10] w-full rounded-2xl object-cover" />
+      )}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <FoodMark type={item.foodType} />
-        {item.isBestseller && <span className="rounded-full bg-brand/12 px-2 py-0.5 text-xs font-semibold text-brand">{t("bestseller")}</span>}
+        <DishTags item={item} />
+        {item.modelUrl && (
+          <button
+            type="button"
+            onClick={() => setShow3d((v) => !v)}
+            aria-pressed={show3d}
+            className="tap ml-auto inline-flex items-center gap-1.5 rounded-full bg-brand/12 px-3 text-sm font-semibold text-brand"
+          >
+            <Box className="h-4 w-4" aria-hidden />
+            {t("view3d")}
+          </button>
+        )}
       </div>
       {desc && <p className="muted -mt-2 mb-5 text-sm leading-relaxed">{desc}</p>}
 
@@ -583,5 +604,34 @@ function ItemSheet({
         </Button>
       </div>
     </Sheet>
+  );
+}
+
+const TAG_KEY: Record<string, MsgKey> = {
+  BESTSELLER: "bestseller",
+  CHEFS_CHOICE: "tag_CHEFS_CHOICE",
+  MUST_TRY: "tag_MUST_TRY",
+  TOP_RATED: "tag_TOP_RATED",
+  NEW_LAUNCH: "tag_NEW_LAUNCH",
+  SPICY: "tag_SPICY",
+  RECOMMENDED: "tag_RECOMMENDED",
+  HEALTHY: "tag_HEALTHY",
+  JAIN: "tag_JAIN",
+  LIMITED: "tag_LIMITED",
+};
+
+/** Smart-tag badges (Bestseller, Chef's choice…), in the manager's order; `max` keeps menu cards tidy. */
+function DishTags({ item, max }: { item: PublicMenuItem; max?: number }) {
+  const { t } = useI18n();
+  // older cached menus (and the local hub) only know isBestseller
+  const tags = item.tags ?? (item.isBestseller ? ["BESTSELLER" as const] : []);
+  return (
+    <>
+      {tags.slice(0, max ?? tags.length).map((tag) => (
+        <span key={tag} className="inline-flex items-center rounded-full bg-brand/12 px-2 py-0.5 text-xs font-semibold text-brand">
+          {TAG_KEY[tag] ? t(TAG_KEY[tag]) : tag}
+        </span>
+      ))}
+    </>
   );
 }

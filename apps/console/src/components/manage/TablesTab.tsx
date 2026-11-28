@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FloorInput, TableInput } from "@rms/contracts";
 import { formatTableCode } from "@rms/domain";
+import { NfcWriteButton } from "./NfcWrite";
 import { Download, ExternalLink, Layers, Plus, QrCode, RefreshCw, Trash2 } from "lucide-react";
 import { API_URL, api } from "@/lib/api";
 import { Button, Card, CardHeader, EmptyState, Field, FormError, SelectField, orNull, useForm } from "@/components/ui";
@@ -91,7 +92,7 @@ export function TablesTab() {
       <Card>
         <CardHeader
           title="Tables"
-          hint="Each table gets its own QR code, with a table code below it for guests who can't scan. Print the sheet and stick one on every table."
+          hint="Each table gets its own QR code, with a table code below it for guests who can't scan. Print the sheet and stick one on every table. For tap-to-open, write the same link onto an NFC card with the NFC button."
           action={
             <a
               href={`${API_URL}/v1/admin/tables/qr-sheet.pdf`}
@@ -171,6 +172,7 @@ export function TablesTab() {
                     >
                       <ExternalLink className="h-4 w-4" aria-hidden />
                     </a>
+                    <NfcWriteButton compact url={t.qrUrl} what={t.isParcelCounter ? "the parcel counter" : `table ${t.label}`} />
                     <RowActions label={`Actions for table ${t.label}`}>
                       <DropdownMenuItem onSelect={() => window.open(t.qrUrl, "_blank", "noopener")}>
                         <ExternalLink aria-hidden /> Open guest page

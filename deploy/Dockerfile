@@ -2,7 +2,7 @@
 # One Dockerfile for the whole monorepo; build context is the repo root.
 #   target api       Fastify API + background jobs (also runs migrations)
 #   target customer  Next.js guest app (next start)
-#   target web       Caddy: HTTPS for every host + the static staff console
+#   target web       Caddy: HTTPS for every host + the static staff console + the static marketing site
 
 FROM node:20-bookworm-slim AS base
 # openssl: Prisma's query engine. Debian (glibc) so argon2 / sharp / Prisma use their prebuilt binaries.
@@ -20,6 +20,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/customer/package.json apps/customer/
 COPY apps/console/package.json apps/console/
 COPY apps/hub/package.json apps/hub/
+COPY apps/site/package.json apps/site/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/domain/package.json packages/domain/
 COPY packages/db/package.json packages/db/prisma.config.ts packages/db/
@@ -57,6 +58,16 @@ ARG API_URL
 ENV API_URL=${API_URL}
 RUN pnpm --filter @rms/console build
 
+# ── Marketing site (static) ──
+FROM source AS site-build
+# Canonical address for SEO tags + sitemap, and the console's "Sign in" link: baked in at build time.
+ARG SITE_URL
+ARG CONSOLE_URL
+ARG CONTACT_EMAIL
+ENV NEXT_PUBLIC_SITE_URL=${SITE_URL} NEXT_PUBLIC_CONSOLE_URL=${CONSOLE_URL} NEXT_PUBLIC_CONTACT_EMAIL=${CONTACT_EMAIL}
+RUN pnpm --filter @rms/site build
+
 FROM caddy:2-alpine AS web
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=console-build /app/apps/console/out /srv/console
+COPY --from=site-build /app/apps/site/out /srv/site

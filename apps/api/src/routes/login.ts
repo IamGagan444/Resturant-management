@@ -16,6 +16,7 @@ import {
 } from "@rms/contracts";
 import { decrypt, encrypt, hashSecret, randomToken, verifySecret } from "../lib/crypto";
 import { AppError, parse, unauthorized } from "../lib/errors";
+import { recordPresence } from "../services/presence";
 import { forceSignOut, issueSession, readAccess, revokeAllFor, type AccessClaims } from "../lib/auth";
 import { assertHotelOperational, getHotel } from "../lib/hotel";
 import {
@@ -63,6 +64,7 @@ async function claimsFor(kind: AccountKind, id: string): Promise<AccessClaims> {
 async function openSession(reply: FastifyReply, kind: AccountKind, id: string): Promise<LoginResult> {
   const claims = await claimsFor(kind, id);
   await issueSession(reply, claims);
+  if (claims.typ === "staff") recordPresence(reply.log, claims.hid, claims.sub, null, { force: true });
   return { ok: true, typ: kind };
 }
 

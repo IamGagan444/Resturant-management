@@ -40,17 +40,30 @@ function s3Client(): S3Client {
   return s3;
 }
 
+/**
+ * A binary glTF 2.0 model (.glb): "glTF" magic, version 2, and a declared total length equal to the file's.
+ * Checked from the bytes, not the browser's MIME type or file name.
+ */
+export function isGlb(b: Buffer): boolean {
+  return b.length >= 20 && b.toString("ascii", 0, 4) === "glTF" && b.readUInt32LE(4) === 2 && b.readUInt32LE(8) === b.length;
+}
+
 /** Store an image under the hotel's folder; returns its public URL. Keys are random and content never changes → cache forever. */
-export async function saveImage(hotelId: string, image: Buffer): Promise<string> {
-  const name = `${randomBytes(12).toString("base64url")}.webp`;
+export const saveImage = (hotelId: string, image: Buffer) => saveFile(hotelId, image, "webp", "image/webp");
+
+/** Store a 3D model (.glb) for the guest's 3D / AR view. */
+export const saveModel = (hotelId: string, model: Buffer) => saveFile(hotelId, model, "glb", "model/gltf-binary");
+
+async function saveFile(hotelId: string, body: Buffer, ext: string, contentType: string): Promise<string> {
+  const name = `${randomBytes(12).toString("base64url")}.${ext}`;
   if (env.STORAGE_DRIVER === "s3") {
     const key = `menu/${hotelId}/${name}`;
     await s3Client().send(
       new PutObjectCommand({
         Bucket: env.S3_BUCKET,
         Key: key,
-        Body: image,
-        ContentType: "image/webp",
+        Body: body,
+        ContentType: contentType,
         CacheControl: "public, max-age=31536000, immutable",
       }),
     );
@@ -58,6 +71,6 @@ export async function saveImage(hotelId: string, image: Buffer): Promise<string>
   }
   const dir = path.resolve(env.UPLOAD_DIR, hotelId);
   await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, name), image);
+  await writeFile(path.join(dir, name), body);
   return `${env.API_URL}/uploads/${hotelId}/${name}`;
 }

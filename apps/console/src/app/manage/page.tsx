@@ -12,6 +12,7 @@ import {
   ArrowLeftRight,
   ArrowUpRight,
   BarChart3,
+  CalendarCheck,
   ChefHat,
   ChevronRight,
   ClipboardList,
@@ -42,18 +43,20 @@ import { StaffTab } from "@/components/manage/StaffTab";
 import { SettingsTab } from "@/components/manage/SettingsTab";
 import { DevicesTab } from "@/components/manage/DevicesTab";
 import { AuditTab } from "@/components/manage/AuditTab";
+import { AttendanceTab } from "@/components/manage/AttendanceTab";
 
-const TABS = { menu: "Menu", tables: "Tables & QR", staff: "Staff", settings: "Settings", devices: "Devices", audit: "Audit log" } as const;
+const TABS = { menu: "Menu", tables: "Tables & QR", staff: "Staff", attendance: "Attendance", settings: "Settings", devices: "Devices", audit: "Audit log" } as const;
 type Tab = keyof typeof TABS;
 const TAB_HINT: Record<Tab, string> = {
   menu: "Dishes, prices, photos and add-ons your guests see.",
   tables: "Your tables, floors and the QR code on each table.",
   staff: "Who works here, what they can do, and their PINs.",
+  attendance: "Who came in today, who's on duty now, and their hours.",
   settings: "Restaurant details, taxes and what goes on the bill.",
   devices: "Kitchen screens, waiter phones and counters that staff sign in on.",
   audit: "Who changed what, and when.",
 };
-const TAB_ICON: Record<Tab, LucideIcon> = { menu: UtensilsCrossed, tables: QrCode, staff: Users, settings: Settings, devices: MonitorSmartphone, audit: ClipboardList };
+const TAB_ICON: Record<Tab, LucideIcon> = { menu: UtensilsCrossed, tables: QrCode, staff: Users, attendance: CalendarCheck, settings: Settings, devices: MonitorSmartphone, audit: ClipboardList };
 
 const LINKS: { href: string; label: string; icon: LucideIcon; group: "manage" | "screens" }[] = [
   { href: "/floor/", label: "Live floor", icon: LayoutGrid, group: "manage" },
@@ -328,6 +331,9 @@ export default function ManagePage() {
           </TabsContent>
           <TabsContent value="staff">
             <StaffTab />
+          </TabsContent>
+          <TabsContent value="attendance">
+            <AttendanceTab />
           </TabsContent>
           <TabsContent value="settings">
             <SettingsTab />

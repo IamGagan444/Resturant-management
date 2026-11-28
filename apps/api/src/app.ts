@@ -15,6 +15,7 @@ import { authRoutes } from "./routes/auth";
 import { loginRoutes } from "./routes/login";
 import { platformRoutes } from "./routes/platform";
 import { adminRoutes } from "./routes/admin";
+import { attendanceRoutes } from "./routes/attendance";
 import { menuAdminRoutes } from "./routes/menuAdmin";
 import { publicRoutes } from "./routes/public";
 import { pushRoutes } from "./routes/push";
@@ -74,6 +75,7 @@ export async function buildApp() {
   await app.register(platformRoutes);
   await app.register(adminRoutes);
   await app.register(menuAdminRoutes);
+  await app.register(attendanceRoutes);
   await app.register(publicRoutes);
   await app.register(staffRoutes);
   await app.register(pushRoutes);

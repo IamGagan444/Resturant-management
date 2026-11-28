@@ -27,6 +27,7 @@ const LABEL: Record<AuditAction, string> = {
   HUB_PAIRED: "Local hub set up",
   HUB_REMOVED: "Local hub removed",
   PAYMENT_KEYS_CHANGED: "UPI keys changed",
+  ATTENDANCE_MARKED: "Attendance marked",
   STAFF_CREDENTIALS_CHANGED: "Sign-in details changed",
   DEVICE_REMOVED: "Device removed",
 };

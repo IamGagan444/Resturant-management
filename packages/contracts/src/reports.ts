@@ -85,6 +85,7 @@ export const AuditAction = z.enum([
   "PAYMENT_KEYS_CHANGED",
   "STAFF_CREDENTIALS_CHANGED",
   "DEVICE_REMOVED",
+  "ATTENDANCE_MARKED",
 ]);
 export type AuditAction = z.infer<typeof AuditAction>;
 

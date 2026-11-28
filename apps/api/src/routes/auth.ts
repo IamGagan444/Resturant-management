@@ -19,6 +19,7 @@ import {
 import { assertHotelOperational, getHotel } from "../lib/hotel";
 import { MANAGERS, staff } from "../lib/route";
 import { redis } from "../jobs/queue";
+import { recordPresence, recordSignOut } from "../services/presence";
 
 const PIN_MAX_FAILS = 5;
 const PIN_LOCK_MS = 5 * 60_000;
@@ -163,6 +164,7 @@ export async function authRoutes(app: FastifyInstance) {
       sid: device.stationId ?? s.stationId ?? null,
     };
     const { accessToken } = await issueSession(reply, claims);
+    recordPresence(req.log, s.hotelId, s.id, device.id, { force: true }); // PIN sign-in = "I'm here"
     return { ok: true, accessToken };
   });
 
@@ -213,12 +215,17 @@ export async function authRoutes(app: FastifyInstance) {
   /** Ends this browser's sign-in now: refresh token revoked and its access token stops working (other devices stay signed in). */
   app.post("/v1/auth/logout", async (req, reply) => {
     const raw = req.cookies[COOKIE.refresh];
-    const rows = raw ? await unscopedDb.refreshToken.findMany({ where: { tokenHash: sha256(raw) }, select: { familyId: true } }) : [];
+    const rows = raw ? await unscopedDb.refreshToken.findMany({ where: { tokenHash: sha256(raw) }, select: { familyId: true, subjectType: true, subjectId: true } }) : [];
     if (raw) await unscopedDb.refreshToken.updateMany({ where: { tokenHash: sha256(raw), revokedAt: null }, data: { revokedAt: new Date() } });
     // the access token may belong to a newer rotation than the cookie we got (or come as a bearer): end that sign-in too
     const access = bearer(req) ?? req.cookies[COOKIE.access];
     const claims = access ? await verifyAccessToken(access) : null;
     const ended = new Set([...rows.map((r) => r.familyId), ...(claims?.rid ? [claims.rid] : [])]);
+    // attendance: this person signed out here, so they stop showing "on duty" now
+    const who = claims?.typ === "staff" ? { hid: claims.hid, sub: claims.sub } : null;
+    const fromCookie = !who && rows[0]?.subjectType === "STAFF" ? await unscopedDb.staff.findUnique({ where: { id: rows[0].subjectId }, select: { id: true, hotelId: true } }) : null;
+    if (who) recordSignOut(req.log, who.hid, who.sub);
+    else if (fromCookie) recordSignOut(req.log, fromCookie.hotelId, fromCookie.id);
     await Promise.all([...ended].map(endSession));
     if (ended.size) await unscopedDb.pushSubscription.deleteMany({ where: { familyId: { in: [...ended] } } }); // signed out: stop ringing
     clearSession(reply);

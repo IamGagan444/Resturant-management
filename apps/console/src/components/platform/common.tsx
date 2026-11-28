@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { HotelStatus } from "@rms/contracts";
+import { BILLING_CYCLE_LABEL, BillingCycle, cyclePrice, cycleSavingPct, type HotelStatus, type PlanView } from "@rms/contracts";
 
 /** Page heading used by every platform page. */
 export function PageTitle({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
@@ -67,3 +67,17 @@ export function makePassword(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   return [...bytes].map((b) => chars[b % chars.length]).join("");
 }
+
+/** "Starter · ₹2,699 / quarter (save 10%)": a plan's price for one billing cycle. */
+export function planLabel(p: Pick<PlanView, "name" | "priceMonthly" | "priceQuarterly" | "priceYearly">, cycle: BillingCycle): string {
+  const price = cyclePrice(p, cycle) ?? p.priceMonthly;
+  const unit = cycle === "MONTHLY" || cyclePrice(p, cycle) === null ? "month" : cycle === "QUARTERLY" ? "quarter" : "year";
+  const save = cycleSavingPct(p, cycle);
+  return `${p.name} · ₹${(price / 100).toLocaleString("en-IN")} / ${unit}${save ? ` (save ${save}%)` : ""}`;
+}
+
+/** Billing cycles a plan offers (monthly always). */
+export const cycleOptions = (p: Pick<PlanView, "priceMonthly" | "priceQuarterly" | "priceYearly"> | undefined) =>
+  BillingCycle.options
+    .filter((c) => !p || cyclePrice(p, c) !== null)
+    .map((c) => ({ value: c, label: BILLING_CYCLE_LABEL[c] + (p && cycleSavingPct(p, c) ? ` (save ${cycleSavingPct(p, c)}%)` : "") }));

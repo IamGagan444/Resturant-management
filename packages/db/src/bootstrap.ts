@@ -26,6 +26,8 @@ export async function ensurePlatform(prisma: PrismaClient, admin: { email: strin
     create: {
       name: "Starter",
       priceMonthly: 99900,
+      priceQuarterly: 269900, // ~10% off 3 months
+      priceYearly: 959900, // ~20% off 12 months
       maxTables: 15,
       maxStaff: 10,
       features: { kds: true, offlineMode: false, inventory: false, roomService: false },
@@ -37,6 +39,8 @@ export async function ensurePlatform(prisma: PrismaClient, admin: { email: strin
     create: {
       name: "Pro",
       priceMonthly: 249900,
+      priceQuarterly: 674900,
+      priceYearly: 2399900,
       maxTables: 60,
       maxStaff: 50,
       features: { kds: true, offlineMode: true, inventory: false, roomService: true },

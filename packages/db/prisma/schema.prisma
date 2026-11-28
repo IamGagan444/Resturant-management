@@ -147,34 +147,50 @@ enum AuthSubject {
   STAFF
 }
 
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+// Set by a manager for one staff member and business day; overrides what the devices saw.
+enum AttendanceMarkKind {
+  PRESENT
+  ABSENT
+  LEAVE
+  WEEK_OFF
+}
+
 // ─────────────────────────────────────────────
 // PLATFORM (Super Admin level)
 // ─────────────────────────────────────────────
 
 model PlatformUser {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  name         String
-  passwordHash String
-  role         PlatformRole @default(SUPER_ADMIN)
+  id                  String       @id @default(cuid())
+  email               String       @unique
+  name                String
+  passwordHash        String
+  role                PlatformRole @default(SUPER_ADMIN)
   // TOTP second factor (RFC 6238). Secret is AES-GCM encrypted; recovery codes are SHA-256 hashes, one use each.
   mfaSecretEnc        String?
   mfaPendingSecretEnc String? // being set up / replaced; becomes mfaSecretEnc once a code from it is entered
-  mfaEnabledAt      DateTime?
-  mfaLastStep       Int? // last accepted 30 s time step: a code can't be replayed
-  mfaRecoveryHashes String[]  @default([])
-  createdAt    DateTime     @default(now())
+  mfaEnabledAt        DateTime?
+  mfaLastStep         Int? // last accepted 30 s time step: a code can't be replayed
+  mfaRecoveryHashes   String[]     @default([])
+  createdAt           DateTime     @default(now())
 }
 
 model Plan {
-  id           String   @id @default(cuid())
-  name         String   @unique // e.g. Starter, Pro
-  priceMonthly Int // paise
-  maxTables    Int
-  maxStaff     Int
-  features     Json // { kds: true, offlineMode: true, inventory: false, roomService: false }
-  hotels       Hotel[]
-  createdAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  name           String   @unique // e.g. Starter, Pro
+  priceMonthly   Int // paise
+  priceQuarterly Int? // paise for 3 months; null = not offered
+  priceYearly    Int? // paise for 12 months; null = not offered
+  maxTables      Int
+  maxStaff       Int
+  features       Json // { kds: true, offlineMode: true, inventory: false, roomService: false }
+  hotels         Hotel[]
+  createdAt      DateTime @default(now())
 }
 
 // Rotating refresh tokens for platform users and staff. Only the hash is stored.
@@ -215,19 +231,20 @@ model WebhookEvent {
 // ─────────────────────────────────────────────
 
 model Hotel {
-  id               String      @id @default(cuid())
+  id               String       @id @default(cuid())
   name             String
-  slug             String      @unique // QR URL: /h/{slug}/t/{qrToken}
+  slug             String       @unique // QR URL: /h/{slug}/t/{qrToken}
   phone            String?
   address          String?
   gstin            String?
-  invoicePrefix    String      @default("INV") // bill number: {prefix}/{FY}/{seq}, max 16 chars
-  currency         String      @default("INR")
-  timezone         String      @default("Asia/Kolkata")
-  defaultLanguage  String      @default("en")
-  status           HotelStatus @default(TRIAL)
+  invoicePrefix    String       @default("INV") // bill number: {prefix}/{FY}/{seq}, max 16 chars
+  currency         String       @default("INR")
+  timezone         String       @default("Asia/Kolkata")
+  defaultLanguage  String       @default("en")
+  status           HotelStatus  @default(TRIAL)
   planId           String?
-  plan             Plan?       @relation(fields: [planId], references: [id])
+  plan             Plan?        @relation(fields: [planId], references: [id])
+  billingCycle     BillingCycle @default(MONTHLY)
   trialEndsAt      DateTime?
   featureOverrides Json? // per-hotel overrides of plan.features
 
@@ -249,70 +266,77 @@ model Hotel {
   // Local hub (outage fallback): LAN URL staff devices switch to when the internet is down
   hubUrl String?
 
+  // Google review page the review NFC card / QR sends guests to (via /h/{slug}/review, so the card never changes)
+  googleReviewUrl String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  staff             Staff[]
-  pushSubs PushSubscription[]
-  devices           Device[]
-  floors            Floor[]
-  tables            Table[]
-  tableAssignments  TableAssignment[]
-  stations          Station[]
-  taxes             Tax[]
-  categories        MenuCategory[]
-  items             MenuItem[]
-  variants          ItemVariant[]
-  addonGroups       AddonGroup[]
-  addons            Addon[]
-  customers         Customer[]
-  sessions          TableSession[]
-  sessionGuests     SessionGuest[]
-  cartItems         CartItem[]
-  orders            Order[]
-  orderItems        OrderItem[]
-  orderItemAddons   OrderItemAddon[]
-  requests          ServiceRequest[]
-  bills             Bill[]
-  billTaxLines      BillTaxLine[]
-  billSplits        BillSplit[]
-  payments          Payment[]
-  auditLogs         AuditLog[]
-  counters          Counter[]
-  idempotencyKeys   IdempotencyKey[]
-  syncRejections    SyncRejection[]
+  staff            Staff[]
+  pushSubs         PushSubscription[]
+  devices          Device[]
+  floors           Floor[]
+  tables           Table[]
+  tableAssignments TableAssignment[]
+  stations         Station[]
+  taxes            Tax[]
+  categories       MenuCategory[]
+  items            MenuItem[]
+  variants         ItemVariant[]
+  addonGroups      AddonGroup[]
+  addons           Addon[]
+  customers        Customer[]
+  sessions         TableSession[]
+  sessionGuests    SessionGuest[]
+  cartItems        CartItem[]
+  orders           Order[]
+  orderItems       OrderItem[]
+  orderItemAddons  OrderItemAddon[]
+  requests         ServiceRequest[]
+  bills            Bill[]
+  billTaxLines     BillTaxLine[]
+  billSplits       BillSplit[]
+  payments         Payment[]
+  auditLogs        AuditLog[]
+  counters         Counter[]
+  idempotencyKeys  IdempotencyKey[]
+  syncRejections   SyncRejection[]
+  presence         StaffPresence[]
+  attendanceMarks  AttendanceMark[]
 }
 
 model Staff {
-  id             String    @id @default(cuid())
-  hotelId        String
-  hotel          Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  name           String
-  phone          String?
-  email          String?   @unique // owners/managers log in with email + password
-  passwordHash   String?
-  role           StaffRole
-  pinHash        String // 4-digit PIN (owners and managers: 6) for fast switching on paired devices
-  pinFailedCount Int       @default(0)
-  lockedUntil    DateTime?
-  language       String    @default("en")
-  isActive       Boolean   @default(true)
-  stationId      String? // cooks: default station
-  station        Station?  @relation(fields: [stationId], references: [id])
+  id                  String    @id @default(cuid())
+  hotelId             String
+  hotel               Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  name                String
+  phone               String?
+  email               String?   @unique // owners/managers log in with email + password
+  passwordHash        String?
+  role                StaffRole
+  pinHash             String // 4-digit PIN (owners and managers: 6) for fast switching on paired devices
+  pinFailedCount      Int       @default(0)
+  lockedUntil         DateTime?
+  language            String    @default("en")
+  isActive            Boolean   @default(true)
+  stationId           String? // cooks: default station
+  station             Station?  @relation(fields: [stationId], references: [id])
   // TOTP second factor (RFC 6238). Secret is AES-GCM encrypted; recovery codes are SHA-256 hashes, one use each.
   mfaSecretEnc        String?
   mfaPendingSecretEnc String? // being set up / replaced; becomes mfaSecretEnc once a code from it is entered
-  mfaEnabledAt      DateTime?
-  mfaLastStep       Int? // last accepted 30 s time step: a code can't be replayed
-  mfaRecoveryHashes String[]  @default([])
-  createdAt      DateTime  @default(now())
+  mfaEnabledAt        DateTime?
+  mfaLastStep         Int? // last accepted 30 s time step: a code can't be replayed
+  mfaRecoveryHashes   String[]  @default([])
+  createdAt           DateTime  @default(now())
 
   assignedTables  TableAssignment[]
-  ordersTaken     Order[]           @relation("OrderTakenBy")
-  itemsPickedUp   OrderItem[]       @relation("ItemPickedUpBy")
+  ordersTaken     Order[]            @relation("OrderTakenBy")
+  itemsPickedUp   OrderItem[]        @relation("ItemPickedUpBy")
   requestsHandled ServiceRequest[]
   pushSubs        PushSubscription[]
   payments        Payment[]
+  presence        StaffPresence[]
+  attendanceMarks AttendanceMark[]
 
   @@unique([hotelId, phone])
   @@index([hotelId, role])
@@ -370,21 +394,21 @@ model Floor {
 }
 
 model Table {
-  id       String      @id @default(cuid())
-  hotelId  String
-  hotel    Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  floorId  String?
-  floor    Floor?      @relation(fields: [floorId], references: [id])
-  label    String // T1, T2, Room 204
-  seats    Int         @default(4)
-  isRoom   Boolean     @default(false) // hotel room service
-  isParcelCounter Boolean @default(false) // walk-in parcels: every scan is its own order, many at once
-  qrToken  String      @unique @default(cuid()) // rotate to invalidate printed QR
-  code     String      @unique @default(dbgenerated("new_table_code()")) // printed under the QR, typed when scanning fails; rotates with qrToken
-  status   TableStatus @default(FREE)
-  posX     Int? // floor-map position
-  posY     Int?
-  isActive Boolean     @default(true)
+  id              String      @id @default(cuid())
+  hotelId         String
+  hotel           Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  floorId         String?
+  floor           Floor?      @relation(fields: [floorId], references: [id])
+  label           String // T1, T2, Room 204
+  seats           Int         @default(4)
+  isRoom          Boolean     @default(false) // hotel room service
+  isParcelCounter Boolean     @default(false) // walk-in parcels: every scan is its own order, many at once
+  qrToken         String      @unique @default(cuid()) // rotate to invalidate printed QR
+  code            String      @unique @default(dbgenerated("new_table_code()")) // printed under the QR, typed when scanning fails; rotates with qrToken
+  status          TableStatus @default(FREE)
+  posX            Int? // floor-map position
+  posY            Int?
+  isActive        Boolean     @default(true)
 
   sessions    TableSession[]
   assignments TableAssignment[]
@@ -470,7 +494,8 @@ model MenuItem {
   foodType     FoodType     @default(VEG)
   spiceLevel   Int? // 0–3
   prepTimeMin  Int          @default(15) // live ETA + KDS card ageing
-  isBestseller Boolean      @default(false)
+  tags         String[]     @default([]) // smart tags: BESTSELLER, CHEFS_CHOICE, … (contracts DISH_TAGS)
+  modelUrl     String? // 3D model (.glb) for the guest's 3D / AR view
   isAvailable  Boolean      @default(true) // cook can toggle OUT OF STOCK
   isActive     Boolean      @default(true) // soft delete; order history keeps pointing here
   sortOrder    Int          @default(0)
@@ -487,14 +512,14 @@ model MenuItem {
 }
 
 model ItemVariant {
-  id      String   @id @default(cuid())
-  hotelId String
-  hotel   Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  itemId  String
-  item    MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  name    String // Half / Full, Small / Large
-  price   Int // paise, replaces base price
-  sortOrder Int    @default(0)
+  id        String   @id @default(cuid())
+  hotelId   String
+  hotel     Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  name      String // Half / Full, Small / Large
+  price     Int // paise, replaces base price
+  sortOrder Int      @default(0)
 
   @@index([itemId])
 }
@@ -665,10 +690,10 @@ model OrderItem {
   readyAt      DateTime?
   pickedUpAt   DateTime?
   pickedUpById String?
-  pickedUpBy   Staff?        @relation("ItemPickedUpBy", fields: [pickedUpById], references: [id])
+  pickedUpBy   Staff?    @relation("ItemPickedUpBy", fields: [pickedUpById], references: [id])
   servedAt     DateTime?
   cancelReason String?
-  updatedAt    DateTime      @updatedAt
+  updatedAt    DateTime  @updatedAt
 
   // Out-of-stock replacement chain
   replacesItemId String?    @unique
@@ -873,4 +898,41 @@ model AuditLog {
 
   @@index([hotelId, createdAt])
   @@index([hotelId, action, createdAt]) // audit screen filter
+}
+
+// ─────────────────────────────────────────────
+// ATTENDANCE
+// ─────────────────────────────────────────────
+
+// One stretch of continuous presence (gap-based sessionization, see packages/domain/src/attendance.ts).
+// A ping within the gap moves lastSeenAt; a longer silence or a sign-out starts a new row next time.
+model StaffPresence {
+  id         String    @id @default(cuid())
+  hotelId    String
+  hotel      Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  staffId    String
+  staff      Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  deviceId   String? // device of the first ping (null = web sign-in)
+  startedAt  DateTime
+  lastSeenAt DateTime
+  endedAt    DateTime? // signed out
+
+  @@index([staffId, lastSeenAt])
+  @@index([hotelId, lastSeenAt])
+}
+
+// A manager's correction for one person and business day (leave, week off, marked present / absent).
+model AttendanceMark {
+  hotelId    String
+  hotel      Hotel              @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  staffId    String
+  staff      Staff              @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  day        String // business date YYYY-MM-DD
+  kind       AttendanceMarkKind
+  note       String?
+  markedById String?
+  updatedAt  DateTime           @updatedAt
+
+  @@id([staffId, day])
+  @@index([hotelId, day])
 }

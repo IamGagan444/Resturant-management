@@ -23,6 +23,7 @@ pnpm dev                        # API :4000 · customer :3000 · console :3001
 | Customer (mobile web) | http://localhost:3000/h/spice-garden/t/{qrToken} (seed prints a T1 link) | Guests, no login |
 | Console | http://localhost:3001 | Kitchen, waiters, cashier, manager, super admin |
 | API | http://localhost:4000 | — |
+| Marketing site | http://localhost:3002 | Public landing page (static export; brand + SEO settings in `apps/site/src/site.ts`) |
 
 ## Demo walkthrough
 
@@ -73,6 +74,10 @@ e2e/          Playwright full-flow test
 ```
 
 ## Design notes
+
+- **Attendance is derived from sign-ins, not typed in.** Every staff request (screens poll every 15–30 s) records presence, at most one write per person per minute. Gap-based sessionization turns pings into spans (a silence over 45 min splits a span, sign-out ends it); a per-person advisory lock keeps concurrent devices from opening two spans. A day is read by clipping spans to the business day and merging overlaps, so hours are never double-counted. Managers' marks (leave, week off, present, absent) override and are audited. Algorithm + tests: `packages/domain/src/attendance.ts`; storage: `apps/api/src/services/presence.ts`.
+- **NFC and review cards hold our own short links** (`/h/{slug}/t/{token}`, `/h/{slug}/review`), so a printed or written card never needs changing. The review link only accepts Google hosts and is re-checked when read, so it can't become an open redirect.
+- **3D/AR models** (`.glb`, checked by file signature, max 15 MB) are fetched by the guest's browser: with S3/R2 storage, the bucket's CORS must allow GET from the guest app's origin.
 
 - **Tenant isolation lives in the data layer.** Every tenant model has `hotelId`. `packages/db/src/tenant.ts` is a Prisma extension that injects `hotelId` into every query, using AsyncLocalStorage set by the route guards. Queries without a tenant context throw. Any ID taken from input and used as a foreign key is checked by `assertOwned()`, because a foreign key only proves the row exists, not that it belongs to this tenant. Tests: `apps/api/test/tenant.test.ts`.
 - **No lost or duplicate orders.** Every create carries a client-generated `clientId`. Retries return the same order or payment, enforced by a unique index plus a lookup.

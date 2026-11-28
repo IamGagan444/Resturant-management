@@ -6,3 +6,4 @@ export * from "./time";
 export * from "./kitchen";
 export * from "./tableCode";
 export * from "./parcel";
+export * from "./attendance";

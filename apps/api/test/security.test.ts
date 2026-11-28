@@ -297,13 +297,13 @@ describe("security controls", () => {
       price: 25000,
       foodType: "NON_VEG",
       isAvailable: false,
-      isBestseller: true,
+      tags: ["MUST_TRY", "BESTSELLER", "MUST_TRY"],
       prepTimeMin: 40,
       taxIds: [tax.id],
       variants: [{ name: "Half", price: 15000 }],
     });
     const after = await owner.ok<Record<string, unknown>>("PATCH", `/v1/admin/items/${item.id}`, { price: 26000 });
-    expect(after).toMatchObject({ price: 26000, foodType: "NON_VEG", isAvailable: false, isBestseller: true, prepTimeMin: 40, taxIds: [tax.id] });
+    expect(after).toMatchObject({ price: 26000, foodType: "NON_VEG", isAvailable: false, tags: ["BESTSELLER", "MUST_TRY"], prepTimeMin: 40, taxIds: [tax.id] });
     expect(after.variants).toHaveLength(1);
     const t = await owner.ok<{ id: string }>("POST", "/v1/admin/tables", { label: "P1", seats: 8, isRoom: true });
     expect(await owner.ok("PATCH", `/v1/admin/tables/${t.id}`, { label: "P2" })).toMatchObject({ label: "P2", seats: 8, isRoom: true });

@@ -3,6 +3,7 @@ import { db, withTenant, type StaffRole } from "@rms/db";
 import { forbidden, unauthorized } from "./errors";
 import { readAccess, readGuest, type GuestClaims, type PlatformClaims, type StaffClaims } from "./auth";
 import { assertHotelOperational, getHotel } from "./hotel";
+import { recordPresence } from "../services/presence";
 
 /**
  * Route guards. Every tenant handler runs inside withTenant(), so the Prisma extension
@@ -23,6 +24,8 @@ export function staff(roles: readonly StaffRole[], handler: Handler<StaffClaims>
     if (claims.typ !== "staff") throw forbidden();
     if (!roles.includes(claims.role)) throw forbidden();
     assertHotelOperational(await getHotel(claims.hid));
+    // attendance: any signed-in staff screen talking to us = this person is here (throttled, never blocks)
+    recordPresence(req.log, claims.hid, claims.sub, claims.did ?? null);
     return withTenant(claims.hid, () => handler(req, reply, claims));
   };
 }
