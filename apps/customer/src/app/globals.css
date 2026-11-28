@@ -28,6 +28,15 @@
   --color-egg: #c48a00;
   --shadow-soft: 0 1px 2px rgb(30 42 54 / 0.05), 0 6px 18px -10px rgb(30 42 54 / 0.12);
   --shadow-lift: 0 2px 4px rgb(30 42 54 / 0.05), 0 18px 36px -14px rgb(30 42 54 / 0.28);
+  /* Headings scale with the screen (320px phone → desktop) instead of jumping at one breakpoint (same as the console). */
+  --text-xl: clamp(1.125rem, 1.06rem + 0.3vw, 1.25rem);
+  --text-xl--line-height: 1.35;
+  --text-2xl: clamp(1.3rem, 1.15rem + 0.6vw, 1.5rem);
+  --text-2xl--line-height: 1.25;
+  --text-3xl: clamp(1.55rem, 1.3rem + 1vw, 1.875rem);
+  --text-3xl--line-height: 1.2;
+  --text-4xl: clamp(1.85rem, 1.45rem + 1.6vw, 2.25rem);
+  --text-4xl--line-height: 1.15;
   --animate-rise: rise 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
   --animate-sheet-up: sheet-up 0.26s cubic-bezier(0.2, 0.9, 0.3, 1);
   --animate-fade-in: fade-in 0.2s ease-out;
@@ -159,6 +168,20 @@ h2,
 h3 {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
+}
+/* Phones: even heading lines, long names break instead of pushing the page sideways, no orphaned last word in a
+   paragraph. The -style longhand only changes how lines break, never whether they wrap, and the base layer lets
+   utilities like `truncate` still win. */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    text-wrap-style: balance;
+    overflow-wrap: break-word;
+  }
+  p {
+    text-wrap-style: pretty;
+  }
 }
 
 @utility surface {

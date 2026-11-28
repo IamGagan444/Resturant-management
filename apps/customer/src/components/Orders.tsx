@@ -110,7 +110,7 @@ function ItemRow({ item, held, actions }: { item: OrderItemView; held: boolean; 
           {STEPS.map((s, i) => (
             <li key={s.key} className="min-w-0 flex-1">
               <div className={`h-1.5 rounded-full transition-colors ${i < idx ? "bg-brand" : i === idx ? "animate-pulse bg-brand" : "bg-(--line)"}`} />
-              <span className={`mt-1.5 block truncate text-[10px] leading-tight ${i === idx ? "font-bold text-brand" : "muted"}`}>{t(s.label)}</span>
+              <span className={`mt-1.5 block truncate text-[11px] leading-tight min-[400px]:text-xs ${i === idx ? "font-bold text-brand" : "muted"}`}>{t(s.label)}</span>
             </li>
           ))}
         </ol>

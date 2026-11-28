@@ -319,8 +319,8 @@ export function MenuTab() {
                               i.isAvailable ? "" : "bg-(--sunken)/60"
                             }`}
                           >
-                            <button type="button" className="flex w-full items-start gap-3 p-3 text-left" onClick={() => setEditing(i)} aria-label={`Edit ${i.name}`}>
-                              <span className="relative h-18 w-18 shrink-0 overflow-hidden rounded-xl bg-(--sunken)">
+                            <button type="button" className="flex w-full items-start gap-3 p-2.5 text-left" onClick={() => setEditing(i)} aria-label={`Edit ${i.name}`}>
+                              <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-(--sunken) sm:h-16 sm:w-16">
                                 {i.imageUrl ? (
                                   <img
                                     src={i.imageUrl}
@@ -336,21 +336,23 @@ export function MenuTab() {
                                 )}
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="flex items-center gap-1.5">
-                                  <FoodDot type={i.foodType} />
-                                  <span className="truncate font-semibold">{i.name}</span>
+                                <span className="flex items-start gap-1.5">
+                                  <span className="mt-[3px]">
+                                    <FoodDot type={i.foodType} />
+                                  </span>
+                                  <span className="line-clamp-2 text-sm leading-snug font-semibold break-words sm:text-[15px]">{i.name}</span>
                                 </span>
-                                <span className="mt-0.5 block truncate text-[15px] font-semibold tabular-nums">
+                                <span className="mt-0.5 block truncate text-sm font-semibold tabular-nums">
                                   {i.variants.length ? i.variants.map((v) => rupees(v.price)).join(" / ") : rupees(i.price)}
                                 </span>
-                                <span className="mt-1.5 flex flex-wrap gap-1">
+                                <span className="mt-1 flex flex-wrap gap-1 empty:hidden">
                                   {i.isBestseller && <Badge tone="brand">Bestseller</Badge>}
-                                  {i.variants.length > 0 && <Badge>{i.variants.length} sizes</Badge>}
+                                  {i.variants.length > 1 && <Badge>{i.variants.length} sizes</Badge>}
                                 </span>
                               </span>
                               <Pencil className="muted mt-1 h-4 w-4 shrink-0 opacity-0 transition group-hover:opacity-100" aria-hidden />
                             </button>
-                            <div className="line mt-auto flex items-center justify-between gap-2 border-t px-3 py-2">
+                            <div className="line mt-auto flex items-center justify-between gap-2 border-t px-2.5 py-1.5">
                               <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${i.isAvailable ? "text-fresh" : "text-late"}`}>
                                 <span className={`h-1.5 w-1.5 rounded-full ${i.isAvailable ? "bg-fresh" : "bg-late"}`} aria-hidden />
                                 {i.isAvailable ? "In stock" : "Out of stock"}
@@ -719,8 +721,8 @@ function AddonGroups() {
           </button>
         ))}
       </div>
-      <form onSubmit={create} className="grid gap-3 rounded-xl bg-(--sunken) p-3 sm:grid-cols-[2fr_1fr_1fr] sm:p-4" noValidate>
-        <Field label="Group name" required error={form.error("name")}>
+      <form onSubmit={create} className="grid grid-cols-2 gap-3 rounded-xl bg-(--sunken) p-3 sm:grid-cols-[2fr_1fr_1fr] sm:p-4" noValidate>
+        <Field label="Group name" required error={form.error("name")} className="col-span-2 sm:col-span-1">
           <input {...form.text("name")} placeholder="e.g. Choose bread" maxLength={60} />
         </Field>
         <Field label="Min choices" required error={form.error("minSelect")}>
@@ -729,10 +731,10 @@ function AddonGroups() {
         <Field label="Max choices" required error={rangeError}>
           <input {...form.text("maxSelect")} inputMode="numeric" />
         </Field>
-        <Field label="Options" required error={form.error("addons")} hint="One per line as Name: price, e.g. Garlic Naan: 20" className="sm:col-span-3">
+        <Field label="Options" required error={form.error("addons")} hint="One per line as Name: price, e.g. Garlic Naan: 20" className="col-span-2 sm:col-span-3">
           <textarea {...form.text("addons")} rows={3} placeholder={"Butter Naan: 0\nGarlic Naan: 20"} />
         </Field>
-        <div className="space-y-2 sm:col-span-3">
+        <div className="col-span-2 space-y-2 sm:col-span-3">
           <FormError message={form.formError} />
           <Button type="submit" disabled={form.busy} className="w-full sm:w-auto">
             <Plus className="h-4 w-4" aria-hidden />
@@ -775,9 +777,9 @@ function Switch({ checked, onChange, label, disabled }: { checked: boolean; onCh
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 disabled:opacity-50 ${checked ? "bg-fresh" : "bg-(--line)"}`}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 disabled:opacity-50 ${checked ? "bg-fresh" : "bg-(--line)"}`}
     >
-      <span className={`block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${checked ? "translate-x-4" : ""}`} />
+      <span className={`block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${checked ? "translate-x-4" : ""}`} />
     </button>
   );
 }

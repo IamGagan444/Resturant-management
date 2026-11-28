@@ -173,7 +173,7 @@ function PairCode({ code, expiresAt, name, onClose }: { code: string; expiresAt:
         </Button>
       }
     >
-      <p data-testid="pair-code" className="py-4 text-center font-mono text-5xl font-bold tracking-[0.25em] tabular-nums">
+      <p data-testid="pair-code" className="py-4 text-center font-mono text-4xl font-bold tracking-[0.2em] min-[400px]:text-5xl min-[400px]:tracking-[0.25em] tabular-nums">
         {left > 0 ? code : "------"}
       </p>
       <p className="muted text-center text-sm">{left > 0 ? `Works once, for ${mm}:${ss} more.` : "This code has expired. Close and get a new one."}</p>

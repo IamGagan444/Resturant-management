@@ -2,22 +2,24 @@
 
 import { useEffect, useState, type ButtonHTMLAttributes, type ComponentProps, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeftRight, CloudOff, RefreshCw, Router, type LucideIcon, Package } from "lucide-react";
+import { ArrowLeftRight, CloudOff, EllipsisVertical, RefreshCw, Router, type LucideIcon, Package } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { useNet } from "@/lib/net";
 import { onRejected } from "@/lib/outbox";
 import { describeError } from "@/lib/errors";
+import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { RestroMark } from "../RestroMark";
-import { ThemeToggle } from "../ThemeToggle";
+import { ThemeMenuItems, ThemeToggle } from "../ThemeToggle";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./dropdown-menu";
 
 type Variant = "primary" | "outline" | "subtle" | "ghost" | "danger" | "success";
 
 const BUTTON_BASE =
-  "tap inline-flex max-w-full items-center justify-center gap-2 rounded-full px-4 text-[15px] leading-tight font-semibold transition sm:px-5 [&_svg]:shrink-0 [&_svg:not([class*='h-'])]:h-4.5 [&_svg:not([class*='w-'])]:w-4.5 duration-200 select-none active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-(--bg)";
+  "tap inline-flex max-w-full items-center justify-center gap-1.5 rounded-full px-4 text-sm leading-tight font-semibold transition sm:gap-2 sm:px-5 sm:text-[15px] [&_svg]:shrink-0 [&_svg:not([class*='h-'])]:h-4 [&_svg:not([class*='w-'])]:w-4 sm:[&_svg:not([class*='h-'])]:h-4.5 sm:[&_svg:not([class*='w-'])]:w-4.5 duration-200 select-none active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-(--bg)";
 const BUTTON_VARIANT: Record<Variant, string> = {
   // orange pill = the main action; white pill with a hairline = secondary; tinted pill = tertiary
-  primary: "bg-brand text-brand-ink shadow-[0_6px_16px_-8px_var(--color-brand)] hover:brightness-110 hover:shadow-[0_10px_22px_-8px_var(--color-brand)]",
+  primary: "bg-brand text-brand-ink shadow-[0_2px_8px_-4px_var(--color-brand)] hover:brightness-110 hover:shadow-[0_6px_16px_-8px_var(--color-brand)]",
   success: "bg-fresh text-fresh-ink hover:opacity-90",
   danger: "bg-late text-late-ink hover:opacity-90",
   outline: "bg-(--surface) text-(--ink) ring-1 ring-(--line) ring-inset hover:bg-(--sunken)",
@@ -77,17 +79,35 @@ export function NavLink({
   );
 }
 
-/** `plain` = no panel or hairline behind the bar: it blends into the page. */
-export function TopBar({ title, subtitle, online = true, plain = false, children }: { title: string; subtitle?: string; online?: boolean; plain?: boolean; children?: ReactNode }) {
+/**
+ * `plain` = no panel or hairline behind the bar: it blends into the page.
+ * Phones keep the bar minimal: theme and "Switch user" fold into one menu (⋮). A screen with its own phone menu
+ * (Manage's drawer) passes `ownMenu` and shows them there instead.
+ */
+export function TopBar({
+  title,
+  subtitle,
+  online = true,
+  plain = false,
+  ownMenu = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  online?: boolean;
+  plain?: boolean;
+  ownMenu?: boolean;
+  children?: ReactNode;
+}) {
   return (
     <header className={cn("no-print sticky top-0 z-20 pt-[env(safe-area-inset-top,0px)] backdrop-blur-lg", plain ? "bg-(--bg)/85" : "line border-b bg-(--surface)/90")}>
-      <div className="flex h-16 items-center gap-2.5 px-4 sm:gap-3 sm:px-6">
-        <BrandMark className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
+      <div className="flex h-16 items-center gap-2 px-4 sm:gap-3 sm:px-6">
+        <BrandMark className="h-8 w-8 shrink-0 sm:h-10 sm:w-10" />
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="truncate text-base font-bold tracking-tight min-[380px]:text-lg sm:text-xl">{title}</h1>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <h1 className="truncate text-[15px] font-bold tracking-tight min-[380px]:text-base sm:text-xl">{title}</h1>
             <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${online ? "live-dot bg-fresh" : "animate-pulse bg-late"}`}
+              className={`h-2 w-2 shrink-0 rounded-full sm:h-2.5 sm:w-2.5 ${online ? "live-dot bg-fresh" : "animate-pulse bg-late"}`}
               role="img"
               aria-label={online ? "Online" : "Offline"}
               title={online ? "Online" : "Offline — reconnecting"}
@@ -96,17 +116,45 @@ export function TopBar({ title, subtitle, online = true, plain = false, children
           {subtitle && <p className="muted truncate text-xs">{subtitle}</p>}
         </div>
         <div className="scroll-x ml-auto flex min-w-0 items-center gap-1 sm:gap-2">{children}</div>
-        <ThemeToggle />
+        <ThemeToggle className="hidden sm:grid" />
         <button
           onClick={() => void signOut()}
           aria-label="Switch user"
           title="Switch user"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-(--sunken) transition hover:bg-(--line) sm:h-10 sm:w-10"
+          className="hidden h-10 w-10 shrink-0 place-items-center rounded-full bg-(--sunken) transition hover:bg-(--line) sm:grid"
         >
-          <ArrowLeftRight className="h-5 w-5" aria-hidden />
+          <ArrowLeftRight className="h-4.5 w-4.5" aria-hidden />
         </button>
+        {!ownMenu && <PhoneMenu />}
       </div>
     </header>
+  );
+}
+
+/** Phones: one ⋮ menu with the theme and "Switch user", so the bar holds just the title and the screen's own links. */
+function PhoneMenu() {
+  const { pinned } = useTheme();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label="More"
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-(--sunken) data-[state=open]:bg-(--sunken) sm:hidden"
+      >
+        <EllipsisVertical className="h-5 w-5" aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="min-w-48">
+        {!pinned && (
+          <>
+            <DropdownMenuLabel>Appearance</DropdownMenuLabel>
+            <ThemeMenuItems />
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuItem onSelect={() => void signOut()}>
+          <ArrowLeftRight aria-hidden /> Switch user
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

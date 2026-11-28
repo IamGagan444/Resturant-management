@@ -55,7 +55,7 @@ export default function PlatformDashboard() {
               {problems > 0 && (
                 <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border border-late/40 bg-late/8 p-4">
                   <AlertTriangle className="h-5 w-5 shrink-0 text-late" aria-hidden />
-                  <p className="flex-1 text-sm font-medium">
+                  <p className="min-w-0 flex-1 basis-56 text-sm font-medium">
                     In the last 24 hours: {o.problems.failedPaymentsLast24h} failed payment{o.problems.failedPaymentsLast24h === 1 ? "" : "s"},{" "}
                     {o.problems.failedSyncsLast24h} offline action{o.problems.failedSyncsLast24h === 1 ? "" : "s"} refused.
                   </p>

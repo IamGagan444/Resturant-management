@@ -258,7 +258,7 @@ export function Menu({
                     <div className="flex items-center gap-2">
                       <FoodMark type={item.foodType} />
                       {item.isBestseller && (
-                        <span className="inline-flex items-center rounded-full bg-brand/12 px-2 py-0.5 text-[11px] font-semibold text-brand">{t("bestseller")}</span>
+                        <span className="inline-flex items-center rounded-full bg-brand/12 px-2 py-0.5 text-xs font-semibold text-brand">{t("bestseller")}</span>
                       )}
                     </div>
                     <h3 className="mt-1.5 text-[17px] leading-snug font-semibold">{tName(item, lang)}</h3>

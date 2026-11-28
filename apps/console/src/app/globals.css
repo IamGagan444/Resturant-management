@@ -241,6 +241,20 @@ h3 {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
 }
+/* Phones: even heading lines, long names break instead of pushing the page sideways, no orphaned last word in a
+   paragraph. The -style longhand only changes how lines break, never whether they wrap, and the base layer lets
+   utilities like `truncate` still win. */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    text-wrap-style: balance;
+    overflow-wrap: break-word;
+  }
+  p {
+    text-wrap-style: pretty;
+  }
+}
 
 @utility surface {
   background: var(--surface);
@@ -251,13 +265,14 @@ h3 {
 @utility line {
   border-color: var(--line);
 }
-/* One height for buttons, inputs and selects: finger-sized on touch screens, compact with a mouse. */
+/* One height for buttons, inputs and selects: 44px on touch screens (the smallest comfortable finger target),
+   40px with a mouse. */
 :root {
-  --control-h: 48px;
+  --control-h: 44px;
 }
 @media (pointer: fine) and (min-width: 640px) {
   :root {
-    --control-h: 42px;
+    --control-h: 40px;
   }
 }
 @utility tap {
@@ -273,7 +288,7 @@ h3 {
     background: var(--field);
     border: 1px solid transparent;
     border-radius: 0.625rem;
-    padding: 0.55rem 0.9rem;
+    padding: 0.5rem 0.8rem;
     min-height: var(--control-h);
     /* 16px on phones: smaller text makes iOS zoom the whole page when the field is tapped */
     font-size: 1rem;

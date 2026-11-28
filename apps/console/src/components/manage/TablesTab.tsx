@@ -5,7 +5,7 @@ import { FloorInput, TableInput } from "@rms/contracts";
 import { formatTableCode } from "@rms/domain";
 import { Download, ExternalLink, Layers, Plus, QrCode, RefreshCw, Trash2 } from "lucide-react";
 import { API_URL, api } from "@/lib/api";
-import { Badge, Button, Card, CardHeader, EmptyState, Field, FormError, SelectField, orNull, useForm } from "@/components/ui";
+import { Button, Card, CardHeader, EmptyState, Field, FormError, SelectField, orNull, useForm } from "@/components/ui";
 import { DropdownMenuItem, DropdownMenuSeparator, RowActions } from "@/components/ui/dropdown-menu";
 import { Loadable, confirm, notify } from "@/components/ui/feedback";
 import { ListSkeleton, Skeleton } from "@/components/ui/skeleton";
@@ -97,15 +97,15 @@ export function TablesTab() {
               href={`${API_URL}/v1/admin/tables/qr-sheet.pdf`}
               target="_blank"
               rel="noreferrer"
-              className="tap inline-flex items-center gap-2 rounded-full bg-brand px-5 text-[15px] font-medium text-brand-ink hover:opacity-85"
+              className="tap inline-flex items-center gap-2 rounded-full bg-(--surface) px-4 text-sm font-semibold text-(--ink) ring-1 ring-(--line) transition ring-inset hover:bg-(--sunken) sm:text-[15px]"
             >
               <Download className="h-4 w-4" aria-hidden />
               Printable QR sheet (PDF)
             </a>
           }
         />
-        <form className="mb-5 grid gap-3 rounded-xl bg-(--sunken) p-3 sm:grid-cols-[1fr_6rem_1fr_auto] sm:items-start sm:p-4" onSubmit={addTable} noValidate>
-          <Field label="Table name" required error={table.error("label")}>
+        <form className="mb-5 grid grid-cols-2 gap-3 rounded-xl bg-(--sunken) p-3 sm:grid-cols-[1fr_6rem_1fr_auto] sm:items-start sm:p-4" onSubmit={addTable} noValidate>
+          <Field label="Table name" required error={table.error("label")} className="col-span-2 sm:col-span-1">
             <input {...table.text("label")} placeholder="e.g. T9" maxLength={20} />
           </Field>
           <Field label="Seats" required error={table.error("seats")}>
@@ -114,22 +114,22 @@ export function TablesTab() {
           <Field label="Floor">
             <SelectField value={table.values.floorId} onChange={(v) => table.set("floorId", v)} emptyLabel="No floor" options={(floors.data ?? []).map((f) => ({ value: f.id, label: f.name }))} />
           </Field>
-          <Button type="submit" className="sm:mt-6.5" disabled={table.busy}>
+          <Button type="submit" className="col-span-2 sm:col-span-1 sm:mt-6.5" disabled={table.busy}>
             <Plus className="h-4 w-4" aria-hidden />
             Add table
           </Button>
           {table.formError && (
-            <div className="sm:col-span-4">
+            <div className="col-span-2 sm:col-span-4">
               <FormError message={table.formError} />
             </div>
           )}
         </form>
         {tables.data && !tables.data.some((t) => t.isActive && t.isParcelCounter) && (
           <div className="line mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 sm:p-4">
-            <p className="min-w-0 flex-1 text-sm">
+            <p className="min-w-0 flex-1 basis-64 text-sm leading-relaxed text-pretty">
               <strong>Walk-in parcels?</strong> <span className="muted">Add a parcel counter: customers scan its QR, order, and get a token. Many can order at the same time.</span>
             </p>
-            <Button variant="outline" onClick={() => void addCounter()}>
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => void addCounter()}>
               <Plus className="h-4 w-4" aria-hidden />
               Add parcel counter
             </Button>
@@ -141,26 +141,36 @@ export function TablesTab() {
             if (!list.length) return <EmptyState icon={QrCode} title="No tables yet" hint="Add your first table above. Each one gets its own QR code." />;
             return (
               <ul className="grid gap-2 md:grid-cols-2">
-                {list.map((t) => (
-                  <li key={t.id} className="line flex items-center gap-3 rounded-xl border p-3">
-                    <span className="grid h-12 min-w-12 shrink-0 place-items-center rounded-xl bg-brand/10 px-2 text-lg font-extrabold text-brand">{t.label}</span>
+                {list.map((t) => {
+                  const busy = t.isParcelCounter || t.status !== "FREE";
+                  return (
+                  <li key={t.id} className="line flex items-center gap-3 rounded-xl border bg-(--surface) py-2 pr-1 pl-2">
+                    <span className="grid h-10 min-w-10 shrink-0 place-items-center rounded-lg bg-(--sunken) px-1.5 text-sm font-bold">{t.label}</span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold">
-                        {t.isParcelCounter ? "Walk-in parcels: each scan is its own order" : `${floorName(t.floorId)} · ${t.seats} seats`}
+                      <span className="block truncate text-sm font-medium">
+                        {t.isParcelCounter ? "Parcel counter" : `${floorName(t.floorId)} · ${t.seats} seats`}
                       </span>
-                      <span className="mt-1 flex flex-wrap items-center gap-2">
-                        <Badge tone={t.isParcelCounter || t.status !== "FREE" ? "brand" : "fresh"} className="capitalize">
+                      <span className="muted mt-0.5 flex items-center gap-1.5 text-xs">
+                        <span className={`inline-flex items-center gap-1 font-medium capitalize ${busy ? "text-brand" : "text-fresh"}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${busy ? "bg-brand" : "bg-fresh"}`} aria-hidden />
                           {t.isParcelCounter ? "parcel" : t.status.toLowerCase().replace("_", " ")}
-                        </Badge>
-                        <span className="muted text-xs">
-                          Code <strong className="tracking-wider text-(--ink)">{formatTableCode(t.code)}</strong>
                         </span>
-                        <a href={t.qrUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-brand hover:underline">
-                          Guest page
-                          <ExternalLink className="h-3 w-3" aria-hidden />
-                        </a>
+                        <span aria-hidden>·</span>
+                        <span className="truncate font-mono tracking-wide text-(--ink)" title="Table code">
+                          {formatTableCode(t.code)}
+                        </span>
                       </span>
                     </span>
+                    <a
+                      href={t.qrUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Guest page for ${t.label}`}
+                      title="Guest page"
+                      className="muted grid h-9 w-9 shrink-0 place-items-center rounded-full transition hover:bg-(--sunken) hover:text-brand"
+                    >
+                      <ExternalLink className="h-4 w-4" aria-hidden />
+                    </a>
                     <RowActions label={`Actions for table ${t.label}`}>
                       <DropdownMenuItem onSelect={() => window.open(t.qrUrl, "_blank", "noopener")}>
                         <ExternalLink aria-hidden /> Open guest page
@@ -174,7 +184,8 @@ export function TablesTab() {
                       </DropdownMenuItem>
                     </RowActions>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             );
           }}

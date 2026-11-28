@@ -282,7 +282,7 @@ export default function WaiterPage() {
                 <div key={t.id} className={`surface flex flex-col rounded-2xl border p-3 shadow-soft ${TABLE_STYLE[t.status]}`}>
                   <span className="flex items-baseline justify-between gap-1">
                     <span className="text-xl font-extrabold">{t.label}</span>
-                    <span className="muted truncate text-[11px] font-medium capitalize">{t.isParcelCounter ? "parcel counter" : t.status.replace("_", " ").toLowerCase()}</span>
+                    <span className="muted truncate text-xs font-medium capitalize">{t.isParcelCounter ? "parcel counter" : t.status.replace("_", " ").toLowerCase()}</span>
                   </span>
                   {t.session ? (
                     <span className="mt-1 flex items-center gap-1 text-xs">
@@ -415,7 +415,7 @@ function SwapItem({ item, onClose, onDone }: { item: OrderItemView; onClose: () 
       <ul className="max-h-[50dvh] divide-y divide-(--line) overflow-y-auto overscroll-contain">
         {items.map((i) => (
           <li key={i.id} className="flex flex-wrap items-center gap-2 py-2.5">
-            <span className="min-w-0 flex-1 font-medium">{i.name}</span>
+            <span className="min-w-0 flex-1 basis-40 font-medium">{i.name}</span>
             {i.variants.length ? (
               i.variants.map((v) => (
                 <button key={v.id} className={PICK} onClick={() => void pick(i.id, v.id)}>
@@ -522,7 +522,7 @@ function TakeOrder({ table, onClose, onPlaced }: { table: BoardTable; onClose: (
       <ul className="max-h-[40dvh] divide-y divide-(--line) overflow-y-auto overscroll-contain">
         {items.map((i) => (
           <li key={i.id} className="flex flex-wrap items-center gap-2 py-2.5">
-            <span className="min-w-0 flex-1 font-medium">{i.name}</span>
+            <span className="min-w-0 flex-1 basis-40 font-medium">{i.name}</span>
             {i.variants.length ? (
               i.variants.map((v) => (
                 <button key={v.id} className={PICK} onClick={() => add(i.id, v.id)}>

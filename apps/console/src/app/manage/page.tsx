@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { FloorView } from "@rms/contracts";
+import { api } from "@/lib/api";
+import { useStaffSocket } from "@/lib/realtime";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { confirmDiscard, hasUnsavedChanges } from "@/lib/unsaved";
 import {
+  ArrowLeftRight,
   ArrowUpRight,
   BarChart3,
   ChefHat,
@@ -13,6 +18,7 @@ import {
   ConciergeBell,
   LayoutGrid,
   Menu,
+  MonitorPlay,
   MonitorSmartphone,
   PanelLeftClose,
   PanelLeftOpen,
@@ -23,10 +29,12 @@ import {
   UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
-import { useGuard } from "@/lib/auth";
+import { signOut, useGuard } from "@/lib/auth";
+import { ThemeSegmented } from "@/components/ThemeToggle";
 import { NavLink, TopBar } from "@/components/ui";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MenuTab } from "@/components/manage/MenuTab";
 import { TablesTab } from "@/components/manage/TablesTab";
@@ -56,6 +64,65 @@ const LINKS: { href: string; label: string; icon: LucideIcon; group: "manage" | 
 ];
 
 const SIDEBAR_KEY = "rms.sidebar";
+
+/** What each staff screen has waiting right now; the number shows on its tab. */
+interface ScreenCount {
+  n: number;
+  /** spoken / tooltip text, e.g. "4 dishes cooking" */
+  label: string;
+  /** needs someone now (guest calls, bills asked for): tinted orange instead of grey */
+  urgent: boolean;
+}
+type ScreenCounts = Partial<Record<string, ScreenCount>>;
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Live counts for the staff-screen tabs, from the same floor view the Live floor screen uses (one request, shared
+ * cache under ["floor"]). Kept fresh by the staff socket's events, with a slow poll as a safety net.
+ */
+function useScreenCounts(enabled: boolean): ScreenCounts {
+  const qc = useQueryClient();
+  const floor = useQuery({ queryKey: ["floor"], queryFn: () => api<FloorView>("GET", "/v1/s/floor"), enabled, refetchInterval: 30_000 });
+  const refetch = useCallback(() => void qc.invalidateQueries({ queryKey: ["floor"] }), [qc]);
+  useStaffSocket(enabled, refetch, (s) => {
+    for (const ev of [
+      "order:placed",
+      "order:pending_confirmation",
+      "item:status_changed",
+      "request:created",
+      "request:done",
+      "bill:requested",
+      "bill:paid",
+      "table:status_changed",
+      "session:guest_joined",
+    ] as const)
+      s.on(ev, refetch);
+  });
+  return useMemo(() => {
+    const tables = floor.data?.tables;
+    if (!tables) return {};
+    let cooking = 0;
+    let ready = 0;
+    let calls = 0;
+    let confirm = 0;
+    for (const t of tables) {
+      cooking += t.session?.cooking ?? 0;
+      ready += t.session?.ready ?? 0;
+      calls += t.session?.openRequests ?? 0;
+      if (t.session?.pendingConfirm) confirm++;
+    }
+    const bills = tables.filter((t) => t.status === "BILL_REQUESTED").length;
+    const floorLabel = [calls && plural(calls, "guest call", "guest calls"), confirm && plural(confirm, "order to confirm", "orders to confirm"), ready && plural(ready, "dish ready to serve", "dishes ready to serve")]
+      .filter(Boolean)
+      .join(", ");
+    return {
+      "/kds/": { n: cooking, label: cooking ? plural(cooking, "dish in the kitchen", "dishes in the kitchen") : "Kitchen is clear", urgent: false },
+      "/waiter/": { n: calls + confirm + ready, label: floorLabel || "Nothing waiting on the floor", urgent: calls + confirm > 0 },
+      "/cashier/": { n: bills, label: bills ? plural(bills, "bill asked for", "bills asked for") : "No bills waiting", urgent: bills > 0 },
+    };
+  }, [floor.data]);
+}
 const isTab = (v: string): v is Tab => v in TABS;
 
 export default function ManagePage() {
@@ -63,6 +130,7 @@ export default function ManagePage() {
   const router = useRouter();
   const [tab, setTabState] = useState<Tab>("menu");
   const [drawer, setDrawer] = useState(false);
+  const counts = useScreenCounts(Boolean(me && me.typ === "staff"));
   // desktop sidebar folded to icons; remembered on this device
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
@@ -126,7 +194,7 @@ export default function ManagePage() {
   };
   return (
     <div className="min-h-dvh" onClickCapture={guardLinks}>
-      <TopBar title={me.hotel.name} subtitle="Manage">
+      <TopBar title={me.hotel.name} subtitle="Manage" ownMenu>
         {/* tablets: every shortcut as an icon; desktop has them in the sidebar; phones: the drawer */}
         <span className="hidden items-center md:flex lg:hidden">
           {today.map((l) => (
@@ -144,24 +212,31 @@ export default function ManagePage() {
         <Drawer open={drawer} onOpenChange={setDrawer}>
           <DrawerTrigger
             aria-label="Go to"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full transition hover:bg-(--sunken) data-[state=open]:bg-(--sunken) sm:h-10 sm:w-10 md:hidden"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-(--sunken) data-[state=open]:bg-(--sunken) md:hidden"
           >
             <Menu className="h-5 w-5" aria-hidden />
           </DrawerTrigger>
           <DrawerContent>
             <DrawerHeader>
               <DrawerTitle>{me.hotel.name}</DrawerTitle>
-              <DrawerDescription>Jump to a live screen.</DrawerDescription>
+              <DrawerDescription>Live screens, appearance and your account.</DrawerDescription>
             </DrawerHeader>
             <nav className="overflow-y-auto px-3 pb-[max(1rem,env(safe-area-inset-bottom))]" aria-label="Screens">
               <SideLabel>Today</SideLabel>
               {today.map((l) => (
                 <SideLink key={l.href} {...l} onClick={jump(l.href)} />
               ))}
-              <SideLabel className="mt-2">Staff screens</SideLabel>
-              {screens.map((l) => (
-                <SideLink key={l.href} {...l} onClick={jump(l.href)} />
-              ))}
+              <StaffScreens links={screens} counts={counts} onPick={jump} className="mt-2" />
+              <SideLabel className="mt-2">Appearance</SideLabel>
+              <ThemeSegmented className="mx-1" />
+              <button
+                type="button"
+                onClick={() => (setDrawer(false), void signOut())}
+                className="mt-3 flex h-11 w-full items-center gap-3 rounded-xl px-3.5 text-[15px] font-medium transition hover:bg-(--sunken)"
+              >
+                <ArrowLeftRight className="muted h-4 w-4" aria-hidden />
+                Switch user
+              </button>
             </nav>
           </DrawerContent>
         </Drawer>
@@ -177,13 +252,13 @@ export default function ManagePage() {
         {/* phones and tablets: a sticky row of pills; desktop: a sidebar that folds to an icon rail */}
         <aside
           className={cn(
-            "line sticky top-[calc(4rem+env(safe-area-inset-top,0px))] z-10 border-b bg-(--surface)/90 backdrop-blur-lg lg:flex lg:h-[calc(100dvh-4rem)] lg:flex-col lg:border-r lg:border-b-0 lg:bg-(--surface) lg:py-5",
+            "line sticky top-[calc(4rem+env(safe-area-inset-top,0px))] z-10 border-b bg-(--surface)/90 backdrop-blur-lg lg:flex lg:h-[calc(100dvh-4rem)] lg:flex-col lg:border-r lg:border-b-0 lg:bg-(--surface) lg:py-3",
             collapsed ? "lg:px-3" : "lg:pr-3 lg:pl-4",
           )}
         >
           <div className="scroll-thin lg:min-h-0 lg:flex-1 lg:overflow-x-hidden lg:overflow-y-auto">
             <SideLabel className={cn("hidden lg:block", collapsed && "lg:sr-only")}>Restaurant</SideLabel>
-            <TabsList className="px-4 py-2.5 sm:px-6 lg:flex-col lg:gap-0.5 lg:p-0" aria-label="Manage sections">
+            <TabsList className="px-4 py-2 sm:px-6 sm:py-2.5 lg:flex-col lg:gap-0.5 lg:p-0" aria-label="Manage sections">
               {(Object.keys(TABS) as Tab[]).map((t) => {
                 const Icon = TAB_ICON[t];
                 return (
@@ -192,9 +267,9 @@ export default function ManagePage() {
                     value={t}
                     title={collapsed ? TABS[t] : undefined}
                     className={cn(
-                      "lg:relative lg:h-11 lg:w-full lg:justify-start lg:gap-3 lg:rounded-xl lg:px-3.5",
+                      "lg:relative lg:h-9 lg:w-full lg:justify-start lg:gap-3 lg:rounded-lg lg:px-3 lg:text-sm",
                       // desktop: a short accent bar marks the open section, besides the tint
-                      "lg:before:absolute lg:before:inset-y-2.5 lg:before:left-0 lg:before:w-[3px] lg:before:scale-y-0 lg:before:rounded-full lg:before:bg-brand lg:before:transition-transform lg:data-[state=active]:before:scale-y-100",
+                      "lg:before:absolute lg:before:inset-y-2 lg:before:left-0 lg:before:w-[3px] lg:before:scale-y-0 lg:before:rounded-full lg:before:bg-brand lg:before:transition-transform lg:data-[state=active]:before:scale-y-100",
                       collapsed && "lg:justify-center lg:px-0",
                     )}
                   >
@@ -205,14 +280,18 @@ export default function ManagePage() {
               })}
             </TabsList>
             <nav className="hidden lg:block" aria-label="Screens">
-              {collapsed ? <Rule /> : <SideLabel className="mt-7">Today</SideLabel>}
+              {collapsed ? <Rule /> : <SideLabel className="mt-4">Today</SideLabel>}
               {today.map((l) => (
                 <SideLink key={l.href} {...l} iconOnly={collapsed} />
               ))}
-              {collapsed ? <Rule /> : <SideLabel className="mt-6">Staff screens</SideLabel>}
-              {screens.map((l) => (
-                <SideLink key={l.href} {...l} iconOnly={collapsed} />
-              ))}
+              {collapsed ? (
+                <>
+                  <Rule />
+                  <StaffScreensMenu links={screens} counts={counts} onPick={go} />
+                </>
+              ) : (
+                <StaffScreens links={screens} counts={counts} className="mt-4" />
+              )}
             </nav>
           </div>
           <button
@@ -221,7 +300,7 @@ export default function ManagePage() {
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={cn(
-              "muted mt-3 hidden h-10 shrink-0 items-center gap-3 rounded-xl text-sm font-medium transition hover:bg-(--sunken) hover:text-(--ink) lg:flex",
+              "muted mt-2 hidden h-9 shrink-0 items-center gap-3 rounded-lg text-sm font-medium transition hover:bg-(--sunken) hover:text-(--ink) lg:flex",
               collapsed ? "justify-center" : "px-3.5",
             )}
           >
@@ -266,10 +345,10 @@ export default function ManagePage() {
 }
 
 function SideLabel({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn("muted px-3.5 pt-3 pb-2 text-[11px] font-semibold tracking-[0.08em] uppercase", className)}>{children}</p>;
+  return <p className={cn("muted px-3 pt-2 pb-1.5 text-[11px] font-semibold tracking-[0.08em] uppercase", className)}>{children}</p>;
 }
 
-const Rule = () => <span className="line mx-3 my-4 block border-t" aria-hidden />;
+const Rule = () => <span className="line mx-3 my-3 block border-t" aria-hidden />;
 
 function SideLink({
   href,
@@ -290,11 +369,97 @@ function SideLink({
       onClick={onClick}
       title={iconOnly ? label : undefined}
       aria-label={iconOnly ? label : undefined}
-      className={cn("group flex h-11 items-center gap-3 rounded-xl text-[15px] font-medium transition hover:bg-(--sunken)", iconOnly ? "justify-center" : "px-3.5")}
+      className={cn("group flex h-10 items-center gap-3 rounded-lg text-[15px] font-medium transition hover:bg-(--sunken) lg:h-9 lg:text-sm", iconOnly ? "justify-center" : "px-3")}
     >
       <Icon className="muted h-4 w-4 shrink-0 transition group-hover:text-brand" aria-hidden />
       {!iconOnly && <span className="flex-1 truncate">{label}</span>}
       {!iconOnly && <ArrowUpRight className="muted h-3.5 w-3.5 opacity-0 transition group-hover:opacity-100" aria-hidden />}
     </Link>
+  );
+}
+
+type ScreenLink = { href: string; label: string; icon: LucideIcon };
+
+/**
+ * Kitchen / Floor / Counter as one compact segmented strip (icon over label) instead of three rows: they're the
+ * same kind of thing — a shared screen staff run — so they read as one group and take a third of the height.
+ */
+function StaffScreens({
+  links,
+  counts,
+  onPick,
+  className,
+}: {
+  links: ScreenLink[];
+  counts: ScreenCounts;
+  onPick?: (href: string) => (e: MouseEvent<HTMLAnchorElement>) => void;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <SideLabel>Staff screens</SideLabel>
+      <div className="grid grid-cols-3 gap-1 rounded-xl bg-(--sunken) p-1">
+        {links.map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            onClick={onPick?.(l.href)}
+            title={counts[l.href] ? `${l.label}: ${counts[l.href]!.label}` : `Open the ${l.label.toLowerCase()} screen`}
+            aria-label={counts[l.href] ? `${l.label}, ${counts[l.href]!.label}` : l.label}
+            className="group relative flex h-13 flex-col items-center justify-center gap-1 rounded-lg text-xs font-medium transition hover:bg-(--surface) hover:shadow-soft"
+          >
+            <l.icon className="muted h-4 w-4 transition group-hover:text-brand" aria-hidden />
+            {l.label}
+            <CountBadge count={counts[l.href]} className="absolute top-1 right-1.5" />
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Folded sidebar: the three staff screens behind one icon. */
+function StaffScreensMenu({ links, counts, onPick }: { links: ScreenLink[]; counts: ScreenCounts; onPick: (href: string) => void }) {
+  const urgent = links.some((l) => counts[l.href]?.urgent);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label="Staff screens"
+        title="Staff screens"
+        className="relative flex h-9 w-full items-center justify-center rounded-lg transition hover:bg-(--sunken) data-[state=open]:bg-(--sunken)"
+      >
+        <MonitorPlay className="muted h-4 w-4" aria-hidden />
+        {/* folded: a dot when something needs someone now */}
+        {urgent && <span className="absolute top-1.5 right-3 h-2 w-2 rounded-full bg-brand ring-2 ring-(--surface)" aria-hidden />}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="right" align="start" className="min-w-44">
+        <DropdownMenuLabel>Staff screens</DropdownMenuLabel>
+        {links.map((l) => (
+          <DropdownMenuItem key={l.href} onSelect={() => onPick(l.href)} title={counts[l.href]?.label}>
+            <l.icon aria-hidden />
+            <span className="flex-1">{l.label}</span>
+            <CountBadge count={counts[l.href]} />
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Small count on a staff-screen tab: orange when someone is needed now, grey for work in progress, hidden at 0. */
+function CountBadge({ count, className }: { count?: ScreenCount; className?: string }) {
+  if (!count?.n) return null;
+  return (
+    <span
+      key={count.n}
+      aria-hidden
+      className={cn(
+        "grid h-4 min-w-4 animate-pop place-items-center rounded-full px-1 text-[10px] leading-none font-bold tabular-nums",
+        count.urgent ? "bg-brand text-brand-ink" : "bg-(--line) text-(--ink)",
+        className,
+      )}
+    >
+      {count.n > 99 ? "99+" : count.n}
+    </span>
   );
 }

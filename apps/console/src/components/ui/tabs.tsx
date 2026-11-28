@@ -26,10 +26,10 @@ export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsP
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        "inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-medium sm:h-10 sm:px-4 sm:text-[15px] whitespace-nowrap text-(--ink) transition outline-none hover:bg-(--sunken)",
+        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium sm:h-10 sm:gap-2 sm:px-4 sm:text-[15px] whitespace-nowrap text-(--ink) transition outline-none hover:bg-(--sunken)",
         // keyboard focus ring drawn inside the pill: an outer ring was clipped by the scrolling sidebar's edge
         "focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-inset data-[state=active]:bg-brand/12 data-[state=active]:font-semibold data-[state=active]:text-brand data-[state=active]:hover:bg-brand/15",
-        "[&_svg]:h-4 [&_svg]:w-4",
+        "[&_svg]:h-3.5 [&_svg]:w-3.5 sm:[&_svg]:h-4 sm:[&_svg]:w-4",
         className,
       )}
       {...props}
